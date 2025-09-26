@@ -1397,20 +1397,21 @@
                 // --- 資料監聽與畫面渲染 ---
                 function listenToTodayRecords(userId) {
                     if (unsubscribeFromHistory) unsubscribeFromHistory();
-                    const today = new Date();
-                    today.setHours(0, 0, 0, 0);
+                    
                     const q = query(
                         collection(db, "clock_records"),
-                        where("userId", "==", userId),
-                        where("timestamp", ">=", today)
+                        where("userId", "==", userId)
                     );
+
                     unsubscribeFromHistory = onSnapshot(q, (snapshot) => {
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+
                         const history = snapshot.docs.map(doc => {
                             const data = doc.data();
                             return { ...data, id: doc.id, timestamp: data.timestamp?.toDate() };
-                        }).filter(item => item.timestamp);
+                        }).filter(item => item.timestamp && item.timestamp >= today);
                         
-                        // 在客戶端進行排序以避免索引問題
                         history.sort((a, b) => b.timestamp - a.timestamp);
 
                         renderHistory(history);
