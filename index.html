@@ -991,7 +991,7 @@
                         const message = (error.code === 'auth/invalid-credential') ? '登入失敗，帳號或密碼錯誤。' : '登入時發生未知錯誤。';
                         loginMessage.textContent = message;
                     } finally {
-                        toggleButtonLoading(loginBtn, false, '登入系統');
+                        toggleButtonLoading(loginBtn, false);
                     }
                 });
                 
@@ -1064,7 +1064,6 @@
                     if (!currentPosition) { showMessage('無法取得您的目前位置，請檢查定位權限後再試。', 'error'); return; }
 
                     const buttonToLoad = type === 'in' ? clockInBtn : clockOutBtn;
-                    const originalText = type === 'in' ? '上班打卡' : '下班打卡';
                     toggleButtonLoading(buttonToLoad, true, '傳送中...');
                     
                     try {
@@ -1082,7 +1081,7 @@
                         showMessage('打卡失敗，同步資料時發生錯誤。', 'error');
                         console.error("Clock action error:", error);
                     } finally {
-                        toggleButtonLoading(buttonToLoad, false, originalText);
+                        toggleButtonLoading(buttonToLoad, false);
                     }
                 }
                 
@@ -1112,42 +1111,44 @@
                     const recordId = cameraModal.dataset.recordId;
                     if (!recordId) return;
 
-                    const canvas = canvasElement;
-                    const context = canvas.getContext('2d');
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
-                    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    toggleButtonLoading(takePhotoBtn, true, '上傳中...');
 
-                    const user = auth.currentUser;
-                    const now = new Date();
-                    const dateTime = now.toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
-                    const userEmail = user ? user.email : 'N/A';
-                    const gpsCoords = currentPosition ? `${currentPosition.coords.latitude.toFixed(5)}, ${currentPosition.coords.longitude.toFixed(5)}` : 'No GPS';
-                    const description = photoDescriptionInput.value.trim();
-
-                    const textLines = [dateTime, userEmail, `GPS: ${gpsCoords}`];
-                    if (description) textLines.push(description);
-
-                    context.font = '24px "Noto Sans TC"';
-                    context.textBaseline = 'bottom';
-                    
-                    const padding = 10;
-                    const lineHeight = 30;
-                    const boxHeight = (lineHeight * textLines.length) + (padding * 2);
-                    
-                    context.fillStyle = 'rgba(0, 0, 0, 0.6)';
-                    const textWidth = Math.max(...textLines.map(line => context.measureText(line).width));
-                    const boxWidth = textWidth + (padding * 2);
-                    context.fillRect(padding, canvas.height - boxHeight - padding, boxWidth, boxHeight);
-                    
-                    context.fillStyle = 'white';
-                    textLines.forEach((line, index) => {
-                        context.fillText(line, padding * 2, canvas.height - padding - (lineHeight * (textLines.length - 1 - index) ));
-                    });
-                    
-                    const dataUrl = canvas.toDataURL('image/jpeg');
-                    
                     try {
+                        const canvas = canvasElement;
+                        const context = canvas.getContext('2d');
+                        canvas.width = video.videoWidth;
+                        canvas.height = video.videoHeight;
+                        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                        const user = auth.currentUser;
+                        const now = new Date();
+                        const dateTime = now.toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                        const userEmail = user ? user.email : 'N/A';
+                        const gpsCoords = currentPosition ? `${currentPosition.coords.latitude.toFixed(5)}, ${currentPosition.coords.longitude.toFixed(5)}` : 'No GPS';
+                        const description = photoDescriptionInput.value.trim();
+
+                        const textLines = [dateTime, userEmail, `GPS: ${gpsCoords}`];
+                        if (description) textLines.push(description);
+
+                        context.font = '24px "Noto Sans TC"';
+                        context.textBaseline = 'bottom';
+                        
+                        const padding = 10;
+                        const lineHeight = 30;
+                        const boxHeight = (lineHeight * textLines.length) + (padding * 2);
+                        
+                        context.fillStyle = 'rgba(0, 0, 0, 0.6)';
+                        const textWidth = Math.max(...textLines.map(line => context.measureText(line).width));
+                        const boxWidth = textWidth + (padding * 2);
+                        context.fillRect(padding, canvas.height - boxHeight - padding, boxWidth, boxHeight);
+                        
+                        context.fillStyle = 'white';
+                        textLines.forEach((line, index) => {
+                            context.fillText(line, padding * 2, canvas.height - padding - (lineHeight * (textLines.length - 1 - index) ));
+                        });
+                        
+                        const dataUrl = canvas.toDataURL('image/jpeg');
+                        
                         const photoName = `${Date.now()}.jpg`;
                         const storageRef = ref(storage, `photos/${user.uid}/${recordId}/${photoName}`);
                         const uploadResult = await uploadString(storageRef, dataUrl, 'data_url');
@@ -1165,12 +1166,14 @@
                         photoPreviewContainer.appendChild(imgContainer);
                         photoDescriptionInput.value = '';
                         showMessage('照片已上傳！', 'success');
-
                     } catch (error) {
                         console.error("Photo upload error:", error);
                         showMessage('照片上傳失敗。', 'error');
+                    } finally {
+                        toggleButtonLoading(takePhotoBtn, false);
                     }
                 }
+
 
                 function closeCameraModal() {
                     if (cameraStream) {
@@ -1251,7 +1254,7 @@
                          console.error("更新個人資料時發生錯誤:", error);
                          showMessage('更新失敗。', 'error');
                     } finally {
-                        toggleButtonLoading(submitProfileEditBtn, false, '儲存變更');
+                        toggleButtonLoading(submitProfileEditBtn, false);
                     }
                 }
                  // --- 照片檢視 Modal ---
@@ -1435,7 +1438,7 @@
                         else if (error.code === 'permission-denied') message = '權限不足。';
                         showMessage(message, 'error');
                     } finally {
-                        toggleButtonLoading(submitAddAccountBtn, false, '儲存');
+                        toggleButtonLoading(submitAddAccountBtn, false);
                     }
                 }
                 
@@ -1470,7 +1473,7 @@
                          if (error.code === 'permission-denied') message = '權限不足。';
                          showMessage(message, 'error');
                     } finally {
-                        toggleButtonLoading(submitEditAccountBtn, false, '更新');
+                        toggleButtonLoading(submitEditAccountBtn, false);
                     }
                 }
                 
@@ -1671,23 +1674,21 @@
                         setTimeout(() => messageBoxEl.classList.add('hidden'), 3000);
                     }
                 }
-
+                
                 function toggleButtonLoading(button, isLoading, text) {
-                    button.disabled = isLoading;
-                    const originalSpan = button.querySelector('span');
-                    const originalText = originalSpan ? originalSpan.textContent : (button.textContent || '');
-
-
                     if (isLoading) {
-                        button.dataset.originalText = originalText;
-                        button.innerHTML = `<div class="spinner"></div><span>${text}</span>`;
+                        button.dataset.originalHtml = button.innerHTML;
+                        button.disabled = true;
+                        button.innerHTML = `<div class="spinner"></div><span>${text || '處理中...'}</span>`;
                     } else {
-                        const buttonText = button.dataset.originalText || text;
-                         if(button.querySelector('svg')){
-                             button.innerHTML = button.querySelector('svg').outerHTML + `<span>${buttonText}</span>`;
-                         } else {
-                             button.innerHTML = `<span>${buttonText}</span>`;
-                         }
+                        button.disabled = false;
+                        if (button.dataset.originalHtml) {
+                            button.innerHTML = button.dataset.originalHtml;
+                        }
+                        if (text) {
+                            const span = button.querySelector('span');
+                            if (span) span.textContent = text;
+                        }
                     }
                 }
                 
