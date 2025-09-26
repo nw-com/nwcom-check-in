@@ -38,7 +38,7 @@
         <!-- 登入畫面 -->
         <div id="login-view" class="flex-1 overflow-y-auto">
             <header class="bg-white p-6 text-center">
-                <img src="https://static.wixstatic.com/media/6148f9_56377cef73c1498f95a2c3057b89f2ed~mv2.png" alt="西北保全 Logo" class="mx-auto" style="width: 120px; height: 60px;">
+                <img id="login-logo" src="https://static.wixstatic.com/media/6148f9_56377cef73c1498f95a2c3057b89f2ed~mv2.png" alt="西北保全 Logo" class="mx-auto" style="width: 120px; height: 60px;">
                 <h1 class="text-xl font-bold text-red-600 mt-4">西北勤務打卡系統</h1>
             </header>
             <main class="p-6 md:p-8">
@@ -447,6 +447,21 @@
         </div>
     </div>
 
+    <!-- Password Prompt Modal -->
+    <div id="password-prompt-modal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-[1300]">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-sm">
+            <div class="p-6">
+                <h3 class="text-lg font-semibold text-gray-800 mb-4">請輸入管理密碼</h3>
+                <input type="password" id="prompt-password-input" class="block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500">
+                <p id="prompt-message" class="text-red-500 text-sm min-h-[20px] mt-2"></p>
+                <div class="mt-4 flex justify-end space-x-3">
+                    <button id="cancel-prompt-btn" type="button" class="bg-white hover:bg-gray-100 text-gray-700 font-bold py-2 px-4 rounded-lg border">取消</button>
+                    <button id="submit-prompt-btn" type="button" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">確認</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
         import { getFirestore, collection, addDoc, query, where, onSnapshot, serverTimestamp, orderBy, doc, updateDoc, arrayUnion, setDoc, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
@@ -551,6 +566,13 @@
             const closeMapModalBtn = document.getElementById('close-map-modal-btn');
             const mapIframe = document.getElementById('map-iframe');
 
+            // --- 密碼提示 Modal 元素 ---
+            const passwordPromptModal = document.getElementById('password-prompt-modal');
+            const promptPasswordInput = document.getElementById('prompt-password-input');
+            const promptMessage = document.getElementById('prompt-message');
+            const cancelPromptBtn = document.getElementById('cancel-prompt-btn');
+            const submitPromptBtn = document.getElementById('submit-prompt-btn');
+
             const eyeIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
             const eyeOffIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"></path><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"></path><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"></path><line x1="2" x2="22" y1="2" y2="22"></line></svg>`;
             
@@ -637,6 +659,47 @@
                     navDashboardBtn.addEventListener('click', () => showPage('dashboard'));
                     navCheckinBtn.addEventListener('click', () => showPage('checkin'));
                     relocateBtn.addEventListener('click', forceRelocate);
+
+                    // Easter Egg: 連續點擊 Logo 開啟新增帳號
+                    const loginLogo = document.getElementById('login-logo');
+                    if (loginLogo) {
+                        let logoClickCount = 0;
+                        let logoClickTimer = null;
+                
+                        loginLogo.addEventListener('click', () => {
+                            logoClickCount++;
+                            
+                            clearTimeout(logoClickTimer);
+                            logoClickTimer = setTimeout(() => {
+                                logoClickCount = 0; // 1.5秒內未繼續點擊則重置計數器
+                            }, 1500);
+                
+                            if (logoClickCount === 10) {
+                                clearTimeout(logoClickTimer);
+                                logoClickCount = 0;
+                                openPasswordPrompt();
+                            }
+                        });
+                    }
+
+                    // 密碼提示 Modal
+                    cancelPromptBtn.addEventListener('click', closePasswordPrompt);
+                    submitPromptBtn.addEventListener('click', () => {
+                        const password = promptPasswordInput.value;
+                        if (password === '0112') {
+                            closePasswordPrompt();
+                            openAddAccountModal();
+                        } else {
+                            promptMessage.textContent = '管理密碼錯誤。';
+                            promptPasswordInput.value = '';
+                            promptPasswordInput.focus();
+                        }
+                    });
+                    promptPasswordInput.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter') {
+                            submitPromptBtn.click();
+                        }
+                    });
 
                     // 打卡相機
                     takePhotoBtn.addEventListener('click', takePhotoWithWatermark);
@@ -770,8 +833,21 @@
                             resetRelocateBtn();
                         },
                         (error) => {
-                            let message = '無法取得 GPS 位置。';
-                            if (error.code === error.PERMISSION_DENIED) message = '您已拒絕 GPS 定位權限。';
+                            let message;
+                            switch(error.code) {
+                                case error.PERMISSION_DENIED:
+                                    message = "您已拒絕 GPS 定位權限。";
+                                    break;
+                                case error.POSITION_UNAVAILABLE:
+                                    message = "無法偵測到您的目前位置。";
+                                    break;
+                                case error.TIMEOUT:
+                                    message = "取得 GPS 位置時發生超時錯誤。";
+                                    break;
+                                default:
+                                    message = "無法取得 GPS 位置，發生未知錯誤。";
+                                    break;
+                            }
                             showMessage(message, 'error');
                             mapLoadingText.textContent = message;
                             mapLoadingText.classList.remove('hidden');
@@ -781,6 +857,18 @@
                         },
                         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
                     );
+                }
+
+                // --- 密碼提示 Modal ---
+                function openPasswordPrompt() {
+                    promptPasswordInput.value = '';
+                    promptMessage.textContent = '';
+                    passwordPromptModal.classList.remove('hidden');
+                    promptPasswordInput.focus();
+                }
+
+                function closePasswordPrompt() {
+                    passwordPromptModal.classList.add('hidden');
                 }
 
                 // --- 登入/登出相關 ---
@@ -850,8 +938,21 @@
                         },
                         (error) => {
                             console.error("Geolocation error:", error);
-                            let message = '無法取得 GPS 位置。';
-                            if(error.code === error.PERMISSION_DENIED) message = '您已拒絕 GPS 定位權限，請至瀏覽器設定中重新開啟。';
+                            let message;
+                            switch(error.code) {
+                                case error.PERMISSION_DENIED:
+                                    message = "您已拒絕 GPS 定位權限，請至瀏覽器設定中重新開啟。";
+                                    break;
+                                case error.POSITION_UNAVAILABLE:
+                                    message = "無法偵測到您的目前位置。";
+                                    break;
+                                case error.TIMEOUT:
+                                    message = "取得 GPS 位置時發生超時錯誤。";
+                                    break;
+                                default:
+                                    message = "無法取得 GPS 位置，發生未知錯誤。";
+                                    break;
+                            }
                             mapLoadingText.textContent = message;
                             mapLoadingText.classList.remove('hidden');
                             currentLocationIframe.classList.add('hidden');
@@ -1301,14 +1402,17 @@
                     const q = query(
                         collection(db, "clock_records"),
                         where("userId", "==", userId),
-                        where("timestamp", ">=", today),
-                        orderBy("timestamp", "desc")
+                        where("timestamp", ">=", today)
                     );
                     unsubscribeFromHistory = onSnapshot(q, (snapshot) => {
                         const history = snapshot.docs.map(doc => {
                             const data = doc.data();
                             return { ...data, id: doc.id, timestamp: data.timestamp?.toDate() };
                         }).filter(item => item.timestamp);
+                        
+                        // 在客戶端進行排序以避免索引問題
+                        history.sort((a, b) => b.timestamp - a.timestamp);
+
                         renderHistory(history);
                         updateUI(history);
                     }, (error) => {
@@ -1397,8 +1501,8 @@
                     const errorMsgEl = document.createElement('p');
                     errorMsgEl.className = 'text-red-500 text-center py-4';
                     errorMsgEl.textContent = '無法載入紀錄，請檢查網路連線。';
-                    if (error.code === 'failed-precondition') {
-                        errorMsgEl.innerHTML += '<br><span class="text-sm text-gray-600">提示：資料庫缺少必要索引，請根據控制台的錯誤連結在 Firebase 後台建立。</span>';
+                    if (error.code === 'failed-precondition' || error.message.includes('index')) {
+                        errorMsgEl.innerHTML += '<br><span class="text-sm text-gray-600">提示：資料庫查詢錯誤，請聯繫管理員。</span>';
                     }
                     historyLogEl.appendChild(errorMsgEl);
                 }
@@ -1456,4 +1560,3 @@
     </script>
 </body>
 </html>
-
