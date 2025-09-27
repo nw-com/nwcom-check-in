@@ -79,14 +79,14 @@
                         <span>登入系統</span>
                     </button>
                     <p id="login-message" class="text-red-500 text-sm text-center min-h-[10px]"></p>
-                    <p class="text-center text-gray-600 text-xs mt-2">V1.2.1</p>
+                    <p class="text-center text-gray-600 text-xs mt-2">V1.2.2</p>
                 </div>
             </main>
         </div>
 
         <!-- 主操作畫面 -->
         <div id="main-view" class="hidden flex-1 flex flex-col relative">
-            <header class="absolute top-0 left-0 w-full z-20 bg-red-600 text-white p-3 flex justify-between items-center shadow-md h-[60px]">
+            <header class="absolute top-0 left-0 w-full z-20 bg-red-600 text-white p-3 flex justify-between items-center shadow-md h-[70px]">
                 <div class="flex items-center space-x-4">
                     <img src="https://static.wixstatic.com/media/6148f9_56377cef73c1498f95a2c3057b89f2ed~mv2.png" alt="西北保全 Logo" style="width: 80px; height: 40px; object-fit: contain;">
                     <div>
@@ -100,9 +100,9 @@
             </header>
 
             <!-- 中間內容區 (包含子導覽與可滾動內容) -->
-            <div class="flex-1 flex flex-col mt-[60px] mb-[60px] overflow-hidden">
+            <div class="flex-1 flex flex-col mt-[70px] mb-[70px] overflow-hidden">
                  <!-- 子導覽列 -->
-                <div id="sub-tab-nav" class="h-[60px] px-6 border-b border-gray-200 bg-gray-100 flex-shrink-0">
+                <div id="sub-tab-nav" class="h-[50px] px-6 border-b border-gray-200 bg-gray-100 flex-shrink-0">
                      <!-- 設定頁面專用 -->
                     <nav id="settings-tab-nav" class="hidden -mb-px flex space-x-6 h-full items-center" aria-label="Tabs">
                         <button id="settings-account-tab-btn" class="whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm">帳號</button>
@@ -216,7 +216,7 @@
             </div>
 
             <!-- 底部導覽列 -->
-            <nav id="bottom-nav" class="absolute bottom-0 left-0 w-full z-20 border-t bg-gray-50 h-[60px] flex items-center">
+            <nav id="bottom-nav" class="absolute bottom-0 left-0 w-full z-20 border-t bg-gray-50 h-[70px] flex items-center">
                 <div class="flex justify-around w-full">
                     <button id="nav-settings-btn" class="hidden flex-1 p-3 text-center text-gray-500 flex flex-col items-center justify-center space-y-1 transition-colors duration-200">
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
@@ -770,7 +770,7 @@
                             }
                             currentUserData = { id: user.uid, ...userData };
                             currentUserRole = currentUserData.role;
-                            userNameDisplay.textContent = `歡迎, ${currentUserData.username || currentUserData.name}`;
+                            userNameDisplay.textContent = `歡迎, ${currentUserData.name || currentUserData.username}`;
                             headerProfileImg.src = currentUserData.photoURL || 'https://placehold.co/96x96/e2e8f0/4a5568?text=頭像';
                         } else {
                             console.error("User data not found in Firestore for UID:", user.uid);
@@ -1248,11 +1248,11 @@
                     const user = auth.currentUser;
                     const now = new Date();
                     const dateTime = now.toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
-                    const userEmail = user ? user.email : 'N/A';
+                    const userName = currentUserData.name || (user ? user.email : 'N/A');
                     const gpsCoords = currentPosition ? `${currentPosition.coords.latitude.toFixed(5)}, ${currentPosition.coords.longitude.toFixed(5)}` : 'No GPS';
                     const description = photoDescriptionInput.value.trim();
 
-                    const textLines = [dateTime, userEmail, `GPS: ${gpsCoords}`];
+                    const textLines = [dateTime, userName, `GPS: ${gpsCoords}`];
                     if (description) textLines.push(description);
 
                     context.font = '24px "Noto Sans TC"';
@@ -1387,7 +1387,7 @@
                         }
                         currentUserData.username = updatedData.username;
                         currentUserData.name = updatedData.name;
-                        userNameDisplay.textContent = `歡迎, ${currentUserData.username || currentUserData.name}`;
+                        userNameDisplay.textContent = `歡迎, ${currentUserData.name || currentUserData.username}`;
 
                         showMessage('個人資料已更新', 'success');
                         closeProfileModal();
@@ -1546,7 +1546,7 @@
                     const email = document.getElementById('new-account-email').value;
                     const password = document.getElementById('new-account-password').value;
 
-                    // 使用獨立的 Firebase App 實例來創建用戶，避免影響當前管理員的登入狀態
+                    // 使用獨立的 Firebase App 實例來創建用戶，避免影響當前管理員の登入狀態
                     const tempAppName = `temp-user-creation-${Date.now()}`;
                     const tempApp = initializeApp(firebaseConfig, tempAppName);
                     const tempAuth = getAuth(tempApp);
