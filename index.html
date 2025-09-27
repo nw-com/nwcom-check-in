@@ -481,10 +481,11 @@
                 <svg class="mx-auto mb-4 text-gray-400 w-12 h-12" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 20">
                     <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 11V6m0 8h.01M19 10a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/>
                 </svg>
-                <h3 class="mb-5 text-lg font-normal text-gray-600">確定要刪除此帳號嗎？</h3>
+                <h3 class="mb-5 text-lg font-normal text-gray-600">確定要停用此帳號嗎？</h3>
+                <p class="mb-2 text-sm text-gray-500">此帳號將無法再登入。</p>
                 <p id="delete-user-info" class="mb-5 text-sm font-normal text-gray-500"></p>
                 <button id="confirm-delete-btn" type="button" class="text-white bg-red-600 hover:bg-red-800 font-medium rounded-lg text-sm inline-flex items-center px-5 py-2.5 text-center mr-2">
-                    是的, 刪除
+                    是的, 停用
                 </button>
                 <button id="cancel-delete-btn" type="button" class="text-gray-500 bg-white hover:bg-gray-100 rounded-lg border border-gray-200 text-sm font-medium px-5 py-2.5 hover:text-gray-900">
                     取消
@@ -717,7 +718,13 @@
                         const userDocSnap = await getDoc(userDocRef);
 
                         if (userDocSnap.exists()) {
-                            currentUserData = { id: user.uid, ...userDocSnap.data() };
+                            const userData = userDocSnap.data();
+                            if (userData.status === 'deleted') {
+                                showMessage('此帳號已被停用。', 'error');
+                                signOut(auth);
+                                return;
+                            }
+                            currentUserData = { id: user.uid, ...userData };
                             currentUserRole = currentUserData.role;
                             userNameDisplay.textContent = `歡迎, ${currentUserData.username || currentUserData.name}`;
                             headerProfileImg.src = currentUserData.photoURL || 'https://placehold.co/96x96/e2e8f0/4a5568?text=頭像';
@@ -1392,7 +1399,7 @@
                 }
                 
                 function openDeleteConfirmModal(userId, userName) {
-                    deleteUserInfo.textContent = `您將要刪除 ${userName} (${userId}) 的帳號資料。`;
+                    deleteUserInfo.textContent = `您將要停用 ${userName} (${userId})。`;
                     confirmDeleteBtn.dataset.userId = userId;
                     deleteConfirmModal.classList.remove('hidden');
                 }
@@ -1488,24 +1495,20 @@
                 async function handleDeleteAccount() {
                     const userId = confirmDeleteBtn.dataset.userId;
                     if (!userId) return;
-                    
+
+                    toggleButtonLoading(confirmDeleteBtn, true, '處理中...');
                     try {
-                        await deleteDoc(doc(db, "users", userId));
+                        const userDocRef = doc(db, "users", userId);
+                        await updateDoc(userDocRef, { status: "deleted" });
                         
-                        const photoRef = ref(storage, `profile_pictures/${userId}`);
-                        deleteObject(photoRef).catch(error => {
-                            if (error.code !== 'storage/object-not-found') {
-                                console.error("刪除大頭照失敗:", error);
-                            }
-                        });
-                        
-                        showMessage('帳號資料已刪除', 'success');
+                        showMessage('帳號已停用', 'success');
                     } catch(error) {
-                        console.error("刪除帳號失敗:", error);
-                        let message = '刪除帳號失敗。';
+                        console.error("停用帳號失敗:", error);
+                        let message = '停用帳號失敗。';
                         if (error.code === 'permission-denied') message = '權限不足。';
                         showMessage(message, 'error');
                     } finally {
+                        toggleButtonLoading(confirmDeleteBtn, false);
                         closeDeleteConfirmModal();
                     }
                 }
@@ -1515,7 +1518,9 @@
                     if (unsubscribeFromAccounts) unsubscribeFromAccounts();
                     const q = query(collection(db, "users"), orderBy("createdAt", "desc"));
                     unsubscribeFromAccounts = onSnapshot(q, (snapshot) => {
-                        const users = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        const users = snapshot.docs
+                            .map(doc => ({ id: doc.id, ...doc.data() }))
+                            .filter(user => user.status !== 'deleted');
                         renderAccountList(users);
                     }, (error) => {
                         console.error("Error listening to accounts:", error);
