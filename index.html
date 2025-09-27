@@ -1340,11 +1340,23 @@
                     if (!currentUserData) return;
 
                     toggleButtonLoading(submitProfileEditBtn, true, '儲存中...');
+                    const newUsername = document.getElementById('profile-modal-username').value.trim();
+
+                    if (newUsername !== currentUserData.username) {
+                        const usersRef = collection(db, "users");
+                        const q = query(usersRef, where("username", "==", newUsername));
+                        const querySnapshot = await getDocs(q);
+                        if (!querySnapshot.empty) {
+                            showMessage('此帳號已被使用，請選擇其他帳號。', 'error');
+                            toggleButtonLoading(submitProfileEditBtn, false);
+                            return;
+                        }
+                    }
                     
                     const userDocRef = doc(db, "users", currentUserData.id);
                     
                     let updatedData = {
-                        username: document.getElementById('profile-modal-username').value,
+                        username: newUsername,
                         name: document.getElementById('profile-modal-name').value,
                         title: document.getElementById('profile-modal-title').value,
                         phone: document.getElementById('profile-modal-phone').value,
@@ -1590,10 +1602,28 @@
                     toggleButtonLoading(submitEditAccountBtn, true, '更新中...');
                     
                     const userId = editAccountIdInput.value;
+                    const newUsername = document.getElementById('edit-account-username').value.trim();
                     const userDocRef = doc(db, "users", userId);
                     
+                    const usersRef = collection(db, "users");
+                    const q = query(usersRef, where("username", "==", newUsername));
+                    const querySnapshot = await getDocs(q);
+
+                    let isDuplicate = false;
+                    querySnapshot.forEach((doc) => {
+                        if (doc.id !== userId) {
+                            isDuplicate = true;
+                        }
+                    });
+
+                    if (isDuplicate) {
+                        showMessage('此帳號已被另一位使用者使用。', 'error');
+                        toggleButtonLoading(submitEditAccountBtn, false);
+                        return;
+                    }
+                    
                     let updatedData = {
-                        username: document.getElementById('edit-account-username').value,
+                        username: newUsername,
                         name: document.getElementById('edit-account-name').value,
                         role: document.getElementById('edit-account-role').value,
                         title: document.getElementById('edit-account-title').value,
