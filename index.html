@@ -483,8 +483,8 @@
                         <input type="text" id="edit-account-username" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500">
                     </div>
                     <div>
-                        <label for="edit-account-email" class="block text-sm font-medium text-gray-700">電子郵件</label>
-                        <input type="email" id="edit-account-email" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500 bg-gray-100" readonly>
+                        <label for="edit-account-email" class="block text-sm font-medium text-gray-700">電子郵件 (不可修改)</label>
+                        <input type="email" id="edit-account-email" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-gray-100" readonly>
                     </div>
                     <div>
                         <label for="edit-account-name" class="block text-sm font-medium text-gray-700">姓名</label>
@@ -504,6 +504,20 @@
                      <div>
                         <label for="edit-account-phone" class="block text-sm font-medium text-gray-700">手機號碼</label>
                         <input type="tel" id="edit-account-phone" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500">
+                    </div>
+                    <div>
+                        <label for="edit-account-line-id" class="block text-sm font-medium text-gray-700">Line ID</label>
+                        <input type="text" id="edit-account-line-id" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500">
+                    </div>
+                     <div class="pt-4 border-t">
+                        <p class="text-sm font-medium text-gray-800">重設密碼 (選填)</p>
+                        <p class="text-xs text-gray-500 mb-2">基於安全考量，無法直接修改，請聯絡使用者自行變更。</p>
+                         <div>
+                            <label for="edit-account-new-password" class="block text-sm font-medium text-gray-700">新密碼</label>
+                             <div class="relative mt-1">
+                                <input type="password" id="edit-account-new-password" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-gray-100" placeholder="無法在此修改" readonly>
+                            </div>
+                        </div>
                     </div>
                 </form>
             </main>
@@ -1354,9 +1368,11 @@
                     document.getElementById('profile-modal-username').value = currentUserData.username || '';
                     document.getElementById('profile-modal-name').value = currentUserData.name || '';
                     document.getElementById('profile-modal-email').value = currentUserData.email || '';
-                    document.getElementById('profile-modal-role').value = currentUserData.role || '';
                     document.getElementById('profile-modal-title').value = currentUserData.title || '';
                     document.getElementById('profile-modal-phone').value = currentUserData.phone || '';
+                    document.getElementById('profile-modal-line-id').value = currentUserData.lineId || '';
+                    document.getElementById('profile-modal-new-password').value = '';
+                    document.getElementById('profile-modal-confirm-new-password').value = '';
                     profileModal.classList.remove('hidden');
                 }
 
@@ -1381,6 +1397,9 @@
 
                     toggleButtonLoading(submitProfileEditBtn, true, '儲存中...');
                     const newUsername = document.getElementById('profile-modal-username').value.trim();
+                    const newPassword = document.getElementById('profile-modal-new-password').value;
+                    const confirmNewPassword = document.getElementById('profile-modal-confirm-new-password').value;
+
 
                     if (newUsername !== currentUserData.username) {
                         const usersRef = collection(db, "users");
@@ -1393,6 +1412,12 @@
                         }
                     }
                     
+                    if (newPassword && newPassword !== confirmNewPassword) {
+                        showMessage('新密碼與確認密碼不一致。', 'error');
+                        toggleButtonLoading(submitProfileEditBtn, false);
+                        return;
+                    }
+
                     const userDocRef = doc(db, "users", currentUserData.id);
                     
                     let updatedData = {
@@ -1400,6 +1425,7 @@
                         name: document.getElementById('profile-modal-name').value,
                         title: document.getElementById('profile-modal-title').value,
                         phone: document.getElementById('profile-modal-phone').value,
+                        lineId: document.getElementById('profile-modal-line-id').value,
                     };
                     
                     try {
@@ -1409,6 +1435,10 @@
                             updatedData.photoURL = await getDownloadURL(uploadResult.ref);
                         }
                         
+                        if (newPassword) {
+                            await updatePassword(auth.currentUser, newPassword);
+                        }
+
                         await updateDoc(userDocRef, updatedData);
                         
                         // Refresh local data
@@ -1424,7 +1454,11 @@
                         closeProfileModal();
                     } catch (error) {
                          console.error("更新個人資料時發生錯誤:", error);
-                         showMessage('更新失敗。', 'error');
+                         let message = '更新失敗。';
+                         if (error.code === 'auth/requires-recent-login') {
+                             message = '更新密碼需要您最近曾登入，請先登出後再重新登入一次。'
+                         }
+                         showMessage(message, 'error');
                     } finally {
                         toggleButtonLoading(submitProfileEditBtn, false);
                     }
