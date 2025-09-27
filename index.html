@@ -46,7 +46,7 @@
 </head>
 <body class="bg-red-600 flex justify-center min-h-screen pt-[10px] px-[10px] pb-[50px]">
 
-    <div class="w-full max-w-md mx-auto bg-white rounded-2xl shadow-lg overflow-hidden flex flex-col">
+    <div id="app-container" class="w-full max-w-md mx-auto bg-white rounded-2xl shadow-lg overflow-hidden flex flex-col transition-all duration-700 ease-out">
         
         <!-- 登入畫面 -->
         <div id="login-view" class="flex-1 overflow-y-auto">
@@ -650,6 +650,8 @@
             const mapLoadingText = document.getElementById('map-loading-text');
             const currentLocationIframe = document.getElementById('current-location-iframe');
             const relocateBtn = document.getElementById('relocate-btn');
+            const appContainer = document.getElementById('app-container');
+            const bodyEl = document.body;
             
             // --- 頁面與導覽按鈕 ---
             const dashboardPage = document.getElementById('dashboard-page');
@@ -787,6 +789,10 @@
                 
                 onAuthStateChanged(auth, async (user) => {
                     if (user) {
+                        bodyEl.className = 'bg-gray-100 flex justify-center min-h-screen pt-[10px] px-[10px] pb-[50px]';
+                        appContainer.classList.remove('h-[50vh]', 'opacity-0', 'translate-y-4');
+                        appContainer.classList.add('mx-auto');
+                        
                         const userDocRef = doc(db, "users", user.uid);
                         const userDocSnap = await getDoc(userDocRef);
 
@@ -809,8 +815,6 @@
 
                         navSettingsBtn.style.display = (currentUserRole === '管理員') ? 'flex' : 'none';
 
-                        document.body.classList.remove('bg-red-600');
-                        document.body.classList.add('bg-gray-100');
                         loginView.classList.add('hidden');
                         mainView.classList.remove('hidden');
                         mainView.classList.add('flex');
@@ -818,13 +822,21 @@
                         getInitialLocation();
                         showPage('dashboard');
                     } else {
+                        bodyEl.className = 'bg-red-600 flex items-center justify-center min-h-screen px-5';
+                        appContainer.classList.add('h-[50vh]', 'opacity-0', 'translate-y-4');
+                        appContainer.classList.remove('mx-auto');
+                        
+                        requestAnimationFrame(() => {
+                            requestAnimationFrame(() => {
+                                appContainer.classList.remove('opacity-0', 'translate-y-4');
+                            });
+                        });
+                        
                         currentUserData = null;
                         currentUserRole = null;
-                        document.body.classList.add('bg-red-600');
-                        document.body.classList.remove('bg-gray-100');
                         loginView.classList.remove('hidden');
                         mainView.classList.add('hidden');
-                        mainView.classList.remove('flex');
+                        mainView.classList.add('flex');
                         if (unsubscribeFromHistory) unsubscribeFromHistory();
                         if (unsubscribeFromAccounts) unsubscribeFromAccounts();
                         if (workDurationInterval) clearInterval(workDurationInterval);
