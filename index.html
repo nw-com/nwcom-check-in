@@ -44,17 +44,17 @@
         }
     </style>
 </head>
-<body class="bg-red-600 flex justify-center min-h-screen py-[40px] px-[10px]">
+<body class="bg-red-600 flex justify-center items-center min-h-screen">
 
-    <div class="w-full max-w-md bg-white rounded-2xl shadow-lg overflow-hidden flex flex-col h-full">
+    <div class="w-[400px] h-[720px] max-w-none bg-white rounded-2xl shadow-lg overflow-hidden flex flex-col">
         
         <!-- 登入畫面 -->
-        <div id="login-view" class="flex-1 overflow-y-auto">
+        <div id="login-view" class="flex-1 overflow-y-auto flex flex-col">
             <header class="bg-white p-6 text-center">
                 <img id="login-logo" src="https://static.wixstatic.com/media/6148f9_56377cef73c1498f95a2c3057b89f2ed~mv2.png" alt="西北保全 Logo" class="mx-auto" style="width: 120px; height: 60px;">
                 <h1 class="text-xl font-bold text-red-600 mt-4">西北勤務打卡系統</h1>
             </header>
-            <main class="p-6 md:p-8">
+            <main class="p-6 md:p-8 flex-1 flex flex-col justify-center">
                 <div class="space-y-4">
                     <div>
                         <div class="flex items-center justify-between">
@@ -99,103 +99,106 @@
                 </button>
             </header>
 
-            <!-- 可滾動的內容區域 -->
-            <main class="w-full h-full overflow-y-auto p-6 md:p-8 bg-gray-100 pt-[80px] pb-[80px]">
-                <div id="message-box" class="hidden p-4 mb-4 text-sm rounded-lg" role="alert">
-                    <span class="font-medium" id="message-content"></span>
+            <!-- 中間內容區 (包含子導覽與可滾動內容) -->
+            <div class="flex-1 flex flex-col mt-[80px] mb-[80px] overflow-hidden">
+                <!-- 子導覽列 (設定頁面專用) -->
+                <div id="settings-tab-nav" class="hidden h-[40px] px-6 border-b border-gray-200 bg-gray-100 flex-shrink-0">
+                    <nav class="-mb-px flex space-x-6 h-full items-center" aria-label="Tabs">
+                        <button id="settings-account-tab-btn" class="whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm">
+                            帳號
+                        </button>
+                        <button id="settings-rules-tab-btn" class="whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm">
+                            規則
+                        </button>
+                    </nav>
                 </div>
-
-                <!-- 儀表板頁面 -->
-                <div id="dashboard-page">
-                    <!-- 狀態顯示區 -->
-                    <div id="status-card" class="bg-white rounded-lg p-5 mb-6 text-center border transition-all">
-                         <div class="flex justify-between items-center">
-                            <div class="text-left">
-                                <h2 class="text-lg font-semibold text-gray-700 mb-1">目前狀態</h2>
-                                <p id="current-status" class="text-2xl font-bold text-gray-800">尚未打卡</p>
-                            </div>
-                            <div class="text-right">
-                                 <h2 class="text-lg font-semibold text-gray-700 mb-1">今日工時</h2>
-                                <p id="work-duration" class="text-2xl font-bold text-gray-800">-- 小時 -- 分</p>
-                            </div>
-                         </div>
+                
+                <!-- 可滾動的頁面內容 -->
+                <main class="flex-1 overflow-y-auto p-6 bg-gray-100">
+                    <div id="message-box" class="hidden p-4 mb-4 text-sm rounded-lg" role="alert">
+                        <span class="font-medium" id="message-content"></span>
                     </div>
-                </div>
 
-                <!-- 打卡頁面 -->
-                <div id="checkin-page" class="hidden">
-                     <!-- Map Display -->
-                    <div class="mb-6">
-                        <h3 class="text-lg font-semibold text-gray-800 mb-3 border-b pb-2 flex items-center justify-between">
-                            <div class="flex items-center space-x-2">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
-                                <span>目前位置</span>
-                            </div>
-                            <button id="relocate-btn" class="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-1 px-3 rounded-lg border border-gray-300 flex items-center space-x-1.5 transition-colors">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
-                                <span>重新定位</span>
-                            </button>
-                        </h3>
-                        <div id="map-wrapper" class="w-full h-[300px] rounded-lg bg-gray-200 flex items-center justify-center text-gray-500 overflow-hidden">
-                            <p id="map-loading-text">正在取得 GPS 定位...</p>
-                            <iframe id="current-location-iframe" class="hidden w-full h-full border-0"></iframe>
+                    <!-- 儀表板頁面 -->
+                    <div id="dashboard-page">
+                        <!-- 狀態顯示區 -->
+                        <div id="status-card" class="bg-white rounded-lg p-5 mb-6 text-center border transition-all">
+                             <div class="flex justify-between items-center">
+                                <div class="text-left">
+                                    <h2 class="text-lg font-semibold text-gray-700 mb-1">目前狀態</h2>
+                                    <p id="current-status" class="text-2xl font-bold text-gray-800">尚未打卡</p>
+                                </div>
+                                <div class="text-right">
+                                     <h2 class="text-lg font-semibold text-gray-700 mb-1">今日工時</h2>
+                                    <p id="work-duration" class="text-2xl font-bold text-gray-800">-- 小時 -- 分</p>
+                                </div>
+                             </div>
                         </div>
                     </div>
-                    <!-- 打卡按鈕區 -->
-                    <div class="grid grid-cols-2 gap-4 mb-6">
-                        <button id="clock-in-btn" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-4 px-4 rounded-lg shadow-md transition-all duration-200 flex items-center justify-center space-x-2 disabled:bg-gray-400">
-                           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" x2="3" y1="12" y2="12"/></svg>
-                            <span>上班打卡</span>
-                        </button>
-                        <button id="clock-out-btn" class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-4 px-4 rounded-lg shadow-md transition-all duration-200 flex items-center justify-center space-x-2 disabled:bg-gray-400" disabled>
-                           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
-                            <span>下班打卡</span>
-                        </button>
-                    </div>
-                    <!-- 打卡紀錄 -->
-                    <div class="mt-8">
-                        <h3 class="text-lg font-semibold text-gray-800 mb-3 border-b pb-2">今日打卡紀錄</h3>
-                        <div id="history-log" class="space-y-3 max-h-96 overflow-y-auto pr-2">
-                        </div>
-                    </div>
-                </div>
 
-                <!-- 設定頁面 -->
-                <div id="settings-page" class="hidden">
-                    <!-- Tab navigation -->
-                    <div class="border-b border-gray-200">
-                        <nav class="-mb-px flex space-x-6" aria-label="Tabs">
-                            <button id="settings-account-tab-btn" class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
-                                帳號
-                            </button>
-                            <button id="settings-rules-tab-btn" class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
-                                規則
-                            </button>
-                        </nav>
-                    </div>
-
-                    <!-- Tab content -->
-                    <div class="mt-6">
-                        <!-- Account Tab Content -->
-                        <div id="settings-account-content">
-                            <div class="flex justify-end mb-4">
-                                <button id="add-account-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                                    <span>新增帳號</span>
+                    <!-- 打卡頁面 -->
+                    <div id="checkin-page" class="hidden">
+                         <!-- Map Display -->
+                        <div class="mb-6">
+                            <h3 class="text-lg font-semibold text-gray-800 mb-3 border-b pb-2 flex items-center justify-between">
+                                <div class="flex items-center space-x-2">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+                                    <span>目前位置</span>
+                                </div>
+                                <button id="relocate-btn" class="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-1 px-3 rounded-lg border border-gray-300 flex items-center space-x-1.5 transition-colors">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                                    <span>重新定位</span>
                                 </button>
-                            </div>
-                            <div id="account-list" class="space-y-3">
-                                <p class="text-gray-500 text-center py-4">正在載入帳號資料...</p>
+                            </h3>
+                            <div id="map-wrapper" class="w-full h-[300px] rounded-lg bg-gray-200 flex items-center justify-center text-gray-500 overflow-hidden">
+                                <p id="map-loading-text">正在取得 GPS 定位...</p>
+                                <iframe id="current-location-iframe" class="hidden w-full h-full border-0"></iframe>
                             </div>
                         </div>
-
-                        <!-- Rules Tab Content -->
-                        <div id="settings-rules-content" class="hidden">
-                            <p class="text-gray-600 text-center py-10">系統開發中</p>
+                        <!-- 打卡按鈕區 -->
+                        <div class="grid grid-cols-2 gap-4 mb-6">
+                            <button id="clock-in-btn" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-4 px-4 rounded-lg shadow-md transition-all duration-200 flex items-center justify-center space-x-2 disabled:bg-gray-400">
+                               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" x2="3" y1="12" y2="12"/></svg>
+                                <span>上班打卡</span>
+                            </button>
+                            <button id="clock-out-btn" class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-4 px-4 rounded-lg shadow-md transition-all duration-200 flex items-center justify-center space-x-2 disabled:bg-gray-400" disabled>
+                               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
+                                <span>下班打卡</span>
+                            </button>
+                        </div>
+                        <!-- 打卡紀錄 -->
+                        <div class="mt-8">
+                            <h3 class="text-lg font-semibold text-gray-800 mb-3 border-b pb-2">今日打卡紀錄</h3>
+                            <div id="history-log" class="space-y-3 max-h-96 overflow-y-auto pr-2">
+                            </div>
                         </div>
                     </div>
-                </div>
-            </main>
+
+                    <!-- 設定頁面 -->
+                    <div id="settings-page" class="hidden">
+                        <!-- Tab content -->
+                        <div>
+                            <!-- Account Tab Content -->
+                            <div id="settings-account-content">
+                                <div class="flex justify-end mb-4">
+                                    <button id="add-account-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                                        <span>新增帳號</span>
+                                    </button>
+                                </div>
+                                <div id="account-list" class="space-y-3">
+                                    <p class="text-gray-500 text-center py-4">正在載入帳號資料...</p>
+                                </div>
+                            </div>
+
+                            <!-- Rules Tab Content -->
+                            <div id="settings-rules-content" class="hidden">
+                                <p class="text-gray-600 text-center py-10">系統開發中</p>
+                            </div>
+                        </div>
+                    </div>
+                </main>
+            </div>
 
             <!-- 底部導覽列 -->
             <nav id="bottom-nav" class="absolute bottom-0 left-0 w-full z-20 border-t bg-gray-50 h-[80px] flex items-center">
@@ -600,6 +603,7 @@
             const navDashboardBtn = document.getElementById('nav-dashboard-btn');
             const navCheckinBtn = document.getElementById('nav-checkin-btn');
             const navSettingsBtn = document.getElementById('nav-settings-btn');
+            const settingsTabNav = document.getElementById('settings-tab-nav');
 
             // --- 設定頁面元素 ---
             const settingsAccountTabBtn = document.getElementById('settings-account-tab-btn');
@@ -907,6 +911,7 @@
                     dashboardPage.classList.add('hidden');
                     checkinPage.classList.add('hidden');
                     settingsPage.classList.add('hidden');
+                    settingsTabNav.classList.add('hidden');
 
                     if (pageName === 'dashboard') {
                         dashboardPage.classList.remove('hidden');
@@ -916,6 +921,7 @@
                         setActiveTab(navCheckinBtn);
                     } else if (pageName === 'settings') {
                         settingsPage.classList.remove('hidden');
+                        settingsTabNav.classList.remove('hidden');
                         setActiveTab(navSettingsBtn);
                         showSettingsTab('account');
                         listenToAccounts();
@@ -929,14 +935,14 @@
                     if (tabName === 'account') {
                         settingsAccountContent.classList.remove('hidden');
                         settingsRulesContent.classList.add('hidden');
-                        settingsAccountTabBtn.className = `whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${activeClasses}`;
-                        settingsRulesTabBtn.className = `whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${inactiveClasses}`;
+                        settingsAccountTabBtn.className = `whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm ${activeClasses}`;
+                        settingsRulesTabBtn.className = `whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm ${inactiveClasses}`;
 
                     } else if (tabName === 'rules') {
                         settingsAccountContent.classList.add('hidden');
                         settingsRulesContent.classList.remove('hidden');
-                        settingsRulesTabBtn.className = `whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${activeClasses}`;
-                        settingsAccountTabBtn.className = `whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${inactiveClasses}`;
+                        settingsRulesTabBtn.className = `whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm ${activeClasses}`;
+                        settingsAccountTabBtn.className = `whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm ${inactiveClasses}`;
                     }
                 }
 
