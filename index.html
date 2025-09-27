@@ -70,7 +70,7 @@
                          <label for="login-password" class="block text-sm font-medium text-gray-700">密碼</label>
                         <div class="relative mt-1">
                             <input type="password" id="login-password" class="block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 pr-10" placeholder="請輸入密碼">
-                            <button type="button" id="toggle-password-btn" class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-500 hover:text-gray-700">
+                            <button type="button" class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-500 hover:text-gray-700 toggle-password-visibility">
                             </button>
                         </div>
                     </div>
@@ -300,10 +300,6 @@
                         <label for="profile-modal-email" class="block text-sm font-medium text-gray-700">電子郵件 (不可修改)</label>
                         <input type="email" id="profile-modal-email" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-gray-100" readonly>
                     </div>
-                     <div>
-                        <label for="profile-modal-role" class="block text-sm font-medium text-gray-700">角色 (不可修改)</label>
-                        <input type="text" id="profile-modal-role" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-gray-100" readonly>
-                    </div>
                     <div>
                         <label for="profile-modal-title" class="block text-sm font-medium text-gray-700">職稱</label>
                         <input type="text" id="profile-modal-title" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500">
@@ -311,6 +307,27 @@
                      <div>
                         <label for="profile-modal-phone" class="block text-sm font-medium text-gray-700">手機號碼</label>
                         <input type="tel" id="profile-modal-phone" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500">
+                    </div>
+                     <div>
+                        <label for="profile-modal-line-id" class="block text-sm font-medium text-gray-700">Line ID</label>
+                        <input type="text" id="profile-modal-line-id" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500">
+                    </div>
+                     <div class="pt-4 border-t">
+                        <p class="text-sm font-medium text-gray-800">變更密碼 (選填)</p>
+                         <div>
+                            <label for="profile-modal-new-password" class="block text-sm font-medium text-gray-700">新密碼</label>
+                             <div class="relative mt-1">
+                                <input type="password" id="profile-modal-new-password" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500 pr-10" placeholder="留空則不變更">
+                                <button type="button" class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-500 hover:text-gray-700 toggle-password-visibility"></button>
+                            </div>
+                        </div>
+                        <div>
+                            <label for="profile-modal-confirm-new-password" class="block text-sm font-medium text-gray-700">確認新密碼</label>
+                            <div class="relative mt-1">
+                                <input type="password" id="profile-modal-confirm-new-password" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500 pr-10">
+                                <button type="button" class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-500 hover:text-gray-700 toggle-password-visibility"></button>
+                            </div>
+                        </div>
                     </div>
                 </form>
             </main>
@@ -387,7 +404,17 @@
                     </div>
                     <div>
                         <label for="new-account-password" class="block text-sm font-medium text-gray-700">密碼</label>
-                        <input type="password" id="new-account-password" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500">
+                         <div class="relative mt-1">
+                            <input type="password" id="new-account-password" required class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500 pr-10">
+                            <button type="button" class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-500 hover:text-gray-700 toggle-password-visibility"></button>
+                        </div>
+                    </div>
+                    <div>
+                        <label for="new-account-confirm-password" class="block text-sm font-medium text-gray-700">密碼確認</label>
+                         <div class="relative mt-1">
+                            <input type="password" id="new-account-confirm-password" required class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500 pr-10">
+                            <button type="button" class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-500 hover:text-gray-700 toggle-password-visibility"></button>
+                        </div>
                     </div>
                      <div>
                         <label for="new-account-name" class="block text-sm font-medium text-gray-700">姓名</label>
@@ -407,6 +434,10 @@
                      <div>
                         <label for="new-account-phone" class="block text-sm font-medium text-gray-700">手機號碼</label>
                         <input type="tel" id="new-account-phone" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500">
+                    </div>
+                    <div>
+                        <label for="new-account-line-id" class="block text-sm font-medium text-gray-700">Line ID</label>
+                        <input type="text" id="new-account-line-id" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500">
                     </div>
                 </form>
             </main>
@@ -573,7 +604,7 @@
     <script type="module">
         import { initializeApp, getApp, deleteApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
         import { getFirestore, collection, addDoc, query, where, onSnapshot, serverTimestamp, orderBy, doc, updateDoc, arrayUnion, setDoc, getDoc, deleteDoc, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-        import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, sendPasswordResetEmail, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, sendPasswordResetEmail, createUserWithEmailAndPassword, updatePassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
         import { getStorage, ref, uploadString, getDownloadURL, uploadBytes, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
         
         document.addEventListener('DOMContentLoaded', () => {
@@ -894,6 +925,17 @@
                     closePhotoViewerBtn.addEventListener('click', closePhotoViewer);
                     prevPhotoBtn.addEventListener('click', () => showPhoto(currentPhotoIndex - 1));
                     nextPhotoBtn.addEventListener('click', () => showPhoto(currentPhotoIndex + 1));
+                    
+                    // 密碼可見性切換
+                    document.body.addEventListener('click', (e) => {
+                        if (e.target.closest('.toggle-password-visibility')) {
+                            const button = e.target.closest('.toggle-password-visibility');
+                            const input = button.previousElementSibling;
+                            const isPassword = input.type === 'password';
+                            input.type = isPassword ? 'text' : 'password';
+                            button.innerHTML = isPassword ? eyeOffIcon : eyeIcon;
+                        }
+                    });
 
                     // 事件代理
                     accountList.addEventListener('click', (e) => {
@@ -1021,7 +1063,7 @@
                         usernameLoginInput.value = savedUsername;
                         rememberMeCheckbox.checked = true;
                     }
-                    togglePasswordBtn.innerHTML = eyeIcon;
+                    document.querySelectorAll('.toggle-password-visibility').forEach(btn => btn.innerHTML = eyeIcon);
                 }
 
                 loginBtn.addEventListener('click', async () => {
@@ -1080,12 +1122,6 @@
                         loginMessage.textContent = message;
                         toggleButtonLoading(loginBtn, false);
                     }
-                });
-                
-                togglePasswordBtn.addEventListener('click', () => {
-                    const isPassword = passwordInput.type === 'password';
-                    passwordInput.type = isPassword ? 'text' : 'password';
-                    togglePasswordBtn.innerHTML = isPassword ? eyeOffIcon : eyeIcon;
                 });
                 
                 // --- 地圖與定位邏輯 ---
@@ -1541,9 +1577,15 @@
                     const username = document.getElementById('new-account-username').value.trim();
                     const email = document.getElementById('new-account-email').value.trim();
                     const password = document.getElementById('new-account-password').value;
+                    const confirmPassword = document.getElementById('new-account-confirm-password').value;
 
                     if (!username || !email || !password) {
                         showMessage('帳號、電子郵件和密碼為必填項。', 'error');
+                        toggleButtonLoading(submitAddAccountBtn, false);
+                        return;
+                    }
+                     if (password !== confirmPassword) {
+                        showMessage('兩次輸入的密碼不一致。', 'error');
                         toggleButtonLoading(submitAddAccountBtn, false);
                         return;
                     }
@@ -1574,6 +1616,7 @@
                             role: document.getElementById('new-account-role').value,
                             title: document.getElementById('new-account-title').value,
                             phone: document.getElementById('new-account-phone').value,
+                            lineId: document.getElementById('new-account-line-id').value,
                             photoURL: '',
                             createdAt: serverTimestamp(),
                             status: 'active'
