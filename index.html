@@ -46,7 +46,7 @@
 </head>
 <body class="bg-red-600 flex justify-center items-center min-h-screen">
 
-    <div class="w-[400px] h-[720px] max-w-none bg-white rounded-2xl shadow-lg overflow-hidden flex flex-col">
+    <div id="root-container" class="w-[380px] h-[480px] max-w-none bg-white rounded-2xl shadow-lg overflow-hidden flex flex-col transition-all duration-300 ease-in-out">
         
         <!-- 登入畫面 -->
         <div id="login-view" class="flex-1 overflow-y-auto flex flex-col">
@@ -578,6 +578,7 @@
 };
 
             // --- DOM 元素 ---
+            const rootContainer = document.getElementById('root-container');
             const loginView = document.getElementById('login-view'), mainView = document.getElementById('main-view');
             const emailInput = document.getElementById('email'), passwordInput = document.getElementById('login-password');
             const togglePasswordBtn = document.getElementById('toggle-password-btn'), rememberMeCheckbox = document.getElementById('remember-me');
@@ -753,6 +754,10 @@
                         }
 
                         navSettingsBtn.style.display = (currentUserRole === '管理員') ? 'flex' : 'none';
+                        
+                        // Adjust container size for main app view
+                        rootContainer.classList.remove('w-[380px]', 'h-[480px]');
+                        rootContainer.classList.add('w-[400px]', 'h-[720px]');
 
                         document.body.classList.remove('bg-red-600');
                         document.body.classList.add('bg-gray-100');
@@ -765,6 +770,11 @@
                     } else {
                         currentUserData = null;
                         currentUserRole = null;
+                        
+                        // Adjust container size for login view
+                        rootContainer.classList.remove('w-[400px]', 'h-[720px]');
+                        rootContainer.classList.add('w-[380px]', 'h-[480px]');
+
                         document.body.classList.add('bg-red-600');
                         document.body.classList.remove('bg-gray-100');
                         loginView.classList.remove('hidden');
