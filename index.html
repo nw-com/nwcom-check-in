@@ -786,7 +786,10 @@
                     closeProfileModalBtn.addEventListener('click', closeProfileModal);
                     cancelProfileEditBtn.addEventListener('click', closeProfileModal);
                     profileForm.addEventListener('submit', handleProfileEditSubmit);
-                    modalLogoutBtn.addEventListener('click', () => signOut(auth));
+                    modalLogoutBtn.addEventListener('click', () => {
+                        closeProfileModal();
+                        signOut(auth);
+                    });
                     profileModalUploadBtn.addEventListener('click', () => profileModalPhotoInput.click());
                     profileModalPhotoInput.addEventListener('change', handleProfileModalPhotoSelect);
                     
