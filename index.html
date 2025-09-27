@@ -44,9 +44,9 @@
         }
     </style>
 </head>
-<body class="bg-red-600 flex justify-center min-h-screen pt-[10px] px-[10px] pb-[50px]">
+<body class="bg-red-600 flex items-center justify-center min-h-screen px-5">
 
-    <div id="app-container" class="w-full max-w-md mx-auto bg-white rounded-2xl shadow-lg overflow-hidden flex flex-col transition-all duration-700 ease-out">
+    <div id="app-container" class="w-full max-w-md bg-white rounded-2xl shadow-lg overflow-hidden flex flex-col transition-all duration-700 ease-out">
         
         <!-- 登入畫面 -->
         <div id="login-view" class="flex-1 overflow-y-auto">
@@ -511,11 +511,18 @@
                     </div>
                      <div class="pt-4 border-t">
                         <p class="text-sm font-medium text-gray-800">重設密碼 (選填)</p>
-                        <p class="text-xs text-gray-500 mb-2">基於安全考量，無法直接修改，請聯絡使用者自行變更。</p>
                          <div>
                             <label for="edit-account-new-password" class="block text-sm font-medium text-gray-700">新密碼</label>
                              <div class="relative mt-1">
-                                <input type="password" id="edit-account-new-password" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-gray-100" placeholder="無法在此修改" readonly>
+                                <input type="password" id="edit-account-new-password" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500 pr-10" placeholder="留空則不變更">
+                                <button type="button" class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-500 hover:text-gray-700 toggle-password-visibility"></button>
+                            </div>
+                        </div>
+                        <div>
+                            <label for="edit-account-confirm-new-password" class="block text-sm font-medium text-gray-700">確認新密碼</label>
+                            <div class="relative mt-1">
+                                <input type="password" id="edit-account-confirm-new-password" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500 pr-10">
+                                <button type="button" class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-500 hover:text-gray-700 toggle-password-visibility"></button>
                             </div>
                         </div>
                     </div>
@@ -790,7 +797,7 @@
                 onAuthStateChanged(auth, async (user) => {
                     if (user) {
                         bodyEl.className = 'bg-gray-100 flex justify-center min-h-screen pt-[10px] px-[10px] pb-[50px]';
-                        appContainer.classList.remove('h-[50vh]', 'opacity-0', 'translate-y-4');
+                        appContainer.classList.remove('h-[70vh]', 'opacity-0', 'translate-y-4');
                         appContainer.classList.add('mx-auto');
                         
                         const userDocRef = doc(db, "users", user.uid);
@@ -823,7 +830,7 @@
                         showPage('dashboard');
                     } else {
                         bodyEl.className = 'bg-red-600 flex items-center justify-center min-h-screen px-5';
-                        appContainer.classList.add('h-[50vh]', 'opacity-0', 'translate-y-4');
+                        appContainer.classList.add('h-[70vh]', 'opacity-0', 'translate-y-4');
                         appContainer.classList.remove('mx-auto');
                         
                         requestAnimationFrame(() => {
@@ -1624,9 +1631,10 @@
                     const email = document.getElementById('new-account-email').value.trim();
                     const password = document.getElementById('new-account-password').value;
                     const confirmPassword = document.getElementById('new-account-confirm-password').value;
+                    const name = document.getElementById('new-account-name').value.trim();
 
-                    if (!username || !email || !password) {
-                        showMessage('帳號、電子郵件和密碼為必填項。', 'error');
+                    if (!username || !email || !password || !name) {
+                        showMessage('帳號、電子郵件、密碼和姓名為必填項。', 'error');
                         toggleButtonLoading(submitAddAccountBtn, false);
                         return;
                     }
@@ -1658,7 +1666,7 @@
                         let userData = {
                             username: username,
                             email: email,
-                            name: document.getElementById('new-account-name').value,
+                            name: name,
                             role: document.getElementById('new-account-role').value,
                             title: document.getElementById('new-account-title').value,
                             phone: document.getElementById('new-account-phone').value,
@@ -1696,8 +1704,15 @@
                     
                     const userId = editAccountIdInput.value;
                     const newUsername = document.getElementById('edit-account-username').value.trim();
+                    const newName = document.getElementById('edit-account-name').value.trim();
                     const userDocRef = doc(db, "users", userId);
                     
+                    if (!newUsername || !newName) {
+                        showMessage('帳號和姓名為必填項。', 'error');
+                        toggleButtonLoading(submitEditAccountBtn, false);
+                        return;
+                    }
+
                     const usersRef = collection(db, "users");
                     const q = query(usersRef, where("username", "==", newUsername));
                     const querySnapshot = await getDocs(q);
@@ -1717,7 +1732,7 @@
                     
                     let updatedData = {
                         username: newUsername,
-                        name: document.getElementById('edit-account-name').value,
+                        name: newName,
                         role: document.getElementById('edit-account-role').value,
                         title: document.getElementById('edit-account-title').value,
                         phone: document.getElementById('edit-account-phone').value,
@@ -1767,11 +1782,13 @@
 
                 function listenToAccounts() {
                     if (unsubscribeFromAccounts) unsubscribeFromAccounts();
-                    const q = query(collection(db, "users"), orderBy("createdAt", "desc"));
+                    const q = query(collection(db, "users"));
                     unsubscribeFromAccounts = onSnapshot(q, (snapshot) => {
                         const users = snapshot.docs
                             .map(doc => ({ id: doc.id, ...doc.data() }))
                             .filter(user => user.status !== 'deleted');
+                        
+                        users.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
                         renderAccountList(users);
                     }, (error) => {
                         console.error("Error listening to accounts:", error);
