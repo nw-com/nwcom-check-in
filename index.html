@@ -58,18 +58,18 @@
                 <div class="space-y-4">
                     <div>
                         <div class="flex items-center justify-between">
-                            <label for="email" class="block text-sm font-medium text-gray-700">電子郵件</label>
+                            <label for="username-login" class="block text-sm font-medium text-gray-700">帳號</label>
                             <div class="flex items-center text-sm">
                                 <input id="remember-me" type="checkbox" class="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded">
                                 <label for="remember-me" class="ml-1.5 text-gray-700">記住我</label>
                             </div>
                         </div>
-                        <input type="email" id="email" class="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500" placeholder="your.email@company.com">
+                        <input type="text" id="username-login" class="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500" placeholder="請輸入帳號">
                     </div>
                     <div>
                          <label for="login-password" class="block text-sm font-medium text-gray-700">密碼</label>
                         <div class="relative mt-1">
-                            <input type="password" id="login-password" class="block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 pr-10" placeholder="••••••••">
+                            <input type="password" id="login-password" class="block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 pr-10" placeholder="請輸入密碼">
                             <button type="button" id="toggle-password-btn" class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-500 hover:text-gray-700">
                             </button>
                         </div>
@@ -79,7 +79,7 @@
                         <span>登入系統</span>
                     </button>
                     <p id="login-message" class="text-red-500 text-sm text-center min-h-[20px]"></p>
-                    <p class="text-center text-gray-500 text-xs mt-2">V1.0.1</p>
+                    <p class="text-center text-gray-500 text-xs mt-2">V1.1.1</p>
                 </div>
             </main>
         </div>
@@ -559,7 +559,7 @@
 
     <script type="module">
         import { initializeApp, getApp, deleteApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-        import { getFirestore, collection, addDoc, query, where, onSnapshot, serverTimestamp, orderBy, doc, updateDoc, arrayUnion, setDoc, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, query, where, onSnapshot, serverTimestamp, orderBy, doc, updateDoc, arrayUnion, setDoc, getDoc, deleteDoc, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
         import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, sendPasswordResetEmail, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
         import { getStorage, ref, uploadString, getDownloadURL, uploadBytes, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
         
@@ -576,13 +576,13 @@
 
             // --- DOM 元素 ---
             const loginView = document.getElementById('login-view'), mainView = document.getElementById('main-view');
-            const emailInput = document.getElementById('email'), passwordInput = document.getElementById('login-password');
+            const usernameLoginInput = document.getElementById('username-login');
+            const passwordInput = document.getElementById('login-password');
             const togglePasswordBtn = document.getElementById('toggle-password-btn'), rememberMeCheckbox = document.getElementById('remember-me');
             const loginBtn = document.getElementById('login-btn'), loginMessage = document.getElementById('login-message');
             const userNameDisplay = document.getElementById('user-name-display');
             const headerProfileImg = document.getElementById('header-profile-img');
             const profileBtn = document.getElementById('profile-btn');
-            const forgotPasswordLink = document.getElementById('forgot-password-link');
             const currentStatusEl = document.getElementById('current-status'), workDurationEl = document.getElementById('work-duration');
             const clockInBtn = document.getElementById('clock-in-btn'), clockOutBtn = document.getElementById('clock-out-btn');
             const historyLogEl = document.getElementById('history-log');
@@ -992,24 +992,61 @@
 
                 // --- 登入/登出相關 ---
                 function initializeLoginScreen() {
-                    const savedEmail = localStorage.getItem('rememberedEmail');
-                    if (savedEmail) {
-                        emailInput.value = savedEmail;
+                    const savedUsername = localStorage.getItem('rememberedUsername');
+                    if (savedUsername) {
+                        usernameLoginInput.value = savedUsername;
                         rememberMeCheckbox.checked = true;
                     }
                     togglePasswordBtn.innerHTML = eyeIcon;
                 }
 
                 loginBtn.addEventListener('click', async () => {
-                    const email = emailInput.value;
+                    const username = usernameLoginInput.value;
                     const password = passwordInput.value;
                     loginMessage.textContent = '';
-                    if (rememberMeCheckbox.checked) localStorage.setItem('rememberedEmail', email);
-                    else localStorage.removeItem('rememberedEmail');
+
+                    if (rememberMeCheckbox.checked) {
+                        localStorage.setItem('rememberedUsername', username);
+                    } else {
+                        localStorage.removeItem('rememberedUsername');
+                    }
+                    
                     toggleButtonLoading(loginBtn, true, '登入中...');
+                    
                     try {
-                        if (email === '11' && password === '11') await signInWithEmailAndPassword(auth, 'test@company.com', 'password123');
-                        else await signInWithEmailAndPassword(auth, email, password);
+                        // Special test user case
+                        if (username === '11' && password === '11') {
+                            await signInWithEmailAndPassword(auth, 'test@company.com', 'password123');
+                            return; // Exit after successful login
+                        }
+
+                        // Normal user login by username
+                        const usersRef = collection(db, "users");
+                        const q = query(usersRef, where("username", "==", username));
+                        const querySnapshot = await getDocs(q);
+
+                        if (querySnapshot.empty) {
+                            loginMessage.textContent = '登入失敗，帳號或密碼錯誤。';
+                            return; // Exit if username not found
+                        }
+
+                        const userDoc = querySnapshot.docs[0];
+                        const userData = userDoc.data();
+                        
+                        if (userData.status === 'deleted') {
+                            loginMessage.textContent = '此帳號已被停用。';
+                            return;
+                        }
+
+                        const email = userData.email;
+
+                        if (!email) {
+                             loginMessage.textContent = '登入失敗，用戶資料不完整。';
+                             return;
+                        }
+
+                        await signInWithEmailAndPassword(auth, email, password);
+
                     } catch (error) {
                         console.error("Login failed:", error);
                         const message = (error.code === 'auth/invalid-credential') ? '登入失敗，帳號或密碼錯誤。' : '登入時發生未知錯誤。';
