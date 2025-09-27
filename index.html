@@ -740,7 +740,7 @@
                             }
                             currentUserData = { id: user.uid, ...userData };
                             currentUserRole = currentUserData.role;
-                            userNameDisplay.textContent = `歡迎, ${currentUserData.username || currentUserData.name}`;
+                            userNameDisplay.textContent = `歡迎, ${currentUserData.name || currentUserData.username}`;
                             headerProfileImg.src = currentUserData.photoURL || 'https://placehold.co/96x96/e2e8f0/4a5568?text=頭像';
                         } else {
                             console.error("User data not found in Firestore for UID:", user.uid);
@@ -1168,11 +1168,11 @@
                     const user = auth.currentUser;
                     const now = new Date();
                     const dateTime = now.toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
-                    const userEmail = user ? user.email : 'N/A';
+                    const userName = currentUserData ? currentUserData.name : (user ? user.email : 'N/A');
                     const gpsCoords = currentPosition ? `${currentPosition.coords.latitude.toFixed(5)}, ${currentPosition.coords.longitude.toFixed(5)}` : 'No GPS';
                     const description = photoDescriptionInput.value.trim();
 
-                    const textLines = [dateTime, userEmail, `GPS: ${gpsCoords}`];
+                    const textLines = [dateTime, userName, `GPS: ${gpsCoords}`];
                     if (description) textLines.push(description);
 
                     context.font = '24px "Noto Sans TC"';
@@ -1307,7 +1307,7 @@
                         }
                         currentUserData.username = updatedData.username;
                         currentUserData.name = updatedData.name;
-                        userNameDisplay.textContent = `歡迎, ${currentUserData.username || currentUserData.name}`;
+                        userNameDisplay.textContent = `歡迎, ${currentUserData.name || currentUserData.username}`;
 
                         showMessage('個人資料已更新', 'success');
                         closeProfileModal();
