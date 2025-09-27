@@ -1027,6 +1027,7 @@
 
                         if (querySnapshot.empty) {
                             loginMessage.textContent = '登入失敗，帳號或密碼錯誤。';
+                            toggleButtonLoading(loginBtn, false);
                             return; // Exit if username not found
                         }
 
@@ -1035,6 +1036,7 @@
                         
                         if (userData.status === 'deleted') {
                             loginMessage.textContent = '此帳號已被停用。';
+                            toggleButtonLoading(loginBtn, false);
                             return;
                         }
 
@@ -1042,6 +1044,7 @@
 
                         if (!email) {
                              loginMessage.textContent = '登入失敗，用戶資料不完整。';
+                             toggleButtonLoading(loginBtn, false);
                              return;
                         }
 
@@ -1051,7 +1054,6 @@
                         console.error("Login failed:", error);
                         const message = (error.code === 'auth/invalid-credential') ? '登入失敗，帳號或密碼錯誤。' : '登入時發生未知錯誤。';
                         loginMessage.textContent = message;
-                    } finally {
                         toggleButtonLoading(loginBtn, false);
                     }
                 });
@@ -1500,8 +1502,25 @@
                     e.preventDefault();
                     toggleButtonLoading(submitAddAccountBtn, true, '儲存中...');
                     
-                    const email = document.getElementById('new-account-email').value;
+                    const username = document.getElementById('new-account-username').value.trim();
+                    const email = document.getElementById('new-account-email').value.trim();
                     const password = document.getElementById('new-account-password').value;
+
+                    if (!username || !email || !password) {
+                        showMessage('帳號、電子郵件和密碼為必填項。', 'error');
+                        toggleButtonLoading(submitAddAccountBtn, false);
+                        return;
+                    }
+                    
+                    const usersRef = collection(db, "users");
+                    const q = query(usersRef, where("username", "==", username));
+                    const querySnapshot = await getDocs(q);
+
+                    if (!querySnapshot.empty) {
+                        showMessage('此帳號已被使用，請選擇其他帳號。', 'error');
+                        toggleButtonLoading(submitAddAccountBtn, false);
+                        return;
+                    }
 
                     // 使用獨立的 Firebase App 實例來創建用戶，避免影響當前管理員的登入狀態
                     const tempAppName = `temp-user-creation-${Date.now()}`;
@@ -1513,14 +1532,15 @@
                         const user = userCredential.user;
 
                         let userData = {
-                            username: document.getElementById('new-account-username').value,
+                            username: username,
                             email: email,
                             name: document.getElementById('new-account-name').value,
                             role: document.getElementById('new-account-role').value,
                             title: document.getElementById('new-account-title').value,
                             phone: document.getElementById('new-account-phone').value,
                             photoURL: '',
-                            createdAt: serverTimestamp()
+                            createdAt: serverTimestamp(),
+                            status: 'active'
                         };
 
                         if (profilePhotoFile) {
