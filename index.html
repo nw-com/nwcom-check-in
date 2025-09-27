@@ -542,18 +542,31 @@
         </div>
     </div>
 
-    <!-- Password Prompt Modal -->
-    <div id="password-prompt-modal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-[1300]">
+    <!-- Email Login Modal -->
+    <div id="email-login-modal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-[1300]">
         <div class="bg-white rounded-lg shadow-xl w-full max-w-sm">
-            <div class="p-6">
-                <h3 class="text-lg font-semibold text-gray-800 mb-4">請輸入管理密碼</h3>
-                <input type="password" id="prompt-password-input" class="block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500">
-                <p id="prompt-message" class="text-red-500 text-sm min-h-[20px] mt-2"></p>
-                <div class="mt-4 flex justify-end space-x-3">
-                    <button id="cancel-prompt-btn" type="button" class="bg-white hover:bg-gray-100 text-gray-700 font-bold py-2 px-4 rounded-lg border">取消</button>
-                    <button id="submit-prompt-btn" type="button" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">確認</button>
+             <header class="p-4 border-b flex justify-between items-center">
+                <h3 class="text-lg font-bold">電子郵件登入</h3>
+                <button id="close-email-login-modal-btn" class="text-gray-400 hover:text-gray-600">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </header>
+            <main class="p-6">
+                <div class="space-y-4">
+                    <div>
+                        <label for="modal-email" class="block text-sm font-medium text-gray-700">電子郵件</label>
+                        <input type="email" id="modal-email" class="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm" placeholder="your.email@company.com">
+                    </div>
+                    <div>
+                        <label for="modal-password" class="block text-sm font-medium text-gray-700">密碼</label>
+                        <input type="password" id="modal-password" class="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm" placeholder="••••••••">
+                    </div>
+                    <button id="modal-login-btn" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-lg">
+                        <span>登入</span>
+                    </button>
+                    <p id="modal-login-message" class="text-red-500 text-sm text-center min-h-[20px]"></p>
                 </div>
-            </div>
+            </main>
         </div>
     </div>
 
@@ -674,12 +687,13 @@
             const closeMapModalBtn = document.getElementById('close-map-modal-btn');
             const mapIframe = document.getElementById('map-iframe');
 
-            // --- 密碼提示 Modal 元素 ---
-            const passwordPromptModal = document.getElementById('password-prompt-modal');
-            const promptPasswordInput = document.getElementById('prompt-password-input');
-            const promptMessage = document.getElementById('prompt-message');
-            const cancelPromptBtn = document.getElementById('cancel-prompt-btn');
-            const submitPromptBtn = document.getElementById('submit-prompt-btn');
+            // --- Email 登入 Modal 元素 ---
+            const emailLoginModal = document.getElementById('email-login-modal');
+            const closeEmailLoginModalBtn = document.getElementById('close-email-login-modal-btn');
+            const modalEmailInput = document.getElementById('modal-email');
+            const modalPasswordInput = document.getElementById('modal-password');
+            const modalLoginBtn = document.getElementById('modal-login-btn');
+            const modalLoginMessage = document.getElementById('modal-login-message');
             
             // --- 照片檢視 Modal 元素 ---
             const photoViewerModal = document.getElementById('photo-viewer-modal');
@@ -798,10 +812,29 @@
                             if (logoClickCount === 10) {
                                 clearTimeout(logoClickTimer);
                                 logoClickCount = 0;
-                                openPasswordPrompt();
+                                openEmailLoginModal();
                             }
                         });
                     }
+                    
+                    // Email 登入 Modal
+                    closeEmailLoginModalBtn.addEventListener('click', closeEmailLoginModal);
+                    modalLoginBtn.addEventListener('click', async () => {
+                        const email = modalEmailInput.value;
+                        const password = modalPasswordInput.value;
+                        modalLoginMessage.textContent = '';
+                        toggleButtonLoading(modalLoginBtn, true, '登入中...');
+                        try {
+                            await signInWithEmailAndPassword(auth, email, password);
+                            closeEmailLoginModal();
+                        } catch (error) {
+                            console.error("Modal Login failed:", error);
+                            modalLoginMessage.textContent = '登入失敗，請確認電子郵件及密碼。';
+                        } finally {
+                            toggleButtonLoading(modalLoginBtn, false);
+                        }
+                    });
+
 
                     // 個人資料 Modal
                     closeProfileModalBtn.addEventListener('click', closeProfileModal);
@@ -814,20 +847,6 @@
                     profileModalUploadBtn.addEventListener('click', () => profileModalPhotoInput.click());
                     profileModalPhotoInput.addEventListener('change', handleProfileModalPhotoSelect);
                     
-                    // 密碼提示 Modal
-                    cancelPromptBtn.addEventListener('click', closePasswordPrompt);
-                    submitPromptBtn.addEventListener('click', () => {
-                        const password = promptPasswordInput.value;
-                        if (password === '0112') {
-                            closePasswordPrompt();
-                            openAddAccountModal();
-                        } else {
-                            promptMessage.textContent = '管理密碼錯誤。';
-                            promptPasswordInput.value = '';
-                        }
-                    });
-                    promptPasswordInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') submitPromptBtn.click(); });
-
                     // 打卡相機
                     takePhotoBtn.addEventListener('click', takePhotoWithWatermark);
                     closeCameraBtn.addEventListener('click', uploadPhotosAndFinish);
@@ -978,16 +997,17 @@
                     );
                 }
 
-                // --- 密碼提示 Modal ---
-                function openPasswordPrompt() {
-                    promptPasswordInput.value = '';
-                    promptMessage.textContent = '';
-                    passwordPromptModal.classList.remove('hidden');
-                    promptPasswordInput.focus();
+                // --- Email 登入 Modal ---
+                function openEmailLoginModal() {
+                    modalEmailInput.value = '';
+                    modalPasswordInput.value = '';
+                    modalLoginMessage.textContent = '';
+                    emailLoginModal.classList.remove('hidden');
+                    modalEmailInput.focus();
                 }
 
-                function closePasswordPrompt() {
-                    passwordPromptModal.classList.add('hidden');
+                function closeEmailLoginModal() {
+                    emailLoginModal.classList.add('hidden');
                 }
 
                 // --- 登入/登出相關 ---
