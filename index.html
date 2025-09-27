@@ -29,6 +29,19 @@
             to { transform: rotate(360deg); }
         }
         #camera-modal, #add-account-modal, #map-modal, #profile-camera-modal, #edit-account-modal, #delete-confirm-modal, #profile-modal { z-index: 1000; }
+        .aspect-16-9 {
+            position: relative;
+            width: 100%;
+            padding-top: 56.25%; /* 16:9 Aspect Ratio */
+        }
+        .aspect-16-9 > video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
     </style>
 </head>
 <body class="bg-red-600 flex justify-center min-h-screen pt-[10px] px-[10px] pb-[50px]">
@@ -212,8 +225,8 @@
             </header>
             <main class="p-4 flex-1 overflow-y-auto">
                 <div class="space-y-4">
-                    <div class="relative w-full bg-gray-200 rounded-lg overflow-hidden">
-                        <video id="camera-video" class="w-full h-auto" playsinline autoplay></video>
+                    <div class="aspect-16-9 bg-gray-200 rounded-lg overflow-hidden">
+                        <video id="camera-video" playsinline autoplay></video>
                         <canvas id="photo-canvas" class="hidden"></canvas>
                     </div>
                      <div>
@@ -689,6 +702,7 @@
             let editCurrentUserPhotoFile = null;
             let viewerPhotos = [];
             let currentPhotoIndex = 0;
+            let tempPhotos = [];
 
             // --- Firebase 設定檢查 ---
             function checkFirebaseConfig() {
@@ -720,7 +734,7 @@
                         if (userDocSnap.exists()) {
                             const userData = userDocSnap.data();
                             if (userData.status === 'deleted') {
-                                showMessage('此帳號已被停用。', 'error');
+                                loginMessage.textContent = '此帳號已被停用。';
                                 signOut(auth);
                                 return;
                             }
@@ -816,7 +830,7 @@
 
                     // 打卡相機
                     takePhotoBtn.addEventListener('click', takePhotoWithWatermark);
-                    closeCameraBtn.addEventListener('click', closeCameraModal);
+                    closeCameraBtn.addEventListener('click', uploadPhotosAndFinish);
                     
                     // 地圖
                     closeMapModalBtn.addEventListener('click', closeMapModal);
@@ -1098,7 +1112,8 @@
                 async function showCameraModal(title, recordId) {
                     cameraModal.dataset.recordId = recordId;
                     cameraModalTitle.textContent = title;
-                    photoPreviewContainer.innerHTML = '';
+                    tempPhotos = []; // Reset photos array
+                    renderPhotoPreviews(); // Clear previews
                     photoDescriptionInput.value = '';
                     cameraModal.classList.remove('hidden');
                     try {
@@ -1112,75 +1127,111 @@
                     }
                 }
 
-                async function takePhotoWithWatermark() {
+                function renderPhotoPreviews() {
+                    photoPreviewContainer.innerHTML = '';
+                    tempPhotos.forEach((dataUrl, index) => {
+                        const imgContainer = document.createElement('div');
+                        imgContainer.className = 'relative';
+                        
+                        const img = document.createElement('img');
+                        img.src = dataUrl;
+                        img.className = 'w-full h-24 object-cover rounded';
+                        
+                        const deleteBtn = document.createElement('button');
+                        deleteBtn.className = 'absolute top-1 right-1 bg-black bg-opacity-50 text-white rounded-full p-0.5 leading-none';
+                        deleteBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`;
+                        deleteBtn.dataset.index = index;
+                        deleteBtn.onclick = () => {
+                            tempPhotos.splice(index, 1);
+                            renderPhotoPreviews();
+                        };
+                        
+                        imgContainer.appendChild(img);
+                        imgContainer.appendChild(deleteBtn);
+                        photoPreviewContainer.appendChild(imgContainer);
+                    });
+                }
+
+                function takePhotoWithWatermark() {
                     const video = videoElement;
                     if (!video || !video.videoWidth) {
                         showMessage('相機尚未就緒。', 'error');
                         return;
                     }
+                   
+                    const canvas = canvasElement;
+                    const context = canvas.getContext('2d');
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                    const user = auth.currentUser;
+                    const now = new Date();
+                    const dateTime = now.toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                    const userEmail = user ? user.email : 'N/A';
+                    const gpsCoords = currentPosition ? `${currentPosition.coords.latitude.toFixed(5)}, ${currentPosition.coords.longitude.toFixed(5)}` : 'No GPS';
+                    const description = photoDescriptionInput.value.trim();
+
+                    const textLines = [dateTime, userEmail, `GPS: ${gpsCoords}`];
+                    if (description) textLines.push(description);
+
+                    context.font = '24px "Noto Sans TC"';
+                    context.textBaseline = 'bottom';
+                    
+                    const padding = 10;
+                    const lineHeight = 30;
+                    const boxHeight = (lineHeight * textLines.length) + (padding * 2);
+                    
+                    context.fillStyle = 'rgba(0, 0, 0, 0.6)';
+                    const textWidth = Math.max(...textLines.map(line => context.measureText(line).width));
+                    const boxWidth = textWidth + (padding * 2);
+                    context.fillRect(padding, canvas.height - boxHeight - padding, boxWidth, boxHeight);
+                    
+                    context.fillStyle = 'white';
+                    textLines.forEach((line, index) => {
+                        context.fillText(line, padding * 2, canvas.height - padding - (lineHeight * (textLines.length - 1 - index) ));
+                    });
+                    
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                    tempPhotos.push(dataUrl);
+                    renderPhotoPreviews();
+                    photoDescriptionInput.value = ''; // Clear description after each photo
+                }
+
+                async function uploadPhotosAndFinish() {
                     const recordId = cameraModal.dataset.recordId;
-                    if (!recordId) return;
+                    if (!recordId) {
+                        closeCameraModal();
+                        return;
+                    }
 
-                    toggleButtonLoading(takePhotoBtn, true, '上傳中...');
+                    if (tempPhotos.length > 0) {
+                        toggleButtonLoading(closeCameraBtn, true, '上傳照片中...');
 
-                    try {
-                        const canvas = canvasElement;
-                        const context = canvas.getContext('2d');
-                        canvas.width = video.videoWidth;
-                        canvas.height = video.videoHeight;
-                        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                        try {
+                            const user = auth.currentUser;
+                            const uploadPromises = tempPhotos.map(dataUrl => {
+                                const photoName = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}.jpg`;
+                                const storageRef = ref(storage, `photos/${user.uid}/${recordId}/${photoName}`);
+                                return uploadString(storageRef, dataUrl, 'data_url').then(uploadResult => getDownloadURL(uploadResult.ref));
+                            });
 
-                        const user = auth.currentUser;
-                        const now = new Date();
-                        const dateTime = now.toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
-                        const userEmail = user ? user.email : 'N/A';
-                        const gpsCoords = currentPosition ? `${currentPosition.coords.latitude.toFixed(5)}, ${currentPosition.coords.longitude.toFixed(5)}` : 'No GPS';
-                        const description = photoDescriptionInput.value.trim();
+                            const downloadURLs = await Promise.all(uploadPromises);
 
-                        const textLines = [dateTime, userEmail, `GPS: ${gpsCoords}`];
-                        if (description) textLines.push(description);
-
-                        context.font = '24px "Noto Sans TC"';
-                        context.textBaseline = 'bottom';
-                        
-                        const padding = 10;
-                        const lineHeight = 30;
-                        const boxHeight = (lineHeight * textLines.length) + (padding * 2);
-                        
-                        context.fillStyle = 'rgba(0, 0, 0, 0.6)';
-                        const textWidth = Math.max(...textLines.map(line => context.measureText(line).width));
-                        const boxWidth = textWidth + (padding * 2);
-                        context.fillRect(padding, canvas.height - boxHeight - padding, boxWidth, boxHeight);
-                        
-                        context.fillStyle = 'white';
-                        textLines.forEach((line, index) => {
-                            context.fillText(line, padding * 2, canvas.height - padding - (lineHeight * (textLines.length - 1 - index) ));
-                        });
-                        
-                        const dataUrl = canvas.toDataURL('image/jpeg');
-                        
-                        const photoName = `${Date.now()}.jpg`;
-                        const storageRef = ref(storage, `photos/${user.uid}/${recordId}/${photoName}`);
-                        const uploadResult = await uploadString(storageRef, dataUrl, 'data_url');
-                        const downloadURL = await getDownloadURL(uploadResult.ref);
-                        
-                        const recordRef = doc(db, 'clock_records', recordId);
-                        await updateDoc(recordRef, { photoURLs: arrayUnion(downloadURL) });
-
-                        const imgContainer = document.createElement('div');
-                        imgContainer.className = 'relative'
-                        const img = document.createElement('img');
-                        img.src = dataUrl;
-                        img.className = 'w-full h-auto object-cover rounded';
-                        imgContainer.appendChild(img);
-                        photoPreviewContainer.appendChild(imgContainer);
-                        photoDescriptionInput.value = '';
-                        showMessage('照片已上傳！', 'success');
-                    } catch (error) {
-                        console.error("Photo upload error:", error);
-                        showMessage('照片上傳失敗。', 'error');
-                    } finally {
-                        toggleButtonLoading(takePhotoBtn, false);
+                            const recordRef = doc(db, 'clock_records', recordId);
+                            await updateDoc(recordRef, {
+                                photoURLs: arrayUnion(...downloadURLs)
+                            });
+                            showMessage('所有照片已上傳！', 'success');
+                        } catch (error) {
+                            console.error("Final photo upload error:", error);
+                            showMessage('部分或所有照片上傳失敗。', 'error');
+                        } finally {
+                            toggleButtonLoading(closeCameraBtn, false);
+                            closeCameraModal();
+                        }
+                    } else {
+                        closeCameraModal();
                     }
                 }
 
