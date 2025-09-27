@@ -1461,13 +1461,11 @@
                         await updateDoc(userDocRef, updatedData);
                         
                         // Refresh local data
-                        if(updatedData.photoURL) {
-                            currentUserData.photoURL = updatedData.photoURL;
-                             headerProfileImg.src = updatedData.photoURL;
-                        }
-                        currentUserData.username = updatedData.username;
-                        currentUserData.name = updatedData.name;
+                        currentUserData = { ...currentUserData, ...updatedData };
                         userNameDisplay.textContent = `歡迎, ${currentUserData.name || currentUserData.username}`;
+                        if (updatedData.photoURL) {
+                            headerProfileImg.src = updatedData.photoURL;
+                        }
 
                         showMessage('個人資料已更新', 'success');
                         closeProfileModal();
@@ -1834,7 +1832,7 @@
                 function listenToTodayRecords(userId) {
                     if (unsubscribeFromHistory) unsubscribeFromHistory();
                     
-                    const q = query(collection(db, "clock_records"), where("userId", "==", userId));
+                    const q = query(collection(db, "clock_records"), where("userId", "==", userId), orderBy("timestamp", "desc"));
 
                     unsubscribeFromHistory = onSnapshot(q, (snapshot) => {
                         const today = new Date();
@@ -1845,8 +1843,6 @@
                             return { ...data, id: doc.id, timestamp: data.timestamp?.toDate() };
                         }).filter(item => item.timestamp && item.timestamp >= today);
                         
-                        history.sort((a, b) => b.timestamp - a.timestamp);
-
                         renderHistory(history);
                         updateUI(history);
                     }, (error) => {
