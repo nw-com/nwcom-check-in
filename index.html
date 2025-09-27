@@ -44,9 +44,9 @@
         }
     </style>
 </head>
-<body class="bg-red-600 flex items-center justify-center min-h-screen px-5">
+<body class="bg-red-600 flex items-center justify-center min-h-screen px-[20px]">
 
-    <div id="app-container" class="w-full max-w-md bg-white rounded-2xl shadow-lg overflow-hidden flex flex-col transition-all duration-700 ease-out">
+    <div class="w-full max-w-md bg-white rounded-2xl shadow-lg overflow-hidden flex flex-col h-[70vh]">
         
         <!-- 登入畫面 -->
         <div id="login-view" class="flex-1 overflow-y-auto">
@@ -58,19 +58,19 @@
                 <div class="space-y-4">
                     <div>
                         <div class="flex items-center justify-between">
-                            <label for="username-login" class="block text-sm font-medium text-gray-700">帳號</label>
+                            <label for="email" class="block text-sm font-medium text-gray-700">電子郵件</label>
                             <div class="flex items-center text-sm">
                                 <input id="remember-me" type="checkbox" class="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded">
                                 <label for="remember-me" class="ml-1.5 text-gray-700">記住我</label>
                             </div>
                         </div>
-                        <input type="text" id="username-login" class="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500" placeholder="請輸入帳號">
+                        <input type="email" id="email" class="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500" placeholder="your.email@company.com">
                     </div>
                     <div>
                          <label for="login-password" class="block text-sm font-medium text-gray-700">密碼</label>
                         <div class="relative mt-1">
-                            <input type="password" id="login-password" class="block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 pr-10" placeholder="請輸入密碼">
-                            <button type="button" class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-500 hover:text-gray-700 toggle-password-visibility">
+                            <input type="password" id="login-password" class="block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 pr-10" placeholder="••••••••">
+                            <button type="button" id="toggle-password-btn" class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-500 hover:text-gray-700">
                             </button>
                         </div>
                     </div>
@@ -79,7 +79,7 @@
                         <span>登入系統</span>
                     </button>
                     <p id="login-message" class="text-red-500 text-sm text-center min-h-[20px]"></p>
-                    <p class="text-center text-gray-500 text-xs mt-2">V1.1.1</p>
+                    <p class="text-center text-gray-500 text-xs mt-2">V1.0.1</p>
                 </div>
             </main>
         </div>
@@ -300,6 +300,10 @@
                         <label for="profile-modal-email" class="block text-sm font-medium text-gray-700">電子郵件 (不可修改)</label>
                         <input type="email" id="profile-modal-email" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-gray-100" readonly>
                     </div>
+                     <div>
+                        <label for="profile-modal-role" class="block text-sm font-medium text-gray-700">角色 (不可修改)</label>
+                        <input type="text" id="profile-modal-role" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-gray-100" readonly>
+                    </div>
                     <div>
                         <label for="profile-modal-title" class="block text-sm font-medium text-gray-700">職稱</label>
                         <input type="text" id="profile-modal-title" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500">
@@ -307,27 +311,6 @@
                      <div>
                         <label for="profile-modal-phone" class="block text-sm font-medium text-gray-700">手機號碼</label>
                         <input type="tel" id="profile-modal-phone" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500">
-                    </div>
-                     <div>
-                        <label for="profile-modal-line-id" class="block text-sm font-medium text-gray-700">Line ID</label>
-                        <input type="text" id="profile-modal-line-id" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500">
-                    </div>
-                     <div class="pt-4 border-t">
-                        <p class="text-sm font-medium text-gray-800">變更密碼 (選填)</p>
-                         <div>
-                            <label for="profile-modal-new-password" class="block text-sm font-medium text-gray-700">新密碼</label>
-                             <div class="relative mt-1">
-                                <input type="password" id="profile-modal-new-password" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500 pr-10" placeholder="留空則不變更">
-                                <button type="button" class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-500 hover:text-gray-700 toggle-password-visibility"></button>
-                            </div>
-                        </div>
-                        <div>
-                            <label for="profile-modal-confirm-new-password" class="block text-sm font-medium text-gray-700">確認新密碼</label>
-                            <div class="relative mt-1">
-                                <input type="password" id="profile-modal-confirm-new-password" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500 pr-10">
-                                <button type="button" class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-500 hover:text-gray-700 toggle-password-visibility"></button>
-                            </div>
-                        </div>
                     </div>
                 </form>
             </main>
@@ -404,17 +387,7 @@
                     </div>
                     <div>
                         <label for="new-account-password" class="block text-sm font-medium text-gray-700">密碼</label>
-                         <div class="relative mt-1">
-                            <input type="password" id="new-account-password" required class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500 pr-10">
-                            <button type="button" class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-500 hover:text-gray-700 toggle-password-visibility"></button>
-                        </div>
-                    </div>
-                    <div>
-                        <label for="new-account-confirm-password" class="block text-sm font-medium text-gray-700">密碼確認</label>
-                         <div class="relative mt-1">
-                            <input type="password" id="new-account-confirm-password" required class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500 pr-10">
-                            <button type="button" class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-500 hover:text-gray-700 toggle-password-visibility"></button>
-                        </div>
+                        <input type="password" id="new-account-password" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500">
                     </div>
                      <div>
                         <label for="new-account-name" class="block text-sm font-medium text-gray-700">姓名</label>
@@ -434,10 +407,6 @@
                      <div>
                         <label for="new-account-phone" class="block text-sm font-medium text-gray-700">手機號碼</label>
                         <input type="tel" id="new-account-phone" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500">
-                    </div>
-                    <div>
-                        <label for="new-account-line-id" class="block text-sm font-medium text-gray-700">Line ID</label>
-                        <input type="text" id="new-account-line-id" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500">
                     </div>
                 </form>
             </main>
@@ -483,8 +452,8 @@
                         <input type="text" id="edit-account-username" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500">
                     </div>
                     <div>
-                        <label for="edit-account-email" class="block text-sm font-medium text-gray-700">電子郵件 (不可修改)</label>
-                        <input type="email" id="edit-account-email" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-gray-100" readonly>
+                        <label for="edit-account-email" class="block text-sm font-medium text-gray-700">電子郵件</label>
+                        <input type="email" id="edit-account-email" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500 bg-gray-100" readonly>
                     </div>
                     <div>
                         <label for="edit-account-name" class="block text-sm font-medium text-gray-700">姓名</label>
@@ -504,27 +473,6 @@
                      <div>
                         <label for="edit-account-phone" class="block text-sm font-medium text-gray-700">手機號碼</label>
                         <input type="tel" id="edit-account-phone" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500">
-                    </div>
-                    <div>
-                        <label for="edit-account-line-id" class="block text-sm font-medium text-gray-700">Line ID</label>
-                        <input type="text" id="edit-account-line-id" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500">
-                    </div>
-                     <div class="pt-4 border-t">
-                        <p class="text-sm font-medium text-gray-800">重設密碼 (選填)</p>
-                         <div>
-                            <label for="edit-account-new-password" class="block text-sm font-medium text-gray-700">新密碼</label>
-                             <div class="relative mt-1">
-                                <input type="password" id="edit-account-new-password" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500 pr-10" placeholder="留空則不變更">
-                                <button type="button" class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-500 hover:text-gray-700 toggle-password-visibility"></button>
-                            </div>
-                        </div>
-                        <div>
-                            <label for="edit-account-confirm-new-password" class="block text-sm font-medium text-gray-700">確認新密碼</label>
-                            <div class="relative mt-1">
-                                <input type="password" id="edit-account-confirm-new-password" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500 pr-10">
-                                <button type="button" class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-500 hover:text-gray-700 toggle-password-visibility"></button>
-                            </div>
-                        </div>
                     </div>
                 </form>
             </main>
@@ -594,38 +542,25 @@
         </div>
     </div>
 
-    <!-- Email Login Modal -->
-    <div id="email-login-modal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-[1300]">
+    <!-- Password Prompt Modal -->
+    <div id="password-prompt-modal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-[1300]">
         <div class="bg-white rounded-lg shadow-xl w-full max-w-sm">
-             <header class="p-4 border-b flex justify-between items-center">
-                <h3 class="text-lg font-bold">電子郵件登入</h3>
-                <button id="close-email-login-modal-btn" class="text-gray-400 hover:text-gray-600">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                </button>
-            </header>
-            <main class="p-6">
-                <div class="space-y-4">
-                    <div>
-                        <label for="modal-email" class="block text-sm font-medium text-gray-700">電子郵件</label>
-                        <input type="email" id="modal-email" class="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm" placeholder="your.email@company.com">
-                    </div>
-                    <div>
-                        <label for="modal-password" class="block text-sm font-medium text-gray-700">密碼</label>
-                        <input type="password" id="modal-password" class="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm" placeholder="••••••••">
-                    </div>
-                    <button id="modal-login-btn" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-lg">
-                        <span>登入</span>
-                    </button>
-                    <p id="modal-login-message" class="text-red-500 text-sm text-center min-h-[20px]"></p>
+            <div class="p-6">
+                <h3 class="text-lg font-semibold text-gray-800 mb-4">請輸入管理密碼</h3>
+                <input type="password" id="prompt-password-input" class="block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500">
+                <p id="prompt-message" class="text-red-500 text-sm min-h-[20px] mt-2"></p>
+                <div class="mt-4 flex justify-end space-x-3">
+                    <button id="cancel-prompt-btn" type="button" class="bg-white hover:bg-gray-100 text-gray-700 font-bold py-2 px-4 rounded-lg border">取消</button>
+                    <button id="submit-prompt-btn" type="button" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">確認</button>
                 </div>
-            </main>
+            </div>
         </div>
     </div>
 
     <script type="module">
         import { initializeApp, getApp, deleteApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-        import { getFirestore, collection, addDoc, query, where, onSnapshot, serverTimestamp, orderBy, doc, updateDoc, arrayUnion, setDoc, getDoc, deleteDoc, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-        import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, sendPasswordResetEmail, createUserWithEmailAndPassword, updatePassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        import { getFirestore, collection, addDoc, query, where, onSnapshot, serverTimestamp, orderBy, doc, updateDoc, arrayUnion, setDoc, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+        import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, sendPasswordResetEmail, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
         import { getStorage, ref, uploadString, getDownloadURL, uploadBytes, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
         
         document.addEventListener('DOMContentLoaded', () => {
@@ -641,13 +576,13 @@
 
             // --- DOM 元素 ---
             const loginView = document.getElementById('login-view'), mainView = document.getElementById('main-view');
-            const usernameLoginInput = document.getElementById('username-login');
-            const passwordInput = document.getElementById('login-password');
+            const emailInput = document.getElementById('email'), passwordInput = document.getElementById('login-password');
             const togglePasswordBtn = document.getElementById('toggle-password-btn'), rememberMeCheckbox = document.getElementById('remember-me');
             const loginBtn = document.getElementById('login-btn'), loginMessage = document.getElementById('login-message');
             const userNameDisplay = document.getElementById('user-name-display');
             const headerProfileImg = document.getElementById('header-profile-img');
             const profileBtn = document.getElementById('profile-btn');
+            const forgotPasswordLink = document.getElementById('forgot-password-link');
             const currentStatusEl = document.getElementById('current-status'), workDurationEl = document.getElementById('work-duration');
             const clockInBtn = document.getElementById('clock-in-btn'), clockOutBtn = document.getElementById('clock-out-btn');
             const historyLogEl = document.getElementById('history-log');
@@ -657,8 +592,6 @@
             const mapLoadingText = document.getElementById('map-loading-text');
             const currentLocationIframe = document.getElementById('current-location-iframe');
             const relocateBtn = document.getElementById('relocate-btn');
-            const appContainer = document.getElementById('app-container');
-            const bodyEl = document.body;
             
             // --- 頁面與導覽按鈕 ---
             const dashboardPage = document.getElementById('dashboard-page');
@@ -741,13 +674,12 @@
             const closeMapModalBtn = document.getElementById('close-map-modal-btn');
             const mapIframe = document.getElementById('map-iframe');
 
-            // --- Email 登入 Modal 元素 ---
-            const emailLoginModal = document.getElementById('email-login-modal');
-            const closeEmailLoginModalBtn = document.getElementById('close-email-login-modal-btn');
-            const modalEmailInput = document.getElementById('modal-email');
-            const modalPasswordInput = document.getElementById('modal-password');
-            const modalLoginBtn = document.getElementById('modal-login-btn');
-            const modalLoginMessage = document.getElementById('modal-login-message');
+            // --- 密碼提示 Modal 元素 ---
+            const passwordPromptModal = document.getElementById('password-prompt-modal');
+            const promptPasswordInput = document.getElementById('prompt-password-input');
+            const promptMessage = document.getElementById('prompt-message');
+            const cancelPromptBtn = document.getElementById('cancel-prompt-btn');
+            const submitPromptBtn = document.getElementById('submit-prompt-btn');
             
             // --- 照片檢視 Modal 元素 ---
             const photoViewerModal = document.getElementById('photo-viewer-modal');
@@ -796,10 +728,6 @@
                 
                 onAuthStateChanged(auth, async (user) => {
                     if (user) {
-                        bodyEl.className = 'bg-gray-100 flex justify-center min-h-screen pt-[10px] px-[10px] pb-[50px]';
-                        appContainer.classList.remove('h-[70vh]', 'opacity-0', 'translate-y-4');
-                        appContainer.classList.add('mx-auto');
-                        
                         const userDocRef = doc(db, "users", user.uid);
                         const userDocSnap = await getDoc(userDocRef);
 
@@ -812,7 +740,7 @@
                             }
                             currentUserData = { id: user.uid, ...userData };
                             currentUserRole = currentUserData.role;
-                            userNameDisplay.textContent = `歡迎, ${currentUserData.name || currentUserData.username}`;
+                            userNameDisplay.textContent = `歡迎, ${currentUserData.username || currentUserData.name}`;
                             headerProfileImg.src = currentUserData.photoURL || 'https://placehold.co/96x96/e2e8f0/4a5568?text=頭像';
                         } else {
                             console.error("User data not found in Firestore for UID:", user.uid);
@@ -822,6 +750,8 @@
 
                         navSettingsBtn.style.display = (currentUserRole === '管理員') ? 'flex' : 'none';
 
+                        document.body.classList.remove('bg-red-600');
+                        document.body.classList.add('bg-gray-100');
                         loginView.classList.add('hidden');
                         mainView.classList.remove('hidden');
                         mainView.classList.add('flex');
@@ -829,30 +759,18 @@
                         getInitialLocation();
                         showPage('dashboard');
                     } else {
-                        bodyEl.className = 'bg-red-600 flex items-center justify-center min-h-screen px-5';
-                        appContainer.classList.add('h-[70vh]', 'opacity-0', 'translate-y-4');
-                        appContainer.classList.remove('mx-auto');
-                        
-                        requestAnimationFrame(() => {
-                            requestAnimationFrame(() => {
-                                appContainer.classList.remove('opacity-0', 'translate-y-4');
-                            });
-                        });
-                        
                         currentUserData = null;
                         currentUserRole = null;
+                        document.body.classList.add('bg-red-600');
+                        document.body.classList.remove('bg-gray-100');
                         loginView.classList.remove('hidden');
                         mainView.classList.add('hidden');
-                        mainView.classList.add('flex');
+                        mainView.classList.remove('flex');
                         if (unsubscribeFromHistory) unsubscribeFromHistory();
                         if (unsubscribeFromAccounts) unsubscribeFromAccounts();
                         if (workDurationInterval) clearInterval(workDurationInterval);
                         cleanupLocationOnLogout();
                         clearMainView();
-                        
-                        // Reset login button state on logout
-                        toggleButtonLoading(loginBtn, false);
-                        loginMessage.textContent = '';
                     }
                 });
                 
@@ -880,29 +798,10 @@
                             if (logoClickCount === 10) {
                                 clearTimeout(logoClickTimer);
                                 logoClickCount = 0;
-                                openEmailLoginModal();
+                                openPasswordPrompt();
                             }
                         });
                     }
-                    
-                    // Email 登入 Modal
-                    closeEmailLoginModalBtn.addEventListener('click', closeEmailLoginModal);
-                    modalLoginBtn.addEventListener('click', async () => {
-                        const email = modalEmailInput.value;
-                        const password = modalPasswordInput.value;
-                        modalLoginMessage.textContent = '';
-                        toggleButtonLoading(modalLoginBtn, true, '登入中...');
-                        try {
-                            await signInWithEmailAndPassword(auth, email, password);
-                            closeEmailLoginModal();
-                        } catch (error) {
-                            console.error("Modal Login failed:", error);
-                            modalLoginMessage.textContent = '登入失敗，請確認電子郵件及密碼。';
-                        } finally {
-                            toggleButtonLoading(modalLoginBtn, false);
-                        }
-                    });
-
 
                     // 個人資料 Modal
                     closeProfileModalBtn.addEventListener('click', closeProfileModal);
@@ -915,6 +814,20 @@
                     profileModalUploadBtn.addEventListener('click', () => profileModalPhotoInput.click());
                     profileModalPhotoInput.addEventListener('change', handleProfileModalPhotoSelect);
                     
+                    // 密碼提示 Modal
+                    cancelPromptBtn.addEventListener('click', closePasswordPrompt);
+                    submitPromptBtn.addEventListener('click', () => {
+                        const password = promptPasswordInput.value;
+                        if (password === '0112') {
+                            closePasswordPrompt();
+                            openAddAccountModal();
+                        } else {
+                            promptMessage.textContent = '管理密碼錯誤。';
+                            promptPasswordInput.value = '';
+                        }
+                    });
+                    promptPasswordInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') submitPromptBtn.click(); });
+
                     // 打卡相機
                     takePhotoBtn.addEventListener('click', takePhotoWithWatermark);
                     closeCameraBtn.addEventListener('click', uploadPhotosAndFinish);
@@ -958,17 +871,6 @@
                     closePhotoViewerBtn.addEventListener('click', closePhotoViewer);
                     prevPhotoBtn.addEventListener('click', () => showPhoto(currentPhotoIndex - 1));
                     nextPhotoBtn.addEventListener('click', () => showPhoto(currentPhotoIndex + 1));
-                    
-                    // 密碼可見性切換
-                    document.body.addEventListener('click', (e) => {
-                        if (e.target.closest('.toggle-password-visibility')) {
-                            const button = e.target.closest('.toggle-password-visibility');
-                            const input = button.previousElementSibling;
-                            const isPassword = input.type === 'password';
-                            input.type = isPassword ? 'text' : 'password';
-                            button.innerHTML = isPassword ? eyeOffIcon : eyeIcon;
-                        }
-                    });
 
                     // 事件代理
                     accountList.addEventListener('click', (e) => {
@@ -1076,85 +978,51 @@
                     );
                 }
 
-                // --- Email 登入 Modal ---
-                function openEmailLoginModal() {
-                    modalEmailInput.value = '';
-                    modalPasswordInput.value = '';
-                    modalLoginMessage.textContent = '';
-                    emailLoginModal.classList.remove('hidden');
-                    modalEmailInput.focus();
+                // --- 密碼提示 Modal ---
+                function openPasswordPrompt() {
+                    promptPasswordInput.value = '';
+                    promptMessage.textContent = '';
+                    passwordPromptModal.classList.remove('hidden');
+                    promptPasswordInput.focus();
                 }
 
-                function closeEmailLoginModal() {
-                    emailLoginModal.classList.add('hidden');
+                function closePasswordPrompt() {
+                    passwordPromptModal.classList.add('hidden');
                 }
 
                 // --- 登入/登出相關 ---
                 function initializeLoginScreen() {
-                    const savedUsername = localStorage.getItem('rememberedUsername');
-                    if (savedUsername) {
-                        usernameLoginInput.value = savedUsername;
+                    const savedEmail = localStorage.getItem('rememberedEmail');
+                    if (savedEmail) {
+                        emailInput.value = savedEmail;
                         rememberMeCheckbox.checked = true;
                     }
-                    document.querySelectorAll('.toggle-password-visibility').forEach(btn => btn.innerHTML = eyeIcon);
+                    togglePasswordBtn.innerHTML = eyeIcon;
                 }
 
                 loginBtn.addEventListener('click', async () => {
-                    const username = usernameLoginInput.value;
+                    const email = emailInput.value;
                     const password = passwordInput.value;
                     loginMessage.textContent = '';
-
-                    if (rememberMeCheckbox.checked) {
-                        localStorage.setItem('rememberedUsername', username);
-                    } else {
-                        localStorage.removeItem('rememberedUsername');
-                    }
-                    
+                    if (rememberMeCheckbox.checked) localStorage.setItem('rememberedEmail', email);
+                    else localStorage.removeItem('rememberedEmail');
                     toggleButtonLoading(loginBtn, true, '登入中...');
-                    
                     try {
-                        // Special test user case
-                        if (username === '11' && password === '11') {
-                            await signInWithEmailAndPassword(auth, 'test@company.com', 'password123');
-                            return; // Exit after successful login
-                        }
-
-                        // Normal user login by username
-                        const usersRef = collection(db, "users");
-                        const q = query(usersRef, where("username", "==", username));
-                        const querySnapshot = await getDocs(q);
-
-                        if (querySnapshot.empty) {
-                            loginMessage.textContent = '登入失敗，帳號或密碼錯誤。';
-                            toggleButtonLoading(loginBtn, false);
-                            return; // Exit if username not found
-                        }
-
-                        const userDoc = querySnapshot.docs[0];
-                        const userData = userDoc.data();
-                        
-                        if (userData.status === 'deleted') {
-                            loginMessage.textContent = '此帳號已被停用。';
-                            toggleButtonLoading(loginBtn, false);
-                            return;
-                        }
-
-                        const email = userData.email;
-
-                        if (!email) {
-                             loginMessage.textContent = '登入失敗，用戶資料不完整。';
-                             toggleButtonLoading(loginBtn, false);
-                             return;
-                        }
-
-                        await signInWithEmailAndPassword(auth, email, password);
-
+                        if (email === '11' && password === '11') await signInWithEmailAndPassword(auth, 'test@company.com', 'password123');
+                        else await signInWithEmailAndPassword(auth, email, password);
                     } catch (error) {
                         console.error("Login failed:", error);
                         const message = (error.code === 'auth/invalid-credential') ? '登入失敗，帳號或密碼錯誤。' : '登入時發生未知錯誤。';
                         loginMessage.textContent = message;
+                    } finally {
                         toggleButtonLoading(loginBtn, false);
                     }
+                });
+                
+                togglePasswordBtn.addEventListener('click', () => {
+                    const isPassword = passwordInput.type === 'password';
+                    passwordInput.type = isPassword ? 'text' : 'password';
+                    togglePasswordBtn.innerHTML = isPassword ? eyeOffIcon : eyeIcon;
                 });
                 
                 // --- 地圖與定位邏輯 ---
@@ -1300,11 +1168,11 @@
                     const user = auth.currentUser;
                     const now = new Date();
                     const dateTime = now.toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
-                    const userName = currentUserData ? currentUserData.name : (user ? user.email : 'N/A');
+                    const userEmail = user ? user.email : 'N/A';
                     const gpsCoords = currentPosition ? `${currentPosition.coords.latitude.toFixed(5)}, ${currentPosition.coords.longitude.toFixed(5)}` : 'No GPS';
                     const description = photoDescriptionInput.value.trim();
 
-                    const textLines = [dateTime, userName, `GPS: ${gpsCoords}`];
+                    const textLines = [dateTime, userEmail, `GPS: ${gpsCoords}`];
                     if (description) textLines.push(description);
 
                     context.font = '24px "Noto Sans TC"';
@@ -1387,11 +1255,9 @@
                     document.getElementById('profile-modal-username').value = currentUserData.username || '';
                     document.getElementById('profile-modal-name').value = currentUserData.name || '';
                     document.getElementById('profile-modal-email').value = currentUserData.email || '';
+                    document.getElementById('profile-modal-role').value = currentUserData.role || '';
                     document.getElementById('profile-modal-title').value = currentUserData.title || '';
                     document.getElementById('profile-modal-phone').value = currentUserData.phone || '';
-                    document.getElementById('profile-modal-line-id').value = currentUserData.lineId || '';
-                    document.getElementById('profile-modal-new-password').value = '';
-                    document.getElementById('profile-modal-confirm-new-password').value = '';
                     profileModal.classList.remove('hidden');
                 }
 
@@ -1415,36 +1281,14 @@
                     if (!currentUserData) return;
 
                     toggleButtonLoading(submitProfileEditBtn, true, '儲存中...');
-                    const newUsername = document.getElementById('profile-modal-username').value.trim();
-                    const newPassword = document.getElementById('profile-modal-new-password').value;
-                    const confirmNewPassword = document.getElementById('profile-modal-confirm-new-password').value;
-
-
-                    if (newUsername !== currentUserData.username) {
-                        const usersRef = collection(db, "users");
-                        const q = query(usersRef, where("username", "==", newUsername));
-                        const querySnapshot = await getDocs(q);
-                        if (!querySnapshot.empty) {
-                            showMessage('此帳號已被使用，請選擇其他帳號。', 'error');
-                            toggleButtonLoading(submitProfileEditBtn, false);
-                            return;
-                        }
-                    }
                     
-                    if (newPassword && newPassword !== confirmNewPassword) {
-                        showMessage('新密碼與確認密碼不一致。', 'error');
-                        toggleButtonLoading(submitProfileEditBtn, false);
-                        return;
-                    }
-
                     const userDocRef = doc(db, "users", currentUserData.id);
                     
                     let updatedData = {
-                        username: newUsername,
+                        username: document.getElementById('profile-modal-username').value,
                         name: document.getElementById('profile-modal-name').value,
                         title: document.getElementById('profile-modal-title').value,
                         phone: document.getElementById('profile-modal-phone').value,
-                        lineId: document.getElementById('profile-modal-line-id').value,
                     };
                     
                     try {
@@ -1454,28 +1298,22 @@
                             updatedData.photoURL = await getDownloadURL(uploadResult.ref);
                         }
                         
-                        if (newPassword) {
-                            await updatePassword(auth.currentUser, newPassword);
-                        }
-
                         await updateDoc(userDocRef, updatedData);
                         
                         // Refresh local data
-                        currentUserData = { ...currentUserData, ...updatedData };
-                        userNameDisplay.textContent = `歡迎, ${currentUserData.name || currentUserData.username}`;
-                        if (updatedData.photoURL) {
-                            headerProfileImg.src = updatedData.photoURL;
+                        if(updatedData.photoURL) {
+                            currentUserData.photoURL = updatedData.photoURL;
+                             headerProfileImg.src = updatedData.photoURL;
                         }
+                        currentUserData.username = updatedData.username;
+                        currentUserData.name = updatedData.name;
+                        userNameDisplay.textContent = `歡迎, ${currentUserData.username || currentUserData.name}`;
 
                         showMessage('個人資料已更新', 'success');
                         closeProfileModal();
                     } catch (error) {
                          console.error("更新個人資料時發生錯誤:", error);
-                         let message = '更新失敗。';
-                         if (error.code === 'auth/requires-recent-login') {
-                             message = '更新密碼需要您最近曾登入，請先登出後再重新登入一次。'
-                         }
-                         showMessage(message, 'error');
+                         showMessage('更新失敗。', 'error');
                     } finally {
                         toggleButtonLoading(submitProfileEditBtn, false);
                     }
@@ -1625,32 +1463,8 @@
                     e.preventDefault();
                     toggleButtonLoading(submitAddAccountBtn, true, '儲存中...');
                     
-                    const username = document.getElementById('new-account-username').value.trim();
-                    const email = document.getElementById('new-account-email').value.trim();
+                    const email = document.getElementById('new-account-email').value;
                     const password = document.getElementById('new-account-password').value;
-                    const confirmPassword = document.getElementById('new-account-confirm-password').value;
-                    const name = document.getElementById('new-account-name').value.trim();
-
-                    if (!username || !email || !password || !name) {
-                        showMessage('帳號、電子郵件、密碼和姓名為必填項。', 'error');
-                        toggleButtonLoading(submitAddAccountBtn, false);
-                        return;
-                    }
-                     if (password !== confirmPassword) {
-                        showMessage('兩次輸入的密碼不一致。', 'error');
-                        toggleButtonLoading(submitAddAccountBtn, false);
-                        return;
-                    }
-                    
-                    const usersRef = collection(db, "users");
-                    const q = query(usersRef, where("username", "==", username));
-                    const querySnapshot = await getDocs(q);
-
-                    if (!querySnapshot.empty) {
-                        showMessage('此帳號已被使用，請選擇其他帳號。', 'error');
-                        toggleButtonLoading(submitAddAccountBtn, false);
-                        return;
-                    }
 
                     // 使用獨立的 Firebase App 實例來創建用戶，避免影響當前管理員的登入狀態
                     const tempAppName = `temp-user-creation-${Date.now()}`;
@@ -1662,16 +1476,14 @@
                         const user = userCredential.user;
 
                         let userData = {
-                            username: username,
+                            username: document.getElementById('new-account-username').value,
                             email: email,
-                            name: name,
+                            name: document.getElementById('new-account-name').value,
                             role: document.getElementById('new-account-role').value,
                             title: document.getElementById('new-account-title').value,
                             phone: document.getElementById('new-account-phone').value,
-                            lineId: document.getElementById('new-account-line-id').value,
                             photoURL: '',
-                            createdAt: serverTimestamp(),
-                            status: 'active'
+                            createdAt: serverTimestamp()
                         };
 
                         if (profilePhotoFile) {
@@ -1701,36 +1513,11 @@
                     toggleButtonLoading(submitEditAccountBtn, true, '更新中...');
                     
                     const userId = editAccountIdInput.value;
-                    const newUsername = document.getElementById('edit-account-username').value.trim();
-                    const newName = document.getElementById('edit-account-name').value.trim();
                     const userDocRef = doc(db, "users", userId);
                     
-                    if (!newUsername || !newName) {
-                        showMessage('帳號和姓名為必填項。', 'error');
-                        toggleButtonLoading(submitEditAccountBtn, false);
-                        return;
-                    }
-
-                    const usersRef = collection(db, "users");
-                    const q = query(usersRef, where("username", "==", newUsername));
-                    const querySnapshot = await getDocs(q);
-
-                    let isDuplicate = false;
-                    querySnapshot.forEach((doc) => {
-                        if (doc.id !== userId) {
-                            isDuplicate = true;
-                        }
-                    });
-
-                    if (isDuplicate) {
-                        showMessage('此帳號已被另一位使用者使用。', 'error');
-                        toggleButtonLoading(submitEditAccountBtn, false);
-                        return;
-                    }
-                    
                     let updatedData = {
-                        username: newUsername,
-                        name: newName,
+                        username: document.getElementById('edit-account-username').value,
+                        name: document.getElementById('edit-account-name').value,
                         role: document.getElementById('edit-account-role').value,
                         title: document.getElementById('edit-account-title').value,
                         phone: document.getElementById('edit-account-phone').value,
@@ -1780,13 +1567,11 @@
 
                 function listenToAccounts() {
                     if (unsubscribeFromAccounts) unsubscribeFromAccounts();
-                    const q = query(collection(db, "users"));
+                    const q = query(collection(db, "users"), orderBy("createdAt", "desc"));
                     unsubscribeFromAccounts = onSnapshot(q, (snapshot) => {
                         const users = snapshot.docs
                             .map(doc => ({ id: doc.id, ...doc.data() }))
                             .filter(user => user.status !== 'deleted');
-                        
-                        users.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
                         renderAccountList(users);
                     }, (error) => {
                         console.error("Error listening to accounts:", error);
@@ -1832,7 +1617,7 @@
                 function listenToTodayRecords(userId) {
                     if (unsubscribeFromHistory) unsubscribeFromHistory();
                     
-                    const q = query(collection(db, "clock_records"), where("userId", "==", userId), orderBy("timestamp", "desc"));
+                    const q = query(collection(db, "clock_records"), where("userId", "==", userId));
 
                     unsubscribeFromHistory = onSnapshot(q, (snapshot) => {
                         const today = new Date();
@@ -1843,6 +1628,8 @@
                             return { ...data, id: doc.id, timestamp: data.timestamp?.toDate() };
                         }).filter(item => item.timestamp && item.timestamp >= today);
                         
+                        history.sort((a, b) => b.timestamp - a.timestamp);
+
                         renderHistory(history);
                         updateUI(history);
                     }, (error) => {
