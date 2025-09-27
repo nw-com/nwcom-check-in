@@ -785,6 +785,10 @@
                         if (workDurationInterval) clearInterval(workDurationInterval);
                         cleanupLocationOnLogout();
                         clearMainView();
+                        
+                        // Reset login button state on logout
+                        toggleButtonLoading(loginBtn, false);
+                        loginMessage.textContent = '';
                     }
                 });
                 
