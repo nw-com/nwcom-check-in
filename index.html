@@ -111,7 +111,7 @@
                         <span>登入系統</span>
                     </button>
                     <p id="login-message" class="text-red-500 text-sm text-center min-h-[10px]"></p>
-                    <p class="text-center text-gray-600 text-xs mt-2">V1.3.5</p>
+                    <p class="text-center text-gray-600 text-xs mt-2">V1.3.7</p>
                 </div>
             </main>
         </div>
@@ -143,17 +143,17 @@
                     <div id="sub-tab-nav" class="h-full px-6">
                         <!-- 追蹤頁面專用 -->
                         <nav id="tracking-tab-nav" class="hidden -mb-px flex space-x-6 h-full items-center" aria-label="Tabs">
-                            <button id="tracking-personnel-tab-btn" class="whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm">人員狀態</button>
+                            <button id="tracking-personnel-tab-btn" class="whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm border-red-500 text-red-600">人員狀態</button>
                         </nav>
                         <!-- 設定頁面專用 -->
                         <nav id="settings-tab-nav" class="hidden -mb-px flex space-x-6 h-full items-center" aria-label="Tabs">
-                            <button id="settings-account-tab-btn" class="whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm">帳號</button>
-                            <button id="settings-rules-tab-btn" class="whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm">規則</button>
+                            <button id="settings-account-tab-btn" class="whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm border-red-500 text-red-600">帳號</button>
+                            <button id="settings-rules-tab-btn" class="whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">規則</button>
                         </nav>
                          <!-- 打卡頁面專用 -->
                         <nav id="checkin-tab-nav" class="hidden -mb-px flex space-x-6 h-full items-center" aria-label="Tabs">
-                            <button id="checkin-location-tab-btn" class="whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm">定位打卡</button>
-                            <button id="checkin-history-tab-btn" class="whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm">打卡紀錄</button>
+                            <button id="checkin-location-tab-btn" class="whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm border-red-500 text-red-600">定位打卡</button>
+                            <button id="checkin-history-tab-btn" class="whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">打卡紀錄</button>
                         </nav>
                     </div>
                 </div>
@@ -1089,31 +1089,31 @@
                     settingsTabNav.classList.add('hidden');
                     checkinTabNav.classList.add('hidden');
                     trackingTabNav.classList.add('hidden');
-                    subTabNav.style.display = 'none';
-                    datetimeDisplay.style.display = 'none';
+                    subTabNav.classList.add('hidden');
+                    datetimeDisplay.classList.add('hidden');
 
 
                     if (pageName === 'dashboard') {
                         dashboardPage.classList.remove('hidden');
-                        datetimeDisplay.style.display = 'flex';
+                        datetimeDisplay.classList.remove('hidden');
                         setActiveTab(navDashboardBtn);
                     } else if (pageName === 'checkin') {
                         checkinPage.classList.remove('hidden');
                         checkinTabNav.classList.remove('hidden');
-                        subTabNav.style.display = 'block';
+                        subTabNav.classList.remove('hidden');
                         setActiveTab(navCheckinBtn);
                         showCheckinTab('location');
                     } else if (pageName === 'settings') {
                         settingsPage.classList.remove('hidden');
                         settingsTabNav.classList.remove('hidden');
-                        subTabNav.style.display = 'block';
+                        subTabNav.classList.remove('hidden');
                         setActiveTab(navSettingsBtn);
                         showSettingsTab('account');
                         listenToAccounts();
                     } else if (pageName === 'tracking') {
                         trackingPage.classList.remove('hidden');
                         trackingTabNav.classList.remove('hidden');
-                        subTabNav.style.display = 'block';
+                        subTabNav.classList.remove('hidden');
                         setActiveTab(navTrackingBtn);
                         showTrackingTab('personnel');
                         loadPersonnelData();
@@ -2130,5 +2130,4 @@
         });
     </script>
 </body>
-
 </html>
