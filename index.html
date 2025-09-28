@@ -79,7 +79,7 @@
 </head>
 <body class="bg-red-600 flex justify-center items-center min-h-screen">
 
-    <div id="root-container" class="w-[calc(100%-20px)] max-w-[400px] h-[calc(100vh-80px)] max-h-[750px] bg-white rounded-2xl shadow-lg overflow-hidden flex flex-col transition-all duration-300 ease-in-out mx-auto my-[40px]">
+    <div id="root-container" class="w-[calc(100%-20px)] max-w-[400px] h-[calc(100vh-20px)] max-h-[750px] bg-white rounded-2xl shadow-lg overflow-hidden flex flex-col transition-all duration-300 ease-in-out mx-auto my-[10px]">
         
         <!-- 登入畫面 -->
         <div id="login-view" class="flex-1 overflow-y-auto flex flex-col min-h-[480px]">
@@ -112,7 +112,7 @@
                         <span>登入系統</span>
                     </button>
                     <p id="login-message" class="text-red-500 text-sm text-center min-h-[10px]"></p>
-                    <p class="text-center text-gray-600 text-xs mt-2">V1.3.1</p>
+                    <p class="text-center text-gray-600 text-xs mt-2">V1.3.2</p>
                 </div>
             </main>
         </div>
@@ -141,6 +141,10 @@
                     </div>
                      <!-- 子導覽列 -->
                     <div id="sub-tab-nav" class="h-full px-6">
+                        <!-- 追蹤頁面專用 -->
+                        <nav id="tracking-tab-nav" class="hidden -mb-px flex space-x-6 h-full items-center" aria-label="Tabs">
+                            <button id="tracking-personnel-tab-btn" class="whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm">人員狀態</button>
+                        </nav>
                         <!-- 設定頁面專用 -->
                         <nav id="settings-tab-nav" class="hidden -mb-px flex space-x-6 h-full items-center" aria-label="Tabs">
                             <button id="settings-account-tab-btn" class="whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm">帳號</button>
@@ -228,6 +232,44 @@
                         </div>
                     </div>
 
+                    <!-- 追蹤頁面 -->
+                    <div id="tracking-page" class="hidden h-full">
+                        <!-- Tab content -->
+                        <div class="h-full flex flex-col">
+                            <!-- Personnel Status Tab Content -->
+                            <div id="tracking-personnel-content" class="h-full flex flex-col">
+                                <div class="flex justify-between items-center mb-4 flex-shrink-0">
+                                    <h3 class="text-lg font-semibold text-gray-800">人員狀態列表</h3>
+                                    <button id="refresh-personnel-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 7v9h9"/><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/></svg>
+                                        <span>重新整理</span>
+                                    </button>
+                                </div>
+                                <div class="flex-1 overflow-y-auto">
+                                    <div class="overflow-x-auto">
+                                        <table class="min-w-full bg-white border border-gray-200 rounded-lg">
+                                            <thead class="bg-gray-50">
+                                                <tr>
+                                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">移動</th>
+                                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">姓名</th>
+                                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">職稱</th>
+                                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">狀態</th>
+                                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">追蹤</th>
+                                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">聯絡</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="personnel-list" class="bg-white divide-y divide-gray-200">
+                                                <tr>
+                                                    <td colspan="6" class="px-4 py-8 text-center text-gray-500">正在載入人員資料...</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- 設定頁面 -->
                     <div id="settings-page" class="hidden h-full">
                         <!-- Tab content -->
@@ -259,9 +301,9 @@
             <!-- 底部導覽列 -->
             <nav id="bottom-nav" class="absolute bottom-0 left-0 w-full z-20 border-t bg-gray-50 h-[70px] flex items-center">
                 <div class="flex justify-around w-full">
-                    <button id="nav-settings-btn" class="hidden flex-1 p-3 text-center text-gray-500 flex flex-col items-center justify-center space-y-1 transition-colors duration-200">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-                        <span class="text-xs font-medium">設定</span>
+                    <button id="nav-tracking-btn" class="hidden flex-1 p-3 text-center text-gray-500 flex flex-col items-center justify-center space-y-1 transition-colors duration-200">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 10 10"/><path d="M12 6a6 6 0 1 0 10 10"/><circle cx="12" cy="12" r="2"/></svg>
+                        <span class="text-xs font-medium">追蹤</span>
                     </button>
                     <button id="nav-dashboard-btn" class="flex-1 p-3 text-center text-gray-500 flex flex-col items-center justify-center space-y-1 transition-colors duration-200">
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
@@ -270,6 +312,10 @@
                     <button id="nav-checkin-btn" class="flex-1 p-3 text-center text-gray-500 flex flex-col items-center justify-center space-y-1 transition-colors duration-200">
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0Z"/><circle cx="12" cy="10" r="3"/></svg>
                         <span class="text-xs font-medium">打卡</span>
+                    </button>
+                    <button id="nav-settings-btn" class="hidden flex-1 p-3 text-center text-gray-500 flex flex-col items-center justify-center space-y-1 transition-colors duration-200">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                        <span class="text-xs font-medium">設定</span>
                     </button>
                 </div>
             </nav>
@@ -655,12 +701,14 @@
             
             // --- 頁面與導覽按鈕 ---
             const dashboardPage = document.getElementById('dashboard-page');
-            const datetimeDisplay = document.getElementById('datetime-display');
-            const checkinPage = document.getElementById('checkin-page');
-            const settingsPage = document.getElementById('settings-page');
+                const datetimeDisplay = document.getElementById('datetime-display');
+                const checkinPage = document.getElementById('checkin-page');
+                const settingsPage = document.getElementById('settings-page');
+                const trackingPage = document.getElementById('tracking-page');
             const navDashboardBtn = document.getElementById('nav-dashboard-btn');
-            const navCheckinBtn = document.getElementById('nav-checkin-btn');
-            const navSettingsBtn = document.getElementById('nav-settings-btn');
+                const navCheckinBtn = document.getElementById('nav-checkin-btn');
+                const navSettingsBtn = document.getElementById('nav-settings-btn');
+                const navTrackingBtn = document.getElementById('nav-tracking-btn');
             const subTabNav = document.getElementById('sub-tab-nav');
             const settingsTabNav = document.getElementById('settings-tab-nav');
             const checkinTabNav = document.getElementById('checkin-tab-nav');
@@ -668,9 +716,13 @@
 
             // --- 打卡子頁面 ---
             const checkinLocationTabBtn = document.getElementById('checkin-location-tab-btn');
-            const checkinHistoryTabBtn = document.getElementById('checkin-history-tab-btn');
-            const checkinLocationContent = document.getElementById('checkin-location-content');
-            const checkinHistoryContent = document.getElementById('checkin-history-content');
+                const checkinHistoryTabBtn = document.getElementById('checkin-history-tab-btn');
+                const checkinLocationContent = document.getElementById('checkin-location-content');
+                const checkinHistoryContent = document.getElementById('checkin-history-content');
+                
+                // --- 追蹤子頁面 ---
+                const trackingPersonnelTabBtn = document.getElementById('tracking-personnel-tab-btn');
+                const trackingPersonnelContent = document.getElementById('tracking-personnel-content');
 
 
             // --- 設定頁面元素 ---
@@ -841,6 +893,7 @@
                         }
 
                         navSettingsBtn.style.display = (currentUserRole === '管理員') ? 'flex' : 'none';
+                        navTrackingBtn.style.display = (currentUserRole === '管理員') ? 'flex' : 'none';
                         
                         rootContainer.classList.remove('w-[380px]', 'h-[480px]');
                         rootContainer.classList.add('w-[400px]', 'h-[750px]');
@@ -890,8 +943,9 @@
                 function initializeNavigation() {
                     // 主導覽
                     navSettingsBtn.addEventListener('click', () => showPage('settings'));
-                    navDashboardBtn.addEventListener('click', () => showPage('dashboard'));
-                    navCheckinBtn.addEventListener('click', () => { 
+                navDashboardBtn.addEventListener('click', () => showPage('dashboard'));
+                navTrackingBtn.addEventListener('click', () => showPage('tracking'));
+                navCheckinBtn.addEventListener('click', () => { 
                         showPage('checkin');
                         forceRelocate();
                     });
@@ -900,7 +954,8 @@
                     
                     // 打卡子導覽
                     checkinLocationTabBtn.addEventListener('click', () => showCheckinTab('location'));
-                    checkinHistoryTabBtn.addEventListener('click', () => showCheckinTab('history'));
+                checkinHistoryTabBtn.addEventListener('click', () => showCheckinTab('history'));
+                trackingPersonnelTabBtn.addEventListener('click', () => showTrackingTab('personnel'));
 
                     // Easter Egg
                     const loginLogo = document.getElementById('login-logo');
@@ -1019,7 +1074,7 @@
                 }
 
                 function setActiveTab(activeBtn) {
-                    [navDashboardBtn, navCheckinBtn, navSettingsBtn].forEach(btn => {
+                    [navDashboardBtn, navCheckinBtn, navSettingsBtn, navTrackingBtn].forEach(btn => {
                         btn.classList.remove('text-red-600', 'bg-red-50');
                         btn.classList.add('text-gray-500');
                     });
@@ -1030,8 +1085,10 @@
                     dashboardPage.classList.add('hidden');
                     checkinPage.classList.add('hidden');
                     settingsPage.classList.add('hidden');
+                    trackingPage.classList.add('hidden');
                     settingsTabNav.classList.add('hidden');
                     checkinTabNav.classList.add('hidden');
+                    trackingTabNav.classList.add('hidden');
                     subTabNav.style.display = 'none';
                     datetimeDisplay.style.display = 'none';
 
@@ -1053,6 +1110,13 @@
                         setActiveTab(navSettingsBtn);
                         showSettingsTab('account');
                         listenToAccounts();
+                    } else if (pageName === 'tracking') {
+                        trackingPage.classList.remove('hidden');
+                        trackingTabNav.classList.remove('hidden');
+                        subTabNav.style.display = 'block';
+                        setActiveTab(navTrackingBtn);
+                        showTrackingTab('personnel');
+                        loadPersonnelData();
                     }
                 }
                 
@@ -1089,6 +1153,113 @@
                         checkinHistoryTabBtn.className = `whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm ${activeClasses}`;
                         checkinLocationTabBtn.className = `whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm ${inactiveClasses}`;
                     }
+                }
+
+                function showTrackingTab(tabName) {
+                    const activeClasses = 'border-red-500 text-red-600';
+                    const inactiveClasses = 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300';
+                    
+                    if (tabName === 'personnel') {
+                        trackingPersonnelContent.classList.remove('hidden');
+                        trackingPersonnelTabBtn.className = `whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm ${activeClasses}`;
+                    }
+                }
+
+                function loadPersonnelData() {
+                    const personnelList = document.getElementById('personnel-list');
+                    personnelList.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-gray-500">正在載入人員資料...</td></tr>';
+                    
+                    const accountsRef = ref(db, 'accounts');
+                    onValue(accountsRef, (snapshot) => {
+                        const accounts = snapshot.val();
+                        if (!accounts) {
+                            personnelList.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-gray-500">暫無人員資料</td></tr>';
+                            return;
+                        }
+
+                        let html = '';
+                        Object.keys(accounts).forEach((key, index) => {
+                            const account = accounts[key];
+                            const status = account.status || '離線';
+                            const statusColor = status === '在線' ? 'text-green-600' : status === '離線' ? 'text-gray-500' : 'text-orange-500';
+                            
+                            html += `
+                                <tr class="hover:bg-gray-50" data-id="${key}">
+                                    <td class="px-4 py-3 text-sm">
+                                        <button class="move-btn text-gray-400 hover:text-gray-600" data-direction="up" data-index="${index}">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>
+                                        </button>
+                                        <button class="move-btn text-gray-400 hover:text-gray-600" data-direction="down" data-index="${index}">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                                        </button>
+                                    </td>
+                                    <td class="px-4 py-3 text-sm font-medium text-gray-900">${account.name || '未知'}</td>
+                                    <td class="px-4 py-3 text-sm text-gray-500">${account.title || '未設定'}</td>
+                                    <td class="px-4 py-3 text-sm">
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColor}">
+                                            ${status}
+                                        </span>
+                                    </td>
+                                    <td class="px-4 py-3 text-sm">
+                                        <button class="track-btn bg-green-100 hover:bg-green-200 text-green-800 px-2 py-1 rounded text-xs font-medium">
+                                            追蹤
+                                        </button>
+                                    </td>
+                                    <td class="px-4 py-3 text-sm">
+                                        <button class="contact-btn bg-blue-100 hover:bg-blue-200 text-blue-800 px-2 py-1 rounded text-xs font-medium">
+                                            聯絡
+                                        </button>
+                                    </td>
+                                </tr>
+                            `;
+                        });
+                        
+                        personnelList.innerHTML = html;
+                        
+                        // 添加事件監聽器
+                        personnelList.addEventListener('click', (e) => {
+                            const moveBtn = e.target.closest('.move-btn');
+                            const trackBtn = e.target.closest('.track-btn');
+                            const contactBtn = e.target.closest('.contact-btn');
+                            
+                            if (moveBtn) {
+                                const direction = moveBtn.dataset.direction;
+                                const index = parseInt(moveBtn.dataset.index);
+                                movePersonnelRow(index, direction);
+                            } else if (trackBtn) {
+                                const row = trackBtn.closest('tr');
+                                const name = row.querySelector('td:nth-child(2)').textContent;
+                                showMessage(`開始追蹤 ${name}`, 'success');
+                            } else if (contactBtn) {
+                                const row = contactBtn.closest('tr');
+                                const name = row.querySelector('td:nth-child(2)').textContent;
+                                showMessage(`聯絡 ${name}`, 'info');
+                            }
+                        });
+                    }, (error) => {
+                        console.error('載入人員資料失敗:', error);
+                        personnelList.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-red-500">載入失敗</td></tr>';
+                    });
+                }
+
+                function movePersonnelRow(index, direction) {
+                    const personnelList = document.getElementById('personnel-list');
+                    const rows = Array.from(personnelList.querySelectorAll('tr'));
+                    
+                    if (direction === 'up' && index > 0) {
+                        // 向上移動
+                        const currentRow = rows[index];
+                        const previousRow = rows[index - 1];
+                        personnelList.insertBefore(currentRow, previousRow);
+                    } else if (direction === 'down' && index < rows.length - 1) {
+                        // 向下移動
+                        const currentRow = rows[index];
+                        const nextRow = rows[index + 1];
+                        personnelList.insertBefore(nextRow, currentRow);
+                    }
+                    
+                    // 重新載入以更新索引
+                    loadPersonnelData();
                 }
 
                 function forceRelocate() {
