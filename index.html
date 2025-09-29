@@ -170,7 +170,7 @@
                         <span>登入系統</span>
                     </button>
                     <p id="login-message" class="text-red-500 text-sm text-center min-h-[10px]"></p>
-                    <p class="text-center text-gray-600 text-xs mt-2">V1.5.1</p>
+                    <p class="text-center text-gray-600 text-xs mt-2">V1.4.6</p>
                 </div>
             </main>
         </div>
@@ -202,8 +202,8 @@
                         <!-- 設定頁面專用 -->
                         <nav id="settings-tab-nav" class="hidden -mb-px flex space-x-6 h-full items-center" aria-label="Tabs">
                             <button id="settings-account-tab-btn" class="whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm">帳號</button>
-                            <button id="settings-rules-tab-btn" class="whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm">規則</button>
-                            <button id="settings-location-tab-btn" class="whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm">位置</button>
+                        <button id="settings-rules-tab-btn" class="whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm">規則</button>
+                        <button id="settings-location-tab-btn" class="whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm">位置</button>
                         </nav>
                          <!-- 打卡頁面專用 -->
                         <nav id="checkin-tab-nav" class="hidden -mb-px flex space-x-6 h-full items-center" aria-label="Tabs">
@@ -312,7 +312,7 @@
                             </div>
 
                             <!-- Location Tab Content -->
-                            <div id="settings-location-content" class="hidden">
+                            <div id="settings-location-content" class="hidden h-full flex flex-col">
                                 <div class="flex justify-end mb-4 flex-shrink-0">
                                     <button id="add-location-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
@@ -321,7 +321,7 @@
                                 </div>
                                 <div class="flex-1 overflow-y-auto">
                                     <div id="location-list" class="space-y-3">
-                                        <p class="text-gray-500 text-center py-4">尚未設定打卡位置</p>
+                                        <p class="text-gray-500 text-center py-4">正在載入位置資料...</p>
                                     </div>
                                 </div>
                             </div>
@@ -690,35 +690,77 @@
         </div>
     </div>
 
-    <!-- Add Location Modal -->
-    <div id="add-location-modal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4">
-        <div class="bg-white rounded-lg shadow-xl w-full max-w-md flex flex-col max-h-full">
+    <!-- 編輯位置 Modal -->
+    <div id="edit-location-modal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-[1200]">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-md">
             <header class="p-4 border-b flex justify-between items-center">
-                <h3 class="text-lg font-bold">新增位置</h3>
-                <button id="close-add-location-modal-btn" class="text-gray-400 hover:text-gray-600">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                </button>
+                <h3 class="text-lg font-semibold text-gray-800">編輯位置</h3>
+                <button id="close-edit-location-modal-btn" type="button" class="text-gray-500 hover:text-gray-700 text-2xl leading-none">&times;</button>
             </header>
-            <main class="p-6 flex-1 overflow-y-auto">
-                <form id="add-location-form" class="space-y-4">
-                    <div>
-                        <label for="location-name" class="block text-sm font-medium text-gray-700">位置名稱</label>
-                        <input type="text" id="location-name" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500">
-                    </div>
-                    <div>
-                        <label for="location-gps" class="block text-sm font-medium text-gray-700">GPS座標</label>
-                        <input type="text" id="location-gps" placeholder="例如: 25.0330,121.5654" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500">
-                        <p class="mt-1 text-sm text-gray-500">格式：緯度,經度 (例如: 25.0330,121.5654)</p>
+            <main class="p-4">
+                <form id="edit-location-form">
+                    <div class="space-y-4">
+                        <div>
+                            <label for="edit-location-name" class="block text-sm font-medium text-gray-700 mb-1">位置名稱</label>
+                            <input type="text" id="edit-location-name" class="block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500" required>
+                        </div>
+                        <div>
+                            <label for="edit-location-gps" class="block text-sm font-medium text-gray-700 mb-1">GPS座標</label>
+                            <input type="text" id="edit-location-gps" class="block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500" placeholder="緯度,經度" required>
+                            <p class="text-xs text-gray-500 mt-1">格式：緯度,經度 (例如：25.0330,121.5654)</p>
+                        </div>
                     </div>
                 </form>
             </main>
             <footer class="p-4 bg-gray-50 border-t flex justify-end space-x-3">
-                <button id="cancel-add-location-btn" type="button" class="bg-white hover:bg-gray-100 text-gray-700 font-bold py-2 px-4 rounded-lg border">
-                    取消
-                </button>
-                 <button id="submit-add-location-btn" type="submit" form="add-location-form" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center">
-                    儲存
-                </button>
+                <button id="cancel-edit-location-btn" type="button" class="bg-white hover:bg-gray-100 text-gray-700 font-bold py-2 px-4 rounded-lg border">取消</button>
+                <button id="submit-edit-location-btn" type="button" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">儲存</button>
+            </footer>
+        </div>
+    </div>
+
+    <!-- 新增位置 Modal -->
+    <div id="add-location-modal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-[1200]">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-md">
+            <header class="p-4 border-b flex justify-between items-center">
+                <h3 class="text-lg font-semibold text-gray-800">新增位置</h3>
+                <button id="close-add-location-modal-btn" type="button" class="text-gray-500 hover:text-gray-700 text-2xl leading-none">&times;</button>
+            </header>
+            <main class="p-4">
+                <form id="add-location-form">
+                    <div class="space-y-4">
+                        <div>
+                            <label for="add-location-name" class="block text-sm font-medium text-gray-700 mb-1">位置名稱</label>
+                            <input type="text" id="add-location-name" class="block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500" required>
+                        </div>
+                        <div>
+                            <label for="add-location-gps" class="block text-sm font-medium text-gray-700 mb-1">GPS座標</label>
+                            <input type="text" id="add-location-gps" class="block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500" placeholder="緯度,經度" required>
+                            <p class="text-xs text-gray-500 mt-1">格式：緯度,經度 (例如：25.0330,121.5654)</p>
+                        </div>
+                    </div>
+                </form>
+            </main>
+            <footer class="p-4 bg-gray-50 border-t flex justify-end space-x-3">
+                <button id="cancel-add-location-btn" type="button" class="bg-white hover:bg-gray-100 text-gray-700 font-bold py-2 px-4 rounded-lg border">取消</button>
+                <button id="submit-add-location-btn" type="button" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">新增</button>
+            </footer>
+        </div>
+    </div>
+
+    <!-- 刪除位置確認 Modal -->
+    <div id="delete-location-confirm-modal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-[1200]">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-sm">
+            <header class="p-4 border-b">
+                <h3 class="text-lg font-semibold text-gray-800">刪除位置</h3>
+            </header>
+            <main class="p-4">
+                <p class="text-gray-700">您確定要刪除這個位置嗎？</p>
+                <p id="delete-location-info" class="text-sm text-gray-500 mt-2"></p>
+            </main>
+            <footer class="p-4 bg-gray-50 border-t flex justify-end space-x-3">
+                <button id="cancel-delete-location-btn" type="button" class="bg-white hover:bg-gray-100 text-gray-700 font-bold py-2 px-4 rounded-lg border">取消</button>
+                <button id="confirm-delete-location-btn" type="button" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">刪除</button>
             </footer>
         </div>
     </div>
@@ -782,19 +824,15 @@
 
             // --- 設定頁面元素 ---
             const settingsAccountTabBtn = document.getElementById('settings-account-tab-btn');
-                const settingsAccountTabBtn = document.getElementById('settings-account-tab-btn');
                 const settingsRulesTabBtn = document.getElementById('settings-rules-tab-btn');
                 const settingsLocationTabBtn = document.getElementById('settings-location-tab-btn');
-                const settingsAccountContent = document.getElementById('settings-account-content');
+            const settingsAccountContent = document.getElementById('settings-account-content');
                 const settingsRulesContent = document.getElementById('settings-rules-content');
                 const settingsLocationContent = document.getElementById('settings-location-content');
-                const addLocationBtn = document.getElementById('add-location-btn');
-                const locationList = document.getElementById('location-list');
-                const settingsLocationContent = document.getElementById('settings-location-content');
-                const addLocationBtn = document.getElementById('add-location-btn');
-                const locationList = document.getElementById('location-list');
             const addAccountBtn = document.getElementById('add-account-btn');
             const accountList = document.getElementById('account-list');
+            const addLocationBtn = document.getElementById('add-location-btn');
+            const locationList = document.getElementById('location-list');
 
              // --- 個人資料 Modal 元素 ---
             const profileModal = document.getElementById('profile-modal');
@@ -817,15 +855,6 @@
             const uploadPhotoBtn = document.getElementById('upload-photo-btn');
             const newAccountPhotoInput = document.getElementById('new-account-photo-input');
             const openCameraForProfileBtn = document.getElementById('open-camera-for-profile-btn');
-
-            // --- 新增位置 Modal 元素 ---
-            const addLocationModal = document.getElementById('add-location-modal');
-            const closeAddLocationModalBtn = document.getElementById('close-add-location-modal-btn');
-            const cancelAddLocationBtn = document.getElementById('cancel-add-location-btn');
-            const addLocationForm = document.getElementById('add-location-form');
-            const submitAddLocationBtn = document.getElementById('submit-add-location-btn');
-            const locationNameInput = document.getElementById('location-name');
-            const locationGpsInput = document.getElementById('location-gps');
             
             // --- 編輯帳號 Modal 元素 ---
             const editAccountModal = document.getElementById('edit-account-modal');
@@ -843,6 +872,30 @@
             const confirmDeleteBtn = document.getElementById('confirm-delete-btn');
             const cancelDeleteBtn = document.getElementById('cancel-delete-btn');
             const deleteUserInfo = document.getElementById('delete-user-info');
+
+            // --- 編輯位置 Modal 元素 ---
+            const editLocationModal = document.getElementById('edit-location-modal');
+            const closeEditLocationModalBtn = document.getElementById('close-edit-location-modal-btn');
+            const cancelEditLocationBtn = document.getElementById('cancel-edit-location-btn');
+            const editLocationForm = document.getElementById('edit-location-form');
+            const submitEditLocationBtn = document.getElementById('submit-edit-location-btn');
+            const editLocationNameInput = document.getElementById('edit-location-name');
+            const editLocationGpsInput = document.getElementById('edit-location-gps');
+            
+            // --- 新增位置 Modal 元素 ---
+            const addLocationModal = document.getElementById('add-location-modal');
+            const closeAddLocationModalBtn = document.getElementById('close-add-location-modal-btn');
+            const cancelAddLocationBtn = document.getElementById('cancel-add-location-btn');
+            const addLocationForm = document.getElementById('add-location-form');
+            const submitAddLocationBtn = document.getElementById('submit-add-location-btn');
+            const addLocationNameInput = document.getElementById('add-location-name');
+            const addLocationGpsInput = document.getElementById('add-location-gps');
+            
+            // --- 刪除位置確認 Modal 元素 ---
+            const deleteLocationConfirmModal = document.getElementById('delete-location-confirm-modal');
+            const confirmDeleteLocationBtn = document.getElementById('confirm-delete-location-btn');
+            const cancelDeleteLocationBtn = document.getElementById('cancel-delete-location-btn');
+            const deleteLocationInfo = document.getElementById('delete-location-info');
 
 
             // --- 大頭照相機 Modal 元素 ---
@@ -888,7 +941,7 @@
             const eyeIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
             const eyeOffIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"></path><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"></path><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"></path><line x1="2" x2="22" y1="2" y2="22"></line></svg>`;
             
-            let workDurationInterval = null, unsubscribeFromHistory = null, unsubscribeFromAccounts = null, unsubscribeFromStatus=null;
+            let workDurationInterval = null, unsubscribeFromHistory = null, unsubscribeFromAccounts = null, unsubscribeFromStatus=null, unsubscribeFromLocations=null;
             let dateTimeInterval = null;
             let currentPosition = null;
             let cameraStream = null;
@@ -1006,6 +1059,7 @@
                         if (unsubscribeFromHistory) unsubscribeFromHistory();
                         if (unsubscribeFromAccounts) unsubscribeFromAccounts();
                         if (unsubscribeFromStatus) unsubscribeFromStatus();
+                        if (unsubscribeFromLocations) unsubscribeFromLocations();
                         if (workDurationInterval) clearInterval(workDurationInterval);
                         if (dateTimeInterval) clearInterval(dateTimeInterval);
                         
@@ -1081,20 +1135,20 @@
 
                     // 設定頁面
                     settingsAccountTabBtn.addEventListener('click', () => showSettingsTab('account'));
-                settingsRulesTabBtn.addEventListener('click', () => showSettingsTab('rules'));
-                settingsLocationTabBtn.addEventListener('click', () => showSettingsTab('location'));
+                    settingsRulesTabBtn.addEventListener('click', () => showSettingsTab('rules'));
+                    settingsLocationTabBtn.addEventListener('click', () => showSettingsTab('location'));
                     
                     // 新增帳號 Modal
                     addAccountBtn.addEventListener('click', openAddAccountModal);
-                closeAddAccountModalBtn.addEventListener('click', closeAddAccountModal);
-                cancelAddAccountBtn.addEventListener('click', closeAddAccountModal);
-
-                // 新增位置 Modal
-                addLocationBtn.addEventListener('click', openAddLocationModal);
-                closeAddLocationModalBtn.addEventListener('click', closeAddLocationModal);
-                cancelAddLocationBtn.addEventListener('click', closeAddLocationModal);
-                addLocationForm.addEventListener('submit', handleAddLocationSubmit);
+                    closeAddAccountModalBtn.addEventListener('click', closeAddAccountModal);
+                    cancelAddAccountBtn.addEventListener('click', closeAddAccountModal);
                     addAccountForm.addEventListener('submit', handleAddAccountSubmit);
+                    
+                    // 新增位置 Modal
+                    addLocationBtn.addEventListener('click', openAddLocationModal);
+                    closeAddLocationModalBtn.addEventListener('click', closeAddLocationModal);
+                    cancelAddLocationBtn.addEventListener('click', closeAddLocationModal);
+                    addLocationForm.addEventListener('submit', handleAddLocationSubmit);
                     
                     // 編輯帳號 Modal
                     closeEditAccountModalBtn.addEventListener('click', closeEditAccountModal);
@@ -1106,6 +1160,15 @@
                     // 刪除帳號
                     cancelDeleteBtn.addEventListener('click', closeDeleteConfirmModal);
                     confirmDeleteBtn.addEventListener('click', handleDeleteAccount);
+                    
+                    // 編輯位置 Modal
+                    closeEditLocationModalBtn.addEventListener('click', closeEditLocationModal);
+                    cancelEditLocationBtn.addEventListener('click', closeEditLocationModal);
+                    editLocationForm.addEventListener('submit', handleEditLocationSubmit);
+                    
+                    // 刪除位置
+                    cancelDeleteLocationBtn.addEventListener('click', closeDeleteLocationConfirmModal);
+                    confirmDeleteLocationBtn.addEventListener('click', handleDeleteLocation);
                     
                     // 大頭照上傳
                     uploadPhotoBtn.addEventListener('click', () => newAccountPhotoInput.click());
@@ -1136,6 +1199,14 @@
                         if (editButton) openEditAccountModal(editButton.dataset.id);
                         const deleteButton = e.target.closest('.delete-account-btn');
                         if (deleteButton) openDeleteConfirmModal(deleteButton.dataset.id, deleteButton.dataset.name);
+                    });
+                    
+                    // 位置管理事件代理
+                    locationList.addEventListener('click', (e) => {
+                        const editButton = e.target.closest('.edit-location-btn');
+                        if (editButton) openEditLocationModal(editButton.dataset.id, editButton.dataset.name, editButton.dataset.gps);
+                        const deleteButton = e.target.closest('.delete-location-btn');
+                        if (deleteButton) openDeleteLocationConfirmModal(deleteButton.dataset.id, deleteButton.dataset.name);
                     });
 
                     historyLogEl.addEventListener('click', (e) => {
@@ -1195,29 +1266,28 @@
                     const activeClasses = 'border-red-500 text-red-600';
                     const inactiveClasses = 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300';
                     
+                    // Hide all content
+                    settingsAccountContent.classList.add('hidden');
+                    settingsRulesContent.classList.add('hidden');
+                    settingsLocationContent.classList.add('hidden');
+                    
+                    // Reset all tabs to inactive
+                    settingsAccountTabBtn.className = `whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm ${inactiveClasses}`;
+                    settingsRulesTabBtn.className = `whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm ${inactiveClasses}`;
+                    settingsLocationTabBtn.className = `whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm ${inactiveClasses}`;
+                    
                     if (tabName === 'account') {
                         settingsAccountContent.classList.remove('hidden');
-                        settingsRulesContent.classList.add('hidden');
-                        settingsLocationContent.classList.add('hidden');
                         settingsAccountTabBtn.className = `whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm ${activeClasses}`;
-                        settingsRulesTabBtn.className = `whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm ${inactiveClasses}`;
-                        settingsLocationTabBtn.className = `whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm ${inactiveClasses}`;
 
                     } else if (tabName === 'rules') {
-                        settingsAccountContent.classList.add('hidden');
                         settingsRulesContent.classList.remove('hidden');
-                        settingsLocationContent.classList.add('hidden');
                         settingsRulesTabBtn.className = `whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm ${activeClasses}`;
-                        settingsAccountTabBtn.className = `whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm ${inactiveClasses}`;
-                        settingsLocationTabBtn.className = `whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm ${inactiveClasses}`;
-
+                        
                     } else if (tabName === 'location') {
-                        settingsAccountContent.classList.add('hidden');
-                        settingsRulesContent.classList.add('hidden');
                         settingsLocationContent.classList.remove('hidden');
                         settingsLocationTabBtn.className = `whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm ${activeClasses}`;
-                        settingsAccountTabBtn.className = `whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm ${inactiveClasses}`;
-                        settingsRulesTabBtn.className = `whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm ${inactiveClasses}`;
+                        listenToLocations();
                     }
                 }
 
@@ -1308,45 +1378,6 @@
                     try {
                         if (email === '11' && password === '11') await signInWithEmailAndPassword(auth, 'test@company.com', 'password123');
                         else await signInWithEmailAndPassword(auth, email, password);
-                        
-                        // 登入成功後，處理設備切換邏輯
-                        const user = auth.currentUser;
-                        if (user) {
-                            const userRef = doc(db, 'users', user.uid);
-                            const userDoc = await getDoc(userRef);
-                            
-                            if (userDoc.exists()) {
-                                const userData = userDoc.data();
-                                const currentDevice = {
-                                    deviceId: currentDeviceId,
-                                    loginTime: serverTimestamp(),
-                                    userAgent: navigator.userAgent
-                                };
-                                
-                                // 如果有其他設備登入，記錄舊設備ID
-                                const oldDeviceId = userData.currentDevice?.deviceId;
-                                
-                                // 更新當前設備信息
-                                await updateDoc(userRef, {
-                                    currentDevice: currentDevice,
-                                    lastLogin: serverTimestamp()
-                                });
-                                
-                                // 如果有舊設備，標記為需要登出
-                                if (oldDeviceId && oldDeviceId !== currentDeviceId) {
-                                    await updateDoc(userRef, {
-                                        [`forceLogout.${oldDeviceId}`]: true
-                                    });
-                                }
-                                
-                                // 清除當前設備的強制登出標記
-                                if (userData.forceLogout && userData.forceLogout[currentDeviceId]) {
-                                    await updateDoc(userRef, {
-                                        [`forceLogout.${currentDeviceId}`]: deleteField()
-                                    });
-                                }
-                            }
-                        }
                     } catch (error) {
                         console.error("Login failed:", error);
                         const message = (error.code === 'auth/invalid-credential') ? '登入失敗，帳號或密碼錯誤。' : '登入時發生未知錯誤。';
@@ -1763,66 +1794,6 @@
                 function closeAddAccountModal() {
                     addAccountModal.classList.add('hidden');
                 }
-
-                function openAddLocationModal() {
-                    addLocationModal.classList.remove('hidden');
-                    addLocationForm.reset();
-                }
-
-                function closeAddLocationModal() {
-                    addLocationModal.classList.add('hidden');
-                }
-
-                async function handleAddLocationSubmit(e) {
-                    e.preventDefault();
-                    toggleButtonLoading(submitAddLocationBtn, true, '儲存中...');
-                    
-                    const locationName = locationNameInput.value.trim();
-                    const gpsCoordinates = locationGpsInput.value.trim();
-                    
-                    // Validate GPS format
-                    const gpsPattern = /^-?\d+\.?\d*,-?\d+\.?\d*$/;
-                    if (!gpsPattern.test(gpsCoordinates)) {
-                        showMessage('GPS座標格式不正確，請使用「緯度,經度」格式', 'error');
-                        toggleButtonLoading(submitAddLocationBtn, false);
-                        return;
-                    }
-                    
-                    try {
-                        // Split GPS coordinates
-                        const [latitude, longitude] = gpsCoordinates.split(',').map(coord => parseFloat(coord.trim()));
-                        
-                        // Validate latitude and longitude ranges
-                        if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
-                            showMessage('GPS座標值超出有效範圍', 'error');
-                            toggleButtonLoading(submitAddLocationBtn, false);
-                            return;
-                        }
-                        
-                        const locationData = {
-                            name: locationName,
-                            latitude: latitude,
-                            longitude: longitude,
-                            gps: gpsCoordinates,
-                            createdAt: serverTimestamp(),
-                            createdBy: auth.currentUser.uid
-                        };
-                        
-                        await addDoc(collection(db, "locations"), locationData);
-                        showMessage(`位置「${locationName}」已成功新增`, 'success');
-                        closeAddLocationModal();
-                        
-                    } catch (error) {
-                        console.error("新增位置時發生錯誤:", error);
-                        let message = '新增位置失敗。';
-                        if (error.code === 'permission-denied') {
-                            message = '權限不足，無法新增位置。';
-                        }
-                        showMessage(message, 'error');
-                    } finally {
-                        toggleButtonLoading(submitAddLocationBtn, false);
-                    }
-                }
                 
                 async function openEditAccountModal(userId) {
                     editAccountModal.classList.remove('hidden');
@@ -1854,6 +1825,67 @@
 
                 function closeDeleteConfirmModal() {
                     deleteConfirmModal.classList.add('hidden');
+                }
+                
+                function closeEditLocationModal() {
+                    editLocationModal.classList.add('hidden');
+                    editLocationForm.reset();
+                    editLocationForm.dataset.locationId = '';
+                }
+                
+                function openEditLocationModal(locationId, locationName, locationGps) {
+                    editLocationForm.dataset.locationId = locationId;
+                    locationNameInput.value = locationName;
+                    locationGpsInput.value = locationGps;
+                    editLocationModal.classList.remove('hidden');
+                }
+                
+                function closeDeleteLocationConfirmModal() {
+                    deleteLocationConfirmModal.classList.add('hidden');
+                    confirmDeleteLocationBtn.dataset.locationId = '';
+                }
+                
+                function openDeleteLocationConfirmModal(locationId, locationName) {
+                    deleteLocationInfo.textContent = `您將要刪除位置 ${locationName} (${locationId})。`;
+                    confirmDeleteLocationBtn.dataset.locationId = locationId;
+                    deleteLocationConfirmModal.classList.remove('hidden');
+                }
+
+                function openAddLocationModal() {
+                    addLocationModal.classList.remove('hidden');
+                }
+
+                function closeAddLocationModal() {
+                    addLocationModal.classList.add('hidden');
+                    addLocationForm.reset();
+                }
+
+                async function handleAddLocationSubmit(e) {
+                    e.preventDefault();
+                    toggleButtonLoading(submitAddLocationBtn, true, '儲存中...');
+                    
+                    const locationName = addLocationNameInput.value;
+                    const locationGps = addLocationGpsInput.value;
+                    
+                    try {
+                        await addDoc(collection(db, 'locations'), {
+                            name: locationName,
+                            gps: locationGps,
+                            createdAt: serverTimestamp()
+                        });
+                        
+                        showMessage('位置已成功新增', 'success');
+                        closeAddLocationModal();
+                    } catch (error) {
+                        console.error('新增位置時發生錯誤:', error);
+                        let message = '新增位置失敗。';
+                        if (error.code === 'permission-denied') {
+                            message = '權限不足。';
+                        }
+                        showMessage(message, 'error');
+                    } finally {
+                        toggleButtonLoading(submitAddLocationBtn, false);
+                    }
                 }
 
                 async function handleAddAccountSubmit(e) {
@@ -1979,6 +2011,19 @@
                         accountList.innerHTML = `<p class="text-red-500 text-center py-4">無法載入帳號資料。權限不足。</p>`;
                     });
                 }
+                
+                function listenToLocations() {
+                    if (unsubscribeFromLocations) unsubscribeFromLocations();
+                    const q = query(collection(db, "locations"), orderBy("createdAt", "desc"));
+                    unsubscribeFromLocations = onSnapshot(q, (snapshot) => {
+                        const locations = snapshot.docs
+                            .map(doc => ({ id: doc.id, ...doc.data() }));
+                        renderLocationList(locations);
+                    }, (error) => {
+                        console.error("Error listening to locations:", error);
+                        locationList.innerHTML = `<p class="text-red-500 text-center py-4">無法載入位置資料。權限不足。</p>`;
+                    });
+                }
 
                 function renderAccountList(users) {
                     accountList.innerHTML = '';
@@ -2011,6 +2056,103 @@
                             </div>
                         `;
                         accountList.appendChild(userCard);
+                    });
+                }
+
+                // --- 位置管理函式 ---
+                async function handleEditLocationSubmit(e) {
+                    e.preventDefault();
+                    const locationId = editLocationForm.dataset.locationId;
+                    if (!locationId) return;
+
+                    const name = locationNameInput.value.trim();
+                    const gps = locationGpsInput.value.trim();
+
+                    if (!name || !gps) {
+                        showMessage('請填寫所有欄位', 'error');
+                        return;
+                    }
+
+                    // GPS validation
+                    const gpsPattern = /^-?\d+\.?\d*,-?\d+\.?\d*$/;
+                    if (!gpsPattern.test(gps)) {
+                        showMessage('GPS 座標格式錯誤，請使用 "緯度,經度" 格式', 'error');
+                        return;
+                    }
+
+                    const [lat, lon] = gps.split(',').map(coord => parseFloat(coord.trim()));
+                    if (isNaN(lat) || isNaN(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+                        showMessage('GPS 座標範圍錯誤，緯度必須在 -90 到 90 之間，經度必須在 -180 到 180 之間', 'error');
+                        return;
+                    }
+
+                    toggleButtonLoading(submitEditLocationBtn, true, '更新中...');
+
+                    try {
+                        const locationRef = doc(db, "locations", locationId);
+                        await updateDoc(locationRef, {
+                            name: name,
+                            gps: gps,
+                            updatedAt: serverTimestamp()
+                        });
+
+                        showMessage('位置更新成功！', 'success');
+                        closeEditLocationModal();
+                        
+                        // Reset form
+                        editLocationForm.reset();
+                        delete editLocationForm.dataset.locationId;
+                    } catch (error) {
+                        console.error("更新位置錯誤: ", error);
+                        showMessage('更新位置失敗，請稍後再試', 'error');
+                    } finally {
+                        toggleButtonLoading(submitEditLocationBtn, false);
+                    }
+                }
+
+                async function handleDeleteLocation() {
+                    const locationId = deleteLocationConfirmBtn.dataset.locationId;
+                    if (!locationId) return;
+
+                    toggleButtonLoading(deleteLocationConfirmBtn, true, '刪除中...');
+
+                    try {
+                        await deleteDoc(doc(db, "locations", locationId));
+                        showMessage('位置刪除成功！', 'success');
+                    } catch (error) {
+                        console.error("刪除位置錯誤: ", error);
+                        showMessage('刪除位置失敗，請稍後再試', 'error');
+                    } finally {
+                        toggleButtonLoading(deleteLocationConfirmBtn, false);
+                        closeDeleteLocationConfirmModal();
+                    }
+                }
+
+                function renderLocationList(locations) {
+                    locationList.innerHTML = '';
+                    if (locations.length === 0) {
+                        locationList.innerHTML = `<p class="text-gray-500 text-center py-4">尚無位置資料</p>`;
+                        return;
+                    }
+                    locations.forEach(location => {
+                        const locationCard = document.createElement('div');
+                        locationCard.className = 'bg-white p-4 rounded-lg border flex items-center justify-between';
+                        
+                        locationCard.innerHTML = `
+                            <div class="flex-1">
+                                <p class="font-bold text-gray-800">${location.name}</p>
+                                <p class="text-sm text-gray-600">GPS: ${location.gps}</p>
+                            </div>
+                            <div class="flex space-x-2">
+                                <button data-id="${location.id}" data-name="${location.name}" data-gps="${location.gps}" class="edit-location-btn p-2 text-gray-500 hover:text-blue-600 rounded-full hover:bg-gray-100">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
+                                </button>
+                                <button data-id="${location.id}" data-name="${location.name}" class="delete-location-btn p-2 text-gray-500 hover:text-red-600 rounded-full hover:bg-gray-100">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="18" y1="8" x2="23" y2="13"></line><line x1="23" y1="8" x2="18" y2="13"></line></svg>
+                                </button>
+                            </div>
+                        `;
+                        locationList.appendChild(locationCard);
                     });
                 }
 
@@ -2205,6 +2347,5 @@
         });
     </script>
 </body>
-
 
 </html>
