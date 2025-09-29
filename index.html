@@ -101,18 +101,24 @@
 
             <!-- 中間內容區 (包含子導覽與可滾動內容) -->
             <div class="flex-1 flex flex-col mt-[70px] mb-[70px] overflow-hidden">
-                 <!-- 子導覽列 -->
-                <div id="sub-tab-nav" class="h-[50px] px-6 border-b border-gray-200 bg-gray-100 flex-shrink-0">
-                     <!-- 設定頁面專用 -->
-                    <nav id="settings-tab-nav" class="hidden -mb-px flex space-x-6 h-full items-center" aria-label="Tabs">
-                        <button id="settings-account-tab-btn" class="whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm">帳號</button>
-                        <button id="settings-rules-tab-btn" class="whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm">規則</button>
-                    </nav>
-                     <!-- 打卡頁面專用 -->
-                    <nav id="checkin-tab-nav" class="hidden -mb-px flex space-x-6 h-full items-center" aria-label="Tabs">
-                        <button id="checkin-location-tab-btn" class="whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm">定位打卡</button>
-                        <button id="checkin-history-tab-btn" class="whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm">打卡紀錄</button>
-                    </nav>
+                 <!-- Date Time Display / Sub Nav Container -->
+                <div class="h-[50px] border-b border-gray-200 bg-gray-100 flex-shrink-0">
+                    <div id="datetime-display" class="h-full px-6 bg-white flex items-center justify-center text-xl font-semibold text-gray-800">
+                        <!-- Date and time will be injected here by JavaScript -->
+                    </div>
+                     <!-- 子導覽列 -->
+                    <div id="sub-tab-nav" class="h-full px-6">
+                        <!-- 設定頁面專用 -->
+                        <nav id="settings-tab-nav" class="hidden -mb-px flex space-x-6 h-full items-center" aria-label="Tabs">
+                            <button id="settings-account-tab-btn" class="whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm">帳號</button>
+                            <button id="settings-rules-tab-btn" class="whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm">規則</button>
+                        </nav>
+                         <!-- 打卡頁面專用 -->
+                        <nav id="checkin-tab-nav" class="hidden -mb-px flex space-x-6 h-full items-center" aria-label="Tabs">
+                            <button id="checkin-location-tab-btn" class="whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm">定位打卡</button>
+                            <button id="checkin-history-tab-btn" class="whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm">打卡紀錄</button>
+                        </nav>
+                    </div>
                 </div>
                 
                 <!-- 可滾動的頁面內容 -->
@@ -123,10 +129,6 @@
 
                     <!-- 儀表板頁面 -->
                     <div id="dashboard-page">
-                         <!-- Date Time Display -->
-                        <div id="datetime-display" class="h-[50px] px-6 border border-gray-200 bg-white flex-shrink-0 flex items-center justify-center text-xl font-semibold text-gray-800 rounded-t-lg -mt-6 -mx-6 mb-6">
-                            <!-- Date and time will be injected here by JavaScript -->
-                        </div>
                         <!-- 狀態顯示區 -->
                         <div id="status-card" class="bg-white rounded-lg p-5 mb-6 text-center border transition-all">
                              <div class="flex justify-between items-center">
@@ -194,19 +196,21 @@
                     </div>
 
                     <!-- 設定頁面 -->
-                    <div id="settings-page" class="hidden">
+                    <div id="settings-page" class="hidden h-full">
                         <!-- Tab content -->
-                        <div>
+                        <div class="h-full flex flex-col">
                             <!-- Account Tab Content -->
-                            <div id="settings-account-content">
-                                <div class="flex justify-end mb-4">
+                            <div id="settings-account-content" class="h-full flex flex-col overflow-hidden">
+                                <div class="flex justify-end mb-4 flex-shrink-0">
                                     <button id="add-account-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                                         <span>新增帳號</span>
                                     </button>
                                 </div>
-                                <div id="account-list" class="space-y-3">
-                                    <p class="text-gray-500 text-center py-4">正在載入帳號資料...</p>
+                                <div class="flex-1 overflow-y-auto">
+                                    <div id="account-list" class="space-y-3">
+                                        <p class="text-gray-500 text-center py-4">正在載入帳號資料...</p>
+                                    </div>
                                 </div>
                             </div>
 
@@ -995,7 +999,7 @@
                     settingsPage.classList.add('hidden');
                     settingsTabNav.classList.add('hidden');
                     checkinTabNav.classList.add('hidden');
-                    subTabNav.style.visibility = 'hidden';
+                    subTabNav.style.display = 'none';
                     datetimeDisplay.style.display = 'none';
 
 
@@ -1006,13 +1010,13 @@
                     } else if (pageName === 'checkin') {
                         checkinPage.classList.remove('hidden');
                         checkinTabNav.classList.remove('hidden');
-                        subTabNav.style.visibility = 'visible';
+                        subTabNav.style.display = 'block';
                         setActiveTab(navCheckinBtn);
                         showCheckinTab('location');
                     } else if (pageName === 'settings') {
                         settingsPage.classList.remove('hidden');
                         settingsTabNav.classList.remove('hidden');
-                        subTabNav.style.visibility = 'visible';
+                        subTabNav.style.display = 'block';
                         setActiveTab(navSettingsBtn);
                         showSettingsTab('account');
                         listenToAccounts();
