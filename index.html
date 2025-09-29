@@ -111,7 +111,7 @@
                         <span>登入系統</span>
                     </button>
                     <p id="login-message" class="text-red-500 text-sm text-center min-h-[10px]"></p>
-                    <p class="text-center text-gray-600 text-xs mt-2">V1.3.7</p>
+                    <p class="text-center text-gray-600 text-xs mt-2">V1.3.8</p>
                 </div>
             </main>
         </div>
@@ -942,10 +942,16 @@
                 // --- 頁面切換與互動邏輯 ---
                 function initializeNavigation() {
                     // 主導覽
-                    navSettingsBtn.addEventListener('click', () => showPage('settings'));
-                navDashboardBtn.addEventListener('click', () => showPage('dashboard'));
-                navTrackingBtn.addEventListener('click', () => showPage('tracking'));
-                navCheckinBtn.addEventListener('click', () => { 
+                    navSettingsBtn.addEventListener('click', () => {
+                        showPage('settings');
+                    });
+                    navDashboardBtn.addEventListener('click', () => {
+                        showPage('dashboard');
+                    });
+                    navTrackingBtn.addEventListener('click', () => {
+                        showPage('tracking');
+                    });
+                    navCheckinBtn.addEventListener('click', () => { 
                         showPage('checkin');
                         forceRelocate();
                     });
@@ -953,9 +959,15 @@
                     profileBtn.addEventListener('click', openProfileModal);
                     
                     // 打卡子導覽
-                    checkinLocationTabBtn.addEventListener('click', () => showCheckinTab('location'));
-                checkinHistoryTabBtn.addEventListener('click', () => showCheckinTab('history'));
-                trackingPersonnelTabBtn.addEventListener('click', () => showTrackingTab('personnel'));
+                    checkinLocationTabBtn.addEventListener('click', () => {
+                    showCheckinTab('location');
+                });
+                checkinHistoryTabBtn.addEventListener('click', () => {
+                    showCheckinTab('history');
+                });
+                trackingPersonnelTabBtn.addEventListener('click', () => {
+                    showTrackingTab('personnel');
+                });
 
                     // Easter Egg
                     const loginLogo = document.getElementById('login-logo');
@@ -1007,8 +1019,12 @@
                     closeMapModalBtn.addEventListener('click', closeMapModal);
 
                     // 設定頁面
-                    settingsAccountTabBtn.addEventListener('click', () => showSettingsTab('account'));
-                    settingsRulesTabBtn.addEventListener('click', () => showSettingsTab('rules'));
+                    settingsAccountTabBtn.addEventListener('click', () => {
+                    showSettingsTab('account');
+                });
+                settingsRulesTabBtn.addEventListener('click', () => {
+                    showSettingsTab('rules');
+                });
                     
                     // 新增帳號 Modal
                     addAccountBtn.addEventListener('click', openAddAccountModal);
@@ -1092,7 +1108,6 @@
                     subTabNav.classList.add('hidden');
                     datetimeDisplay.classList.add('hidden');
 
-
                     if (pageName === 'dashboard') {
                         dashboardPage.classList.remove('hidden');
                         datetimeDisplay.classList.remove('hidden');
@@ -1158,6 +1173,12 @@
                 function showTrackingTab(tabName) {
                     const activeClasses = 'border-red-500 text-red-600';
                     const inactiveClasses = 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300';
+                    
+                    // 隱藏所有追蹤頁面內容
+                    trackingPersonnelContent.classList.add('hidden');
+                    
+                    // 重設所有追蹤分頁按鈕為非活躍狀態
+                    trackingPersonnelTabBtn.className = `whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm ${inactiveClasses}`;
                     
                     if (tabName === 'personnel') {
                         trackingPersonnelContent.classList.remove('hidden');
