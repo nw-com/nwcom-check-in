@@ -46,8 +46,7 @@
         /* 響應式設計 - 手機優先 */
         @media (max-width: 450px) {
             /* 只在登入頁面時應用置中樣式 */
-            body:has(#login-view:not(.hidden)) #root-container,
-            body:has(#main-view.hidden) #root-container {
+            body:has(#login-view:not(.hidden)) #root-container {
                 width: 360px !important;
                 max-width: none !important;
                 margin: auto !important;
@@ -60,8 +59,7 @@
                 transform: translate(-50%, -50%) !important;
             }
             
-            
-            /* 登入後的樣式 - 保持原有尺寸 */
+            /* 登入後的樣式 - 恢復原有佈局 */
             body:has(#main-view:not(.hidden)) #root-container {
                 width: 400px !important;
                 height: 750px !important;
@@ -172,7 +170,7 @@
                         <span>登入系統</span>
                     </button>
                     <p id="login-message" class="text-red-500 text-sm text-center min-h-[10px]"></p>
-                    <p class="text-center text-gray-600 text-xs mt-2">V1.4.4</p>
+                    <p class="text-center text-gray-600 text-xs mt-2">V1.3.1</p>
                 </div>
             </main>
         </div>
@@ -2023,5 +2021,4 @@
         });
     </script>
 </body>
-
 </html>
