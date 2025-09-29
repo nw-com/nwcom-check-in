@@ -1,0 +1,81 @@
+<div class="p-6">
+    <!-- Welcome Section -->
+    <div class="bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl p-6 text-white mb-6">
+        <div class="flex items-center space-x-4">
+            <img id="user-photo" src="https://via.placeholder.com/60" alt="使用者頭像" class="w-15 h-15 rounded-full border-3 border-white">
+            <div>
+                <h2 class="text-xl font-bold">歡迎回來，<span id="user-name">使用者</span></h2>
+                <p id="user-email" class="text-blue-100">user@example.com</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Stats -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div class="bg-white rounded-lg p-4 border border-gray-200">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium text-gray-600">本月打卡次數</p>
+                    <p class="text-2xl font-bold text-gray-900">22</p>
+                </div>
+                <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                    <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-lg p-4 border border-gray-200">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium text-gray-600">遲到次數</p>
+                    <p class="text-2xl font-bold text-gray-900">1</p>
+                </div>
+                <div class="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center">
+                    <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-lg p-4 border border-gray-200">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium text-gray-600">請假天數</p>
+                    <p class="text-2xl font-bold text-gray-900">2</p>
+                </div>
+                <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                    <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                    </svg>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="bg-white rounded-lg p-6 border border-gray-200">
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">快速操作</h3>
+        <div class="grid grid-cols-2 gap-4">
+            <button onclick="showPage('checkin')" class="flex flex-col items-center p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
+                <div class="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center mb-2">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                </div>
+                <span class="text-sm font-medium text-blue-700">立即打卡</span>
+            </button>
+            
+            <button onclick="showPage('checkin-history')" class="flex flex-col items-center p-4 bg-green-50 rounded-lg hover:bg-green-100 transition-colors">
+                <div class="w-12 h-12 bg-green-600 rounded-full flex items-center justify-center mb-2">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                </div>
+                <span class="text-sm font-medium text-green-700">打卡紀錄</span>
+            </button>
+        </div>
+    </div>
+</div>

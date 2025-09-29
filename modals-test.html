@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>模態框測試</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-8">
+    <div class="max-w-4xl mx-auto bg-white rounded-lg shadow-lg p-6">
+        <h1 class="text-2xl font-bold text-gray-800 mb-6">模態框功能測試</h1>
+        
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            <button id="test-camera" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors">
+                測試相機模態框
+            </button>
+            <button id="test-map" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition-colors">
+                測試地圖模態框
+            </button>
+            <button id="test-add-account" class="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700 transition-colors">
+                測試新增帳號
+            </button>
+            <button id="test-profile" class="bg-orange-600 text-white px-4 py-2 rounded hover:bg-orange-700 transition-colors">
+                測試個人資料
+            </button>
+        </div>
+        
+        <div id="modals-container">
+            <!-- 模態框將被載入到這裡 -->
+        </div>
+        
+        <div class="bg-green-50 border border-green-200 rounded p-4">
+            <h3 class="text-green-800 font-semibold mb-2">測試說明：</h3>
+            <ul class="text-green-700 text-sm space-y-1">
+                <li>• 點擊按鈕測試不同的模態框</li>
+                <li>• 確認模態框能正常顯示和關閉</li>
+                <li>• 檢查所有按鈕和表單元素是否正常運作</li>
+            </ul>
+        </div>
+    </div>
+    
+    <script>
+        // 載入模態框
+        async function loadModals() {
+            try {
+                const response = await fetch('pages/modals.html');
+                const html = await response.text();
+                document.getElementById('modals-container').innerHTML = html;
+                
+                // 綁定關閉按鈕事件
+                bindModalEvents();
+            } catch (error) {
+                console.error('載入模態框失敗:', error);
+            }
+        }
+        
+        // 綁定模態框事件
+        function bindModalEvents() {
+            // 相機模態框關閉
+            const cameraClose = document.getElementById('close-camera');
+            if (cameraClose) {
+                cameraClose.addEventListener('click', () => closeModal('camera-modal'));
+            }
+            
+            // 地圖模態框關閉
+            const mapClose = document.getElementById('close-map');
+            if (mapClose) {
+                mapClose.addEventListener('click', () => closeModal('map-modal'));
+            }
+            
+            // 新增帳號模態框關閉
+            const addAccountClose = document.getElementById('close-add-account');
+            if (addAccountClose) {
+                addAccountClose.addEventListener('click', () => closeModal('add-account-modal'));
+            }
+            
+            // 個人資料模態框關閉
+            const profileClose = document.getElementById('close-profile');
+            if (profileClose) {
+                profileClose.addEventListener('click', () => closeModal('profile-modal'));
+            }
+            
+            // 照片查看器關閉
+            const photoViewerClose = document.getElementById('close-photo-viewer');
+            if (photoViewerClose) {
+                photoViewerClose.addEventListener('click', () => closeModal('photo-viewer-modal'));
+            }
+        }
+        
+        // 關閉模態框
+        function closeModal(modalId) {
+            const modal = document.getElementById(modalId);
+            if (modal) {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            }
+        }
+        
+        // 顯示模態框
+        function showModal(modalId) {
+            const modal = document.getElementById(modalId);
+            if (modal) {
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+            }
+        }
+        
+        // 頁面載入完成後初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            loadModals();
+            
+            // 綁定測試按鈕
+            document.getElementById('test-camera').addEventListener('click', () => showModal('camera-modal'));
+            document.getElementById('test-map').addEventListener('click', () => showModal('map-modal'));
+            document.getElementById('test-add-account').addEventListener('click', () => showModal('add-account-modal'));
+            document.getElementById('test-profile').addEventListener('click', () => showModal('profile-modal'));
+        });
+    </script>
+</body>
+</html>

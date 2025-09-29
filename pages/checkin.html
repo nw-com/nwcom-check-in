@@ -1,0 +1,107 @@
+<div class="p-6">
+    <!-- Check-in Tabs -->
+    <div class="mb-6">
+        <div class="border-b border-gray-200">
+            <nav id="check-in-tabs" class="-mb-px flex space-x-8">
+                <button data-tab="morning" class="border-blue-500 text-blue-600 whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm">
+                    上班打卡
+                </button>
+                <button data-tab="afternoon" class="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm">
+                    下班打卡
+                </button>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Morning Check-in -->
+    <div id="morning-check-in" class="space-y-6">
+        <div class="bg-white rounded-lg p-6 border border-gray-200">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">上班打卡</h3>
+            
+            <!-- Current Time -->
+            <div class="mb-4">
+                <p class="text-sm text-gray-600 mb-1">當前時間</p>
+                <p id="check-in-time" class="text-xl font-bold text-gray-900">--:--:--</p>
+            </div>
+            
+            <!-- Location Status -->
+            <div class="mb-6">
+                <p class="text-sm text-gray-600 mb-2">位置資訊</p>
+                <button id="check-in-location" class="w-full p-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-blue-400 hover:text-blue-600 transition-colors">
+                    點擊獲取位置資訊
+                </button>
+            </div>
+            
+            <!-- Check-in Button -->
+            <button id="check-in-btn" class="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all font-medium">
+                立即打卡
+            </button>
+            
+            <!-- Status -->
+            <p id="check-in-status" class="text-center text-sm text-gray-600 mt-3">準備就緒</p>
+        </div>
+        
+        <!-- Photo Capture -->
+        <div class="bg-white rounded-lg p-6 border border-gray-200">
+            <h4 class="text-md font-semibold text-gray-900 mb-3">拍照打卡</h4>
+            <button onclick="openCamera()" class="w-full bg-gray-100 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-200 transition-colors flex items-center justify-center space-x-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                </svg>
+                <span>開啟相機</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Afternoon Check-in -->
+    <div id="afternoon-check-in" class="hidden space-y-6">
+        <div class="bg-white rounded-lg p-6 border border-gray-200">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">下班打卡</h3>
+            
+            <!-- Current Time -->
+            <div class="mb-4">
+                <p class="text-sm text-gray-600 mb-1">當前時間</p>
+                <p id="check-in-time-afternoon" class="text-xl font-bold text-gray-900">--:--:--</p>
+            </div>
+            
+            <!-- Location Status -->
+            <div class="mb-6">
+                <p class="text-sm text-gray-600 mb-2">位置資訊</p>
+                <button onclick="forceGeolocation()" class="w-full p-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-blue-400 hover:text-blue-600 transition-colors">
+                    點擊獲取位置資訊
+                </button>
+            </div>
+            
+            <!-- Check-in Button -->
+            <button onclick="handleCheckIn()" class="w-full bg-purple-600 text-white py-3 px-4 rounded-lg hover:bg-purple-700 focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-all font-medium">
+                立即打卡
+            </button>
+            
+            <!-- Status -->
+            <p id="check-in-status-afternoon" class="text-center text-sm text-gray-600 mt-3">準備就緒</p>
+        </div>
+        
+        <!-- Photo Capture -->
+        <div class="bg-white rounded-lg p-6 border border-gray-200">
+            <h4 class="text-md font-semibold text-gray-900 mb-3">拍照打卡</h4>
+            <button onclick="openCamera()" class="w-full bg-gray-100 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-200 transition-colors flex items-center justify-center space-x-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                </svg>
+                <span>開啟相機</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- History Button -->
+    <div class="bg-white rounded-lg p-4 border border-gray-200">
+        <button id="check-in-history-btn" class="w-full bg-gray-50 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-100 transition-colors flex items-center justify-center space-x-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+            </svg>
+            <span>查看打卡紀錄</span>
+        </button>
+    </div>
+</div>

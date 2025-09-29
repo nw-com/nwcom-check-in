@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>測試頁面載入</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-8">
+    <div class="max-w-2xl mx-auto bg-white rounded-lg shadow-lg p-6">
+        <h1 class="text-2xl font-bold text-gray-800 mb-4">測試頁面載入功能</h1>
+        
+        <div class="space-y-4">
+            <div>
+                <h2 class="text-lg font-semibold text-gray-700 mb-2">測試載入 Login 頁面：</h2>
+                <div id="login-test" class="border border-gray-300 rounded p-4 min-h-[200px]">
+                    載入中...
+                </div>
+            </div>
+            
+            <div>
+                <h2 class="text-lg font-semibold text-gray-700 mb-2">測試載入 Dashboard 頁面：</h2>
+                <div id="dashboard-test" class="border border-gray-300 rounded p-4 min-h-[200px]">
+                    載入中...
+                </div>
+            </div>
+            
+            <div>
+                <h2 class="text-lg font-semibold text-gray-700 mb-2">測試載入 Check-in 頁面：</h2>
+                <div id="checkin-test" class="border border-gray-300 rounded p-4 min-h-[200px]">
+                    載入中...
+                </div>
+            </div>
+            
+            <div>
+                <h2 class="text-lg font-semibold text-gray-700 mb-2">測試載入 Modals 頁面：</h2>
+                <div id="modals-test" class="border border-gray-300 rounded p-4 min-h-[200px]">
+                    載入中...
+                </div>
+                <button id="test-camera-modal" class="mt-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">測試相機模態框</button>
+            </div>
+        </div>
+        
+        <div class="mt-6 p-4 bg-blue-50 rounded">
+            <p class="text-blue-800">如果以上區域都成功顯示內容，表示頁面拆分成功！</p>
+        </div>
+    </div>
+    
+    <script>
+        // 測試載入各個頁面
+        async function loadPageContent(url, containerId) {
+            try {
+                const response = await fetch(url);
+                const html = await response.text();
+                document.getElementById(containerId).innerHTML = html;
+            } catch (error) {
+                console.error(`Error loading ${url}:`, error);
+                document.getElementById(containerId).innerHTML = '<div class="text-red-600">載入失敗：' + error.message + '</div>';
+            }
+        }
+        
+        // 載入測試頁面
+        document.addEventListener('DOMContentLoaded', function() {
+            loadPageContent('pages/login.html', 'login-test');
+            loadPageContent('pages/dashboard.html', 'dashboard-test');
+            loadPageContent('pages/checkin.html', 'checkin-test');
+            loadPageContent('pages/modals.html', 'modals-test');
+            
+            // 測試按鈕事件
+            document.getElementById('test-camera-modal').addEventListener('click', function() {
+                document.getElementById('camera-modal').classList.remove('hidden');
+                document.getElementById('camera-modal').classList.add('flex');
+            });
+        });
+    </script>
+</body>
+</html>

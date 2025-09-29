@@ -1,0 +1,136 @@
+body {
+    font-family: 'Inter', 'Noto Sans TC', sans-serif;
+    touch-action: manipulation;
+}
+
+.spinner {
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: #fff;
+    width: 20px;
+    height: 20px;
+    animation: spin 1s ease-in-out infinite;
+}
+
+.spinner-gray {
+    border: 2px solid #e5e7eb; /* gray-200 */
+    border-radius: 50%;
+    border-top-color: #4b5563; /* gray-600 */
+    width: 16px;
+    height: 16px;
+    animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+#camera-modal, #add-account-modal, #map-modal, #profile-camera-modal, #edit-account-modal, #delete-confirm-modal, #profile-modal {
+    z-index: 1000;
+}
+
+.aspect-16-9 {
+    position: relative;
+    width: 100%;
+    padding-top: 56.25%; /* 16:9 Aspect Ratio */
+}
+
+.aspect-16-9 > video {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* 響應式設計 - 手機優先 */
+@media (max-width: 450px) {
+    /* 只在登入頁面時應用置中樣式 */
+    body:has(#login-view:not(.hidden)) #root-container {
+        width: 360px !important;
+        max-width: none !important;
+        margin: auto !important;
+        border-radius: 1rem !important;
+        height: 480px !important;
+        max-height: none !important;
+        position: absolute !important;
+        top: 50% !important;
+        left: 50% !important;
+        transform: translate(-50%, -50%) !important;
+    }
+    
+    /* 登入後的樣式 - 恢復原有佈局 */
+    body:has(#main-view:not(.hidden)) #root-container {
+        width: 400px !important;
+        height: 750px !important;
+        position: relative !important;
+        top: auto !important;
+        left: auto !important;
+        transform: none !important;
+        margin: 10px auto 50px !important;
+    }
+    
+    body {
+        overflow: hidden;
+        position: relative;
+        height: 100vh;
+        margin: 0;
+    }
+    
+    #bottom-nav {
+        border-bottom-left-radius: 1rem !important;
+        border-bottom-right-radius: 1rem !important;
+        overflow: hidden;
+    }
+}
+
+/* 確保登入頁面在手機上也能正確顯示 */
+@media (max-height: 600px) {
+    #login-view {
+        min-height: auto !important;
+    }
+}
+
+/* 確保內容區域可以正確捲動 */
+#main-view {
+    position: relative;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+/* 主頁佈局調整 */
+#root-container {
+    margin: 10px auto 50px !important;
+}
+
+/* 確保登入後頁面在登入狀態下完全隱藏 */
+#main-view.hidden {
+    display: none !important;
+}
+
+#main-view header {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 70px;
+    z-index: 20;
+}
+
+#bottom-nav {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 70px;
+    z-index: 20;
+}
+
+#main-view .flex-1.flex-col {
+    margin-top: 70px;
+    margin-bottom: 70px;
+    height: calc(100% - 140px);
+    overflow: hidden;
+}
