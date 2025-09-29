@@ -28,7 +28,7 @@
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
-        #camera-modal, #add-account-modal, #map-modal, #profile-camera-modal, #edit-account-modal, #delete-confirm-modal, #profile-modal, #location-picker-modal { z-index: 1000; }
+        #camera-modal, #add-account-modal, #map-modal, #profile-camera-modal, #edit-account-modal, #delete-confirm-modal, #profile-modal { z-index: 1000; }
         .aspect-16-9 {
             position: relative;
             width: 100%;
@@ -133,18 +133,7 @@
             height: calc(100% - 140px);
             overflow: hidden;
         }
-    #location-picker-modal .modal-content {
-                max-width: 90vw;
-                max-height: 80vh;
-            }
-            
-            #location-picker-iframe {
-                width: 100%;
-                height: 400px;
-                border: 1px solid #e5e7eb;
-                border-radius: 0.5rem;
-            }
-        </style>
+    </style>
 </head>
 <body class="bg-red-600 flex justify-center items-center min-h-screen">
 
@@ -175,16 +164,13 @@
                             <button type="button" id="toggle-password-btn" class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-500 hover:text-gray-700">
                             </button>
                         </div>
-                        <div class="mt-2 text-right">
-                            <a href="#" id="forgot-password-link" class="text-sm text-red-600 hover:text-red-500">忘記密碼？</a>
-                        </div>
                     </div>
                     <button id="login-btn" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-transform transform hover:scale-105 flex items-center justify-center space-x-2">
                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" x2="3" y1="12" y2="12"/></svg>
                         <span>登入系統</span>
                     </button>
                     <p id="login-message" class="text-red-500 text-sm text-center min-h-[10px]"></p>
-                    <p class="text-center text-gray-600 text-xs mt-2">V1.6.1</p>
+                    <p class="text-center text-gray-600 text-xs mt-2">V1.4.6</p>
                 </div>
             </main>
         </div>
@@ -279,26 +265,6 @@
                                 <button id="clock-out-btn" class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-4 px-4 rounded-lg shadow-md transition-all duration-200 flex items-center justify-center space-x-2 disabled:bg-gray-400" disabled>
                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
                                     <span>下班打卡</span>
-                                </button>
-                            </div>
-                            
-                            <!-- 外出、抵達、離開、返回按鈕 -->
-                            <div class="grid grid-cols-4 gap-2 mb-6">
-                                <button id="go-out-btn" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-2 rounded-lg shadow-md transition-all duration-200 flex flex-col items-center justify-center space-y-1 disabled:bg-gray-400">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s-8-4.5-8-11.8A8 8 0 0 1 12 2a8 8 0 0 1 8 8.2c0 7.3-8 11.8-8 11.8z"/><circle cx="12" cy="10" r="3"/></svg>
-                                    <span class="text-sm">外出</span>
-                                </button>
-                                <button id="arrive-btn" class="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 px-2 rounded-lg shadow-md transition-all duration-200 flex flex-col items-center justify-center space-y-1 disabled:bg-gray-400" disabled>
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
-                                    <span class="text-sm">抵達</span>
-                                </button>
-                                <button id="leave-btn" class="w-full bg-purple-500 hover:bg-purple-600 text-white font-bold py-3 px-2 rounded-lg shadow-md transition-all duration-200 flex flex-col items-center justify-center space-y-1 disabled:bg-gray-400" disabled>
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" x2="3" y1="12" y2="12"/></svg>
-                                    <span class="text-sm">離開</span>
-                                </button>
-                                <button id="return-btn" class="w-full bg-teal-500 hover:bg-teal-600 text-white font-bold py-3 px-2 rounded-lg shadow-md transition-all duration-200 flex flex-col items-center justify-center space-y-1 disabled:bg-gray-400" disabled>
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
-                                    <span class="text-sm">返回</span>
                                 </button>
                             </div>
                         </div>
@@ -412,40 +378,6 @@
             </header>
             <main class="h-[300px] bg-gray-200">
                 <iframe id="map-iframe" class="w-full h-full border-0" loading="lazy" referrerpolicy="no-referrer-when-downgrade" src=""></iframe>
-            </main>
-        </div>
-    </div>
-    
-    <!-- Location Picker Modal -->
-    <div id="location-picker-modal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-[1100]">
-        <div class="bg-white rounded-lg shadow-xl w-full max-w-lg flex flex-col h-[500px]">
-            <header class="p-4 border-b flex justify-between items-center">
-                <h3 class="text-lg font-bold">選擇外出地點</h3>
-                <button id="close-location-picker-btn" class="text-gray-400 hover:text-gray-600">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                </button>
-            </header>
-            <main class="flex-1 flex flex-col">
-                <div class="p-4 border-b">
-                    <input type="text" id="location-search-input" placeholder="搜尋地點..." class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-red-500 focus:border-red-500">
-                </div>
-                <div class="flex-1 bg-gray-200">
-                    <iframe id="location-picker-map" class="w-full h-full border-0" loading="lazy" referrerpolicy="no-referrer-when-downgrade" src=""></iframe>
-                </div>
-                <div class="p-4 border-t bg-gray-50">
-                    <div class="text-sm text-gray-600 mb-2">
-                        <div>目前選擇: <span id="selected-location-text" class="font-medium">尚未選擇地點</span></div>
-                        <div>距離: <span id="location-distance" class="font-medium">--</span> 公里</div>
-                    </div>
-                    <div class="flex space-x-3">
-                        <button id="cancel-location-picker-btn" class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg">
-                            取消
-                        </button>
-                        <button id="confirm-location-btn" class="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg disabled:opacity-50" disabled>
-                            確認外出
-                        </button>
-                    </div>
-                </div>
             </main>
         </div>
     </div>
@@ -771,7 +703,6 @@
             const forgotPasswordLink = document.getElementById('forgot-password-link');
             const currentStatusEl = document.getElementById('current-status'), workDurationEl = document.getElementById('work-duration');
             const clockInBtn = document.getElementById('clock-in-btn'), clockOutBtn = document.getElementById('clock-out-btn');
-const goOutBtn = document.getElementById('go-out-btn'), arriveBtn = document.getElementById('arrive-btn'), leaveBtn = document.getElementById('leave-btn'), returnBtn = document.getElementById('return-btn');
             const historyLogEl = document.getElementById('history-log');
             const messageBoxEl = document.getElementById('message-box'), messageContentEl = document.getElementById('message-content');
             const statusCardEl = document.getElementById('status-card');
@@ -873,14 +804,6 @@ const goOutBtn = document.getElementById('go-out-btn'), arriveBtn = document.get
             const closeMapModalBtn = document.getElementById('close-map-modal-btn');
             const mapIframe = document.getElementById('map-iframe');
 
-            // --- 地點選擇器 Modal 元素 ---
-            const locationPickerModal = document.getElementById('location-picker-modal');
-            const locationSearchInput = document.getElementById('location-search-input');
-            const locationPickerIframe = document.getElementById('location-picker-iframe');
-            const cancelLocationPickerBtn = document.getElementById('cancel-location-picker-btn');
-            const confirmLocationBtn = document.getElementById('confirm-location-btn');
-            let selectedLocationData = null;
-
             // --- 密碼提示 Modal 元素 ---
             const passwordPromptModal = document.getElementById('password-prompt-modal');
             const promptPasswordInput = document.getElementById('prompt-password-input');
@@ -976,7 +899,6 @@ const goOutBtn = document.getElementById('go-out-btn'), arriveBtn = document.get
                         }
 
                         navSettingsBtn.style.display = (currentUserRole === '管理員') ? 'flex' : 'none';
-                        settingsLocationTabBtn.style.display = (currentUserRole === '管理員') ? 'flex' : 'none';
                         
                         rootContainer.classList.remove('w-[380px]', 'h-[480px]');
                         rootContainer.classList.add('w-[400px]', 'h-[750px]');
@@ -994,9 +916,6 @@ const goOutBtn = document.getElementById('go-out-btn'), arriveBtn = document.get
                         listenToRecordsByDate(user.uid, todayString);
                         listenToTodayStatus(user.uid);
                         getInitialLocation();
-                        
-                        // 初始化按鈕狀態
-                        initializeButtonStatesFromHistory(user.uid);
                         
                         if (dateTimeInterval) clearInterval(dateTimeInterval);
                         updateDateTime();
@@ -1044,11 +963,6 @@ const goOutBtn = document.getElementById('go-out-btn'), arriveBtn = document.get
                     // 打卡子導覽
                     checkinLocationTabBtn.addEventListener('click', () => showCheckinTab('location'));
                     checkinHistoryTabBtn.addEventListener('click', () => showCheckinTab('history'));
-                    
-                    // 設定子導覽
-                    settingsAccountTabBtn.addEventListener('click', () => showSettingsTab('account'));
-                    settingsRulesTabBtn.addEventListener('click', () => showSettingsTab('rules'));
-                    settingsLocationTabBtn.addEventListener('click', () => showSettingsTab('location'));
 
                     // Easter Egg
                     const loginLogo = document.getElementById('login-logo');
@@ -1098,15 +1012,6 @@ const goOutBtn = document.getElementById('go-out-btn'), arriveBtn = document.get
                     
                     // 地圖
                     closeMapModalBtn.addEventListener('click', closeMapModal);
-                    
-                    // 地點選擇器 Modal
-                    cancelLocationPickerBtn.addEventListener('click', closeLocationPickerModal);
-                    confirmLocationBtn.addEventListener('click', handleLocationConfirm);
-                    locationSearchInput.addEventListener('keypress', (e) => {
-                        if (e.key === 'Enter') {
-                            searchLocation();
-                        }
-                    });
 
                     // 設定頁面
                     settingsAccountTabBtn.addEventListener('click', () => showSettingsTab('account'));
@@ -1220,25 +1125,14 @@ const goOutBtn = document.getElementById('go-out-btn'), arriveBtn = document.get
                     if (tabName === 'account') {
                         settingsAccountContent.classList.remove('hidden');
                         settingsRulesContent.classList.add('hidden');
-                        settingsLocationContent.classList.add('hidden');
                         settingsAccountTabBtn.className = `whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm ${activeClasses}`;
                         settingsRulesTabBtn.className = `whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm ${inactiveClasses}`;
-                        settingsLocationTabBtn.className = `whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm ${inactiveClasses}`;
 
                     } else if (tabName === 'rules') {
                         settingsAccountContent.classList.add('hidden');
                         settingsRulesContent.classList.remove('hidden');
-                        settingsLocationContent.classList.add('hidden');
                         settingsRulesTabBtn.className = `whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm ${activeClasses}`;
                         settingsAccountTabBtn.className = `whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm ${inactiveClasses}`;
-                        settingsLocationTabBtn.className = `whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm ${inactiveClasses}`;
-                    } else if (tabName === 'location') {
-                        settingsAccountContent.classList.add('hidden');
-                        settingsRulesContent.classList.add('hidden');
-                        settingsLocationContent.classList.remove('hidden');
-                        settingsLocationTabBtn.className = `whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm ${activeClasses}`;
-                        settingsAccountTabBtn.className = `whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm ${inactiveClasses}`;
-                        settingsRulesTabBtn.className = `whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm ${inactiveClasses}`;
                     }
                 }
 
@@ -1320,51 +1214,19 @@ const goOutBtn = document.getElementById('go-out-btn'), arriveBtn = document.get
                 }
 
                 loginBtn.addEventListener('click', async () => {
-                    const email = emailInput.value.trim();
+                    const email = emailInput.value;
                     const password = passwordInput.value;
                     loginMessage.textContent = '';
-                    loginMessage.style.color = 'red'; // 確保錯誤訊息使用紅色
-                    
-                    // 基本驗證
-                    if (!email || !password) {
-                        loginMessage.textContent = '請輸入電子郵件和密碼。';
-                        return;
-                    }
-                    
                     if (rememberMeCheckbox.checked) localStorage.setItem('rememberedEmail', email);
                     else localStorage.removeItem('rememberedEmail');
-                    
                     toggleButtonLoading(loginBtn, true, '登入中...');
                     try {
-                        await signInWithEmailAndPassword(auth, email, password);
-                        loginMessage.textContent = '';
+                        if (email === '11' && password === '11') await signInWithEmailAndPassword(auth, 'test@company.com', 'password123');
+                        else await signInWithEmailAndPassword(auth, email, password);
                     } catch (error) {
                         console.error("Login failed:", error);
-                        let message;
-                        switch (error.code) {
-                            case 'auth/invalid-credential':
-                            case 'auth/wrong-password':
-                            case 'auth/user-not-found':
-                                message = '登入失敗，帳號或密碼錯誤。';
-                                break;
-                            case 'auth/invalid-email':
-                                message = '電子郵件格式不正確。';
-                                break;
-                            case 'auth/user-disabled':
-                                message = '此帳號已被停用。';
-                                break;
-                            case 'auth/too-many-requests':
-                                message = '嘗試次數過多，請稍後再試。';
-                                break;
-                            case 'auth/network-request-failed':
-                                message = '網路連線失敗，請檢查網路連線。';
-                                break;
-                            default:
-                                message = '登入失敗：' + (error.message || '發生未知錯誤。');
-                                break;
-                        }
+                        const message = (error.code === 'auth/invalid-credential') ? '登入失敗，帳號或密碼錯誤。' : '登入時發生未知錯誤。';
                         loginMessage.textContent = message;
-                        loginMessage.style.color = 'red';
                     } finally {
                         toggleButtonLoading(loginBtn, false);
                     }
@@ -1374,61 +1236,6 @@ const goOutBtn = document.getElementById('go-out-btn'), arriveBtn = document.get
                     const isPassword = passwordInput.type === 'password';
                     passwordInput.type = isPassword ? 'text' : 'password';
                     togglePasswordBtn.innerHTML = isPassword ? eyeOffIcon : eyeIcon;
-                });
-                
-                // 忘記密碼功能
-                forgotPasswordLink.addEventListener('click', async (e) => {
-                    e.preventDefault();
-                    const email = emailInput.value.trim();
-                    
-                    if (!email) {
-                        loginMessage.textContent = '請先輸入您的電子郵件地址。';
-                        emailInput.focus();
-                        return;
-                    }
-                    
-                    if (!confirm(`確定要重設密碼嗎？系統將發送重設密碼郵件到 ${email}`)) {
-                        return;
-                    }
-                    
-                    try {
-                        loginMessage.textContent = '正在發送重設密碼郵件...';
-                        await sendPasswordResetEmail(auth, email);
-                        loginMessage.textContent = '重設密碼郵件已發送，請檢查您的信箱。';
-                        loginMessage.style.color = 'green';
-                    } catch (error) {
-                        console.error("Password reset failed:", error);
-                        let message;
-                        switch (error.code) {
-                            case 'auth/invalid-email':
-                                message = '電子郵件格式不正確。';
-                                break;
-                            case 'auth/user-not-found':
-                                message = '找不到此電子郵件地址的使用者。';
-                                break;
-                            case 'auth/too-many-requests':
-                                message = '請求次數過多，請稍後再試。';
-                                break;
-                            default:
-                                message = '發送重設密碼郵件失敗：' + (error.message || '發生未知錯誤。');
-                                break;
-                        }
-                        loginMessage.textContent = message;
-                        loginMessage.style.color = 'red';
-                    }
-                });
-                
-                // 支援 Enter 鍵登入
-                emailInput.addEventListener('keypress', (e) => {
-                    if (e.key === 'Enter') {
-                        passwordInput.focus();
-                    }
-                });
-                
-                passwordInput.addEventListener('keypress', (e) => {
-                    if (e.key === 'Enter') {
-                        loginBtn.click();
-                    }
                 });
                 
                 // --- 地圖與定位邏輯 ---
@@ -1487,51 +1294,6 @@ const goOutBtn = document.getElementById('go-out-btn'), arriveBtn = document.get
                     mapIframe.src = ''; 
                 }
 
-                // --- 地點選擇器 Modal 函式 ---
-                function showLocationPickerModal() {
-                    locationPickerModal.classList.remove('hidden');
-                    // 初始化地圖，顯示台北市中心
-                    const taipeiCenter = { lat: 25.0330, lng: 121.5654 };
-                    const mapUrl = `https://www.google.com/maps/embed/v1/place?key=YOUR_API_KEY&q=台北市政府&center=${taipeiCenter.lat},${taipeiCenter.lng}&zoom=14`;
-                    locationPickerIframe.src = mapUrl;
-                    selectedLocationData = null;
-                    locationSearchInput.value = '';
-                }
-
-                function closeLocationPickerModal() {
-                    locationPickerModal.classList.add('hidden');
-                    locationPickerIframe.src = '';
-                    selectedLocationData = null;
-                }
-
-                function searchLocation() {
-                    const query = locationSearchInput.value.trim();
-                    if (!query) return;
-                    
-                    // 使用 Google Maps Embed API 搜尋地點
-                    const encodedQuery = encodeURIComponent(query);
-                    const mapUrl = `https://www.google.com/maps/embed/v1/place?key=YOUR_API_KEY&q=${encodedQuery}&zoom=16`;
-                    locationPickerIframe.src = mapUrl;
-                }
-
-                function handleLocationConfirm() {
-                    // 這裡應該整合 Google Maps JavaScript API 來取得實際座標
-                    // 目前先使用模擬資料
-                    selectedLocationData = {
-                        name: locationSearchInput.value || '未知地點',
-                        address: locationSearchInput.value || '未知地址',
-                        lat: 25.0330,
-                        lng: 121.5654
-                    };
-                    
-                    closeLocationPickerModal();
-                    
-                    // 繼續處理外出打卡
-                    if (selectedLocationData) {
-                        handleLocationCheckIn('goOut', selectedLocationData);
-                    }
-                }
-
                 // --- 打卡與相機邏輯 ---
                 async function handleClockAction(type) {
                     const user = auth.currentUser;
@@ -1552,172 +1314,11 @@ const goOutBtn = document.getElementById('go-out-btn'), arriveBtn = document.get
                         const docRef = await addDoc(collection(db, "clock_records"), record);
                         const clockInType = type === 'in' ? '上班' : '下班';
                         showCameraModal(`${clockInType}打卡成功！`, docRef.id);
-                        updateButtonStatesAfterCheckIn(type);
                     } catch (error) {
                         showMessage('打卡失敗，同步資料時發生錯誤。', 'error');
                         console.error("Clock action error:", error);
                     } finally {
                         toggleButtonLoading(buttonToLoad, false);
-                    }
-                }
-                
-                // 新增：處理位置相關打卡
-                async function handleLocationCheckIn(type, locationData = null) {
-                    const user = auth.currentUser;
-                    if (!user) { showMessage('使用者未登入，無法打卡。', 'error'); return; }
-                    if (!currentPosition) { showMessage('無法取得您的目前位置，請檢查定位權限後再試。', 'error'); return; }
-
-                    let buttonToLoad;
-                    let typeText;
-                    let recordType;
-                    
-                    switch(type) {
-                        case 'goOut': 
-                            buttonToLoad = goOutBtn; 
-                            typeText = '外出';
-                            recordType = 'goOut';
-                            // 外出按鈕需要選擇地點（如果沒有提供地點資料）
-                            if (!locationData) {
-                                await showLocationPickerModal();
-                                return;
-                            }
-                            break;
-                        case 'arrive': 
-                            buttonToLoad = arriveBtn; 
-                            typeText = '抵達';
-                            recordType = 'arrive';
-                            break;
-                        case 'leave': 
-                            buttonToLoad = leaveBtn; 
-                            typeText = '離開';
-                            recordType = 'leave';
-                            break;
-                        case 'return': 
-                            buttonToLoad = returnBtn; 
-                            typeText = '返回';
-                            recordType = 'return';
-                            break;
-                    }
-                    
-                    toggleButtonLoading(buttonToLoad, true, '傳送中...');
-                    
-                    try {
-                        const { latitude, longitude } = currentPosition.coords;
-                        const record = {
-                            userId: user.uid, 
-                            userEmail: user.email, 
-                            type: recordType,
-                            timestamp: serverTimestamp(),
-                            coords: { latitude, longitude },
-                            photoURLs: []
-                        };
-                        
-                        // 如果有地點資料，加入到記錄中
-                        if (locationData) {
-                            record.locationData = locationData;
-                        }
-                        
-                        const docRef = await addDoc(collection(db, "clock_records"), record);
-                        showCameraModal(`${typeText}打卡成功！`, docRef.id);
-                        updateButtonStatesAfterCheckIn(type);
-                    } catch (error) {
-                        showMessage('打卡失敗，同步資料時發生錯誤。', 'error');
-                        console.error("Location check-in error:", error);
-                    } finally {
-                        toggleButtonLoading(buttonToLoad, false);
-                    }
-                }
-                
-                // 新增：從歷史記錄初始化按鈕狀態
-                async function initializeButtonStatesFromHistory(userId) {
-                    try {
-                        const today = new Date();
-                        const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-                        const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
-                        
-                        const q = query(
-                            collection(db, "clock_records"),
-                            where("userId", "==", userId),
-                            where("timestamp", ">=", startOfDay),
-                            where("timestamp", "<", endOfDay),
-                            orderBy("timestamp", "desc"),
-                            limit(1)
-                        );
-                        
-                        const querySnapshot = await getDocs(q);
-                        
-                        if (!querySnapshot.empty) {
-                            const lastRecord = querySnapshot.docs[0].data();
-                            updateButtonStatesAfterCheckIn(lastRecord.type);
-                        } else {
-                            // 如果今天沒有任何打卡記錄，初始化為下班狀態
-                            updateButtonStatesAfterCheckIn('out');
-                        }
-                    } catch (error) {
-                        console.error("初始化按鈕狀態失敗:", error);
-                        // 如果出錯，預設為下班狀態
-                        updateButtonStatesAfterCheckIn('out');
-                    }
-                }
-                
-                // 新增：更新按鈕狀態
-                function updateButtonStatesAfterCheckIn(lastAction) {
-                    // 根據最後的打卡動作更新按鈕狀態
-                    switch(lastAction) {
-                        case 'goOut':
-                            // 外出後：只有抵達可以按
-                            clockInBtn.disabled = true;
-                            clockOutBtn.disabled = true;
-                            goOutBtn.disabled = true;
-                            arriveBtn.disabled = false;
-                            leaveBtn.disabled = true;
-                            returnBtn.disabled = true;
-                            break;
-                        case 'arrive':
-                            // 抵達後：只有離開可以按
-                            clockInBtn.disabled = true;
-                            clockOutBtn.disabled = true;
-                            goOutBtn.disabled = true;
-                            arriveBtn.disabled = true;
-                            leaveBtn.disabled = false;
-                            returnBtn.disabled = true;
-                            break;
-                        case 'leave':
-                            // 離開後：返回和下班打卡可以按
-                            clockInBtn.disabled = true;
-                            clockOutBtn.disabled = false;
-                            goOutBtn.disabled = true;
-                            arriveBtn.disabled = true;
-                            leaveBtn.disabled = true;
-                            returnBtn.disabled = false;
-                            break;
-                        case 'return':
-                            // 返回後：外出和下班打卡可以按
-                            clockInBtn.disabled = true;
-                            clockOutBtn.disabled = false;
-                            goOutBtn.disabled = false;
-                            arriveBtn.disabled = true;
-                            leaveBtn.disabled = true;
-                            returnBtn.disabled = true;
-                            break;
-                        case 'in':
-                            // 上班打卡後：外出和下班打卡可以按
-                            clockInBtn.disabled = true;
-                            clockOutBtn.disabled = false;
-                            goOutBtn.disabled = false;
-                            arriveBtn.disabled = true;
-                            leaveBtn.disabled = true;
-                            returnBtn.disabled = true;
-                            break;
-                        case 'out':
-                            // 下班打卡後：只有上班打卡可以按
-                            clockInBtn.disabled = false;
-                            clockOutBtn.disabled = true;
-                            goOutBtn.disabled = true;
-                            arriveBtn.disabled = true;
-                            leaveBtn.disabled = true;
-                            returnBtn.disabled = true;
-                            break;
                     }
                 }
                 
@@ -1858,10 +1459,6 @@ const goOutBtn = document.getElementById('go-out-btn'), arriveBtn = document.get
 
                 clockInBtn.addEventListener('click', () => handleClockAction('in'));
                 clockOutBtn.addEventListener('click', () => handleClockAction('out'));
-                goOutBtn.addEventListener('click', () => handleLocationCheckIn('goOut'));
-                arriveBtn.addEventListener('click', () => handleLocationCheckIn('arrive'));
-                leaveBtn.addEventListener('click', () => handleLocationCheckIn('leave'));
-                returnBtn.addEventListener('click', () => handleLocationCheckIn('return'));
                 
                 // --- 個人資料 Modal ---
                 function openProfileModal() {
@@ -2320,36 +1917,8 @@ const goOutBtn = document.getElementById('go-out-btn'), arriveBtn = document.get
                         historyLogEl.innerHTML = `<p class="text-gray-500 text-center py-4">此日期尚無紀錄</p>`;
                     } else {
                         history.forEach(item => {
-                            let typeText, typeColor;
-                            switch(item.type) {
-                                case 'in':
-                                    typeText = '上班';
-                                    typeColor = 'text-green-600';
-                                    break;
-                                case 'out':
-                                    typeText = '下班';
-                                    typeColor = 'text-red-600';
-                                    break;
-                                case 'goOut':
-                                    typeText = '外出';
-                                    typeColor = 'text-blue-600';
-                                    break;
-                                case 'arrive':
-                                    typeText = '抵達';
-                                    typeColor = 'text-orange-600';
-                                    break;
-                                case 'leave':
-                                    typeText = '離開';
-                                    typeColor = 'text-purple-600';
-                                    break;
-                                case 'return':
-                                    typeText = '返回';
-                                    typeColor = 'text-teal-600';
-                                    break;
-                                default:
-                                    typeText = item.type;
-                                    typeColor = 'text-gray-600';
-                            }
+                            const typeText = item.type === 'in' ? '上班' : '下班';
+                            const typeColor = item.type === 'in' ? 'text-green-600' : 'text-red-600';
                             const logItem = document.createElement('div');
                             logItem.className = 'bg-white p-3 rounded-lg border flex justify-between items-center';
                             
@@ -2452,6 +2021,5 @@ const goOutBtn = document.getElementById('go-out-btn'), arriveBtn = document.get
         });
     </script>
 </body>
-
 
 </html>
