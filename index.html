@@ -43,18 +43,18 @@
             object-fit: cover;
         }
         
-        /* 登入頁面紅色背景動畫 - 只在登入頁面顯示 */
+        /* 登入頁面炫麗背景動畫 - 只在登入頁面顯示 */
         body:has(#login-view:not(.hidden)) .login-background-animation {
             position: fixed;
             top: 0;
             left: 0;
             width: 100vw;
             height: 100vh;
-            background: linear-gradient(45deg, #dc2626, #ef4444, #dc2626, #b91c1c);
-            background-size: 400% 400%;
-            animation: gradientShift 8s ease infinite;
-            z-index: -1;
-            opacity: 0.8;
+            background: linear-gradient(-45deg, #ff6b6b, #ee5a24, #ff3838, #c44569, #f8b500, #ff6348, #e056fd, #ff6b9d);
+            background-size: 600% 600%;
+            animation: gradientShift 15s ease infinite, shimmer 8s infinite ease-in-out;
+            z-index: -999;
+            opacity: 0.9;
         }
         
         /* 登入頁面時隱藏主頁面內容 */
@@ -64,45 +64,55 @@
         
         @keyframes gradientShift {
             0% { background-position: 0% 50%; }
-            25% { background-position: 100% 0%; }
-            50% { background-position: 100% 100%; }
-            75% { background-position: 0% 100%; }
+            10% { background-position: 10% 90%; }
+            20% { background-position: 30% 20%; }
+            30% { background-position: 70% 60%; }
+            40% { background-position: 90% 30%; }
+            50% { background-position: 100% 80%; }
+            60% { background-position: 80% 10%; }
+            70% { background-position: 40% 70%; }
+            80% { background-position: 20% 40%; }
+            90% { background-position: 60% 90%; }
             100% { background-position: 0% 50%; }
         }
         
-        /* 動畫粒子效果 */
+        /* 炫麗粒子效果 */
         .login-particles {
             position: fixed;
             top: 0;
             left: 0;
             width: 100vw;
             height: 100vh;
-            z-index: -1;
+            z-index: -998;
             overflow: hidden;
+            pointer-events: none;
         }
         
         .particle {
             position: absolute;
-            background: rgba(255, 255, 255, 0.1);
             border-radius: 50%;
-            animation: float 15s infinite linear;
+            animation: float 20s infinite linear, pulse 3s infinite ease-in-out;
+            box-shadow: 0 0 20px currentColor, 0 0 40px currentColor, 0 0 60px currentColor;
         }
         
-        /* 為每個粒子設置不同的動畫延遲和大小 */
-        .particle:nth-child(1) { width: 40px; height: 40px; left: 10%; animation-delay: 0s; }
-        .particle:nth-child(2) { width: 60px; height: 60px; left: 20%; animation-delay: 2s; }
-        .particle:nth-child(3) { width: 30px; height: 30px; left: 30%; animation-delay: 4s; }
-        .particle:nth-child(4) { width: 50px; height: 50px; left: 40%; animation-delay: 6s; }
-        .particle:nth-child(5) { width: 35px; height: 35px; left: 50%; animation-delay: 8s; }
-        .particle:nth-child(6) { width: 45px; height: 45px; left: 60%; animation-delay: 10s; }
-        .particle:nth-child(7) { width: 55px; height: 55px; left: 70%; animation-delay: 12s; }
-        .particle:nth-child(8) { width: 25px; height: 25px; left: 80%; animation-delay: 14s; }
-        .particle:nth-child(9) { width: 40px; height: 40px; left: 90%; animation-delay: 1s; }
-        .particle:nth-child(10) { width: 35px; height: 35px; left: 15%; animation-delay: 3s; }
+        /* 炫麗光效線條 */
+        .light-streak {
+            position: absolute;
+            width: 2px;
+            height: 100px;
+            background: linear-gradient(to bottom, transparent, rgba(255, 255, 255, 0.8), transparent);
+            animation: streakMove 8s infinite linear;
+        }
         
-        @keyframes float {
+        .light-streak:nth-child(16) { animation-name: streakMoveReverse; animation-duration: 10s; }
+        .light-streak:nth-child(17) { animation-name: streakMoveDiagonal; animation-duration: 12s; }
+        .light-streak:nth-child(18) { animation-name: streakMoveReverse; animation-duration: 9s; }
+        .light-streak:nth-child(19) { animation-name: streakMoveDiagonal; animation-duration: 11s; }
+        .light-streak:nth-child(20) { animation-name: streakMove; animation-duration: 7s; }
+        
+        @keyframes streakMove {
             0% {
-                transform: translateY(100vh) translateX(0) scale(0);
+                transform: translateY(-100px) rotate(45deg);
                 opacity: 0;
             }
             10% {
@@ -112,13 +122,131 @@
                 opacity: 1;
             }
             100% {
-                transform: translateY(-100vh) translateX(100px) scale(1);
+                transform: translateY(calc(100vh + 100px)) rotate(45deg);
+                opacity: 0;
+            }
+        }
+        
+        @keyframes streakMoveReverse {
+            0% {
+                transform: translateY(calc(100vh + 100px)) rotate(-45deg);
+                opacity: 0;
+            }
+            10% {
+                opacity: 1;
+            }
+            90% {
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(-100px) rotate(-45deg);
+                opacity: 0;
+            }
+        }
+        
+        @keyframes streakMoveDiagonal {
+            0% {
+                transform: translate(-50px, -100px) rotate(60deg);
+                opacity: 0;
+            }
+            10% {
+                opacity: 1;
+            }
+            90% {
+                opacity: 1;
+            }
+            100% {
+                transform: translate(50px, calc(100vh + 100px)) rotate(60deg);
+                opacity: 0;
+            }
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 0.8; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.2); }
+        }
+        
+        @keyframes shimmer {
+            0%, 100% { opacity: 0.9; }
+            25% { opacity: 1; }
+            50% { opacity: 0.8; }
+            75% { opacity: 1; }
+        }
+        
+        /* 炫麗多彩的粒子設置 */
+        .particle:nth-child(1) { width: 40px; height: 40px; left: 10%; animation-delay: 0s; background: #ff6b6b; color: #ff6b6b; }
+        .particle:nth-child(2) { width: 60px; height: 60px; left: 20%; animation-delay: 2s; background: #4ecdc4; color: #4ecdc4; }
+        .particle:nth-child(3) { width: 30px; height: 30px; left: 30%; animation-delay: 4s; background: #45b7d1; color: #45b7d1; }
+        .particle:nth-child(4) { width: 50px; height: 50px; left: 40%; animation-delay: 6s; background: #f9ca24; color: #f9ca24; }
+        .particle:nth-child(5) { width: 35px; height: 35px; left: 50%; animation-delay: 8s; background: #f0932b; color: #f0932b; }
+        .particle:nth-child(6) { width: 45px; height: 45px; left: 60%; animation-delay: 10s; background: #eb4d4b; color: #eb4d4b; }
+        .particle:nth-child(7) { width: 55px; height: 55px; left: 70%; animation-delay: 12s; background: #6c5ce7; color: #6c5ce7; }
+        .particle:nth-child(8) { width: 25px; height: 25px; left: 80%; animation-delay: 14s; background: #a29bfe; color: #a29bfe; }
+        .particle:nth-child(9) { width: 40px; height: 40px; left: 90%; animation-delay: 1s; background: #fd79a8; color: #fd79a8; }
+        .particle:nth-child(10) { width: 35px; height: 35px; left: 15%; animation-delay: 3s; background: #fdcb6e; color: #fdcb6e; }
+        .particle:nth-child(11) { width: 45px; height: 45px; left: 25%; animation-delay: 5s; background: #00b894; color: #00b894; }
+        .particle:nth-child(12) { width: 38px; height: 38px; left: 35%; animation-delay: 7s; background: #0984e3; color: #0984e3; }
+        .particle:nth-child(13) { width: 52px; height: 52px; left: 65%; animation-delay: 9s; background: #e17055; color: #e17055; }
+        .particle:nth-child(14) { width: 28px; height: 28px; left: 75%; animation-delay: 11s; background: #fd79a8; color: #fd79a8; }
+        .particle:nth-child(15) { width: 42px; height: 42px; left: 85%; animation-delay: 13s; background: #fdcb6e; color: #fdcb6e; }
+        
+        @keyframes float {
+            0% {
+                transform: translateY(100vh) translateX(0) scale(0) rotate(0deg);
+                opacity: 0;
+            }
+            10% {
+                opacity: 1;
+                transform: translateY(90vh) translateX(20px) scale(0.3) rotate(36deg);
+            }
+            25% {
+                transform: translateY(75vh) translateX(-30px) scale(0.7) rotate(90deg);
+            }
+            50% {
+                transform: translateY(50vh) translateX(50px) scale(1) rotate(180deg);
+            }
+            75% {
+                transform: translateY(25vh) translateX(-20px) scale(0.8) rotate(270deg);
+            }
+            90% {
+                opacity: 1;
+                transform: translateY(10vh) translateX(10px) scale(0.4) rotate(324deg);
+            }
+            100% {
+                transform: translateY(-10vh) translateX(0) scale(0) rotate(360deg);
                 opacity: 0;
             }
         }
         
         /* 響應式設計 - 手機優先 */
         @media (max-width: 450px) {
+            /* 確保登入動畫在手機上覆蓋整個視窗 */
+            body:has(#login-view:not(.hidden)) {
+                overflow: hidden;
+                position: relative;
+                height: 100vh;
+                margin: 0;
+                background: transparent;
+            }
+            
+            body:has(#login-view:not(.hidden)) .login-background-animation {
+                position: fixed !important;
+                top: 0 !important;
+                left: 0 !important;
+                width: 100vw !important;
+                height: 100vh !important;
+                z-index: -999 !important;
+            }
+            
+            body:has(#login-view:not(.hidden)) .login-particles {
+                position: fixed !important;
+                top: 0 !important;
+                left: 0 !important;
+                width: 100vw !important;
+                height: 100vh !important;
+                z-index: -998 !important;
+            }
+            
             /* 只在登入頁面時應用置中樣式 */
             body:has(#login-view:not(.hidden)) #root-container {
                 width: 360px !important;
@@ -131,6 +259,10 @@
                 top: 50% !important;
                 left: 50% !important;
                 transform: translate(-50%, -50%) !important;
+                z-index: 1 !important;
+                background: rgba(255, 255, 255, 0.95) !important;
+                backdrop-filter: blur(10px);
+                box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3) !important;
             }
             
             /* 登入後的樣式 - 恢復原有佈局 */
@@ -226,6 +358,17 @@
                 <div class="particle"></div>
                 <div class="particle"></div>
                 <div class="particle"></div>
+                <div class="particle"></div>
+                <div class="particle"></div>
+                <div class="particle"></div>
+                <div class="particle"></div>
+                <div class="particle"></div>
+                <!-- 炫麗光效線條 -->
+                <div class="light-streak" style="left: 5%; animation-delay: 0s;"></div>
+                <div class="light-streak" style="left: 25%; animation-delay: 2s;"></div>
+                <div class="light-streak" style="left: 45%; animation-delay: 4s;"></div>
+                <div class="light-streak" style="left: 65%; animation-delay: 6s;"></div>
+                <div class="light-streak" style="left: 85%; animation-delay: 8s;"></div>
             </div>
         </div>
         
@@ -260,7 +403,7 @@
                         <span>登入系統</span>
                     </button>
                     <p id="login-message" class="text-red-500 text-sm text-center min-h-[10px]"></p>
-                    <p class="text-center text-gray-600 text-xs mt-2">V1.4.7</p>
+                    <p class="text-center text-gray-600 text-xs mt-2">V1.3.1</p>
                 </div>
             </main>
         </div>
@@ -2184,5 +2327,4 @@
         });
     </script>
 </body>
-
 </html>
