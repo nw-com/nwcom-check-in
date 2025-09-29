@@ -175,13 +175,16 @@
                             <button type="button" id="toggle-password-btn" class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-500 hover:text-gray-700">
                             </button>
                         </div>
+                        <div class="mt-2 text-right">
+                            <a href="#" id="forgot-password-link" class="text-sm text-red-600 hover:text-red-500">忘記密碼？</a>
+                        </div>
                     </div>
                     <button id="login-btn" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-transform transform hover:scale-105 flex items-center justify-center space-x-2">
                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" x2="3" y1="12" y2="12"/></svg>
                         <span>登入系統</span>
                     </button>
                     <p id="login-message" class="text-red-500 text-sm text-center min-h-[10px]"></p>
-                    <p class="text-center text-gray-600 text-xs mt-2">V1.6.0</p>
+                    <p class="text-center text-gray-600 text-xs mt-2">V1.4.6</p>
                 </div>
             </main>
         </div>
@@ -1317,19 +1320,51 @@ const goOutBtn = document.getElementById('go-out-btn'), arriveBtn = document.get
                 }
 
                 loginBtn.addEventListener('click', async () => {
-                    const email = emailInput.value;
+                    const email = emailInput.value.trim();
                     const password = passwordInput.value;
                     loginMessage.textContent = '';
+                    loginMessage.style.color = 'red'; // 確保錯誤訊息使用紅色
+                    
+                    // 基本驗證
+                    if (!email || !password) {
+                        loginMessage.textContent = '請輸入電子郵件和密碼。';
+                        return;
+                    }
+                    
                     if (rememberMeCheckbox.checked) localStorage.setItem('rememberedEmail', email);
                     else localStorage.removeItem('rememberedEmail');
+                    
                     toggleButtonLoading(loginBtn, true, '登入中...');
                     try {
-                        if (email === '11' && password === '11') await signInWithEmailAndPassword(auth, 'test@company.com', 'password123');
-                        else await signInWithEmailAndPassword(auth, email, password);
+                        await signInWithEmailAndPassword(auth, email, password);
+                        loginMessage.textContent = '';
                     } catch (error) {
                         console.error("Login failed:", error);
-                        const message = (error.code === 'auth/invalid-credential') ? '登入失敗，帳號或密碼錯誤。' : '登入時發生未知錯誤。';
+                        let message;
+                        switch (error.code) {
+                            case 'auth/invalid-credential':
+                            case 'auth/wrong-password':
+                            case 'auth/user-not-found':
+                                message = '登入失敗，帳號或密碼錯誤。';
+                                break;
+                            case 'auth/invalid-email':
+                                message = '電子郵件格式不正確。';
+                                break;
+                            case 'auth/user-disabled':
+                                message = '此帳號已被停用。';
+                                break;
+                            case 'auth/too-many-requests':
+                                message = '嘗試次數過多，請稍後再試。';
+                                break;
+                            case 'auth/network-request-failed':
+                                message = '網路連線失敗，請檢查網路連線。';
+                                break;
+                            default:
+                                message = '登入失敗：' + (error.message || '發生未知錯誤。');
+                                break;
+                        }
                         loginMessage.textContent = message;
+                        loginMessage.style.color = 'red';
                     } finally {
                         toggleButtonLoading(loginBtn, false);
                     }
@@ -1339,6 +1374,61 @@ const goOutBtn = document.getElementById('go-out-btn'), arriveBtn = document.get
                     const isPassword = passwordInput.type === 'password';
                     passwordInput.type = isPassword ? 'text' : 'password';
                     togglePasswordBtn.innerHTML = isPassword ? eyeOffIcon : eyeIcon;
+                });
+                
+                // 忘記密碼功能
+                forgotPasswordLink.addEventListener('click', async (e) => {
+                    e.preventDefault();
+                    const email = emailInput.value.trim();
+                    
+                    if (!email) {
+                        loginMessage.textContent = '請先輸入您的電子郵件地址。';
+                        emailInput.focus();
+                        return;
+                    }
+                    
+                    if (!confirm(`確定要重設密碼嗎？系統將發送重設密碼郵件到 ${email}`)) {
+                        return;
+                    }
+                    
+                    try {
+                        loginMessage.textContent = '正在發送重設密碼郵件...';
+                        await sendPasswordResetEmail(auth, email);
+                        loginMessage.textContent = '重設密碼郵件已發送，請檢查您的信箱。';
+                        loginMessage.style.color = 'green';
+                    } catch (error) {
+                        console.error("Password reset failed:", error);
+                        let message;
+                        switch (error.code) {
+                            case 'auth/invalid-email':
+                                message = '電子郵件格式不正確。';
+                                break;
+                            case 'auth/user-not-found':
+                                message = '找不到此電子郵件地址的使用者。';
+                                break;
+                            case 'auth/too-many-requests':
+                                message = '請求次數過多，請稍後再試。';
+                                break;
+                            default:
+                                message = '發送重設密碼郵件失敗：' + (error.message || '發生未知錯誤。');
+                                break;
+                        }
+                        loginMessage.textContent = message;
+                        loginMessage.style.color = 'red';
+                    }
+                });
+                
+                // 支援 Enter 鍵登入
+                emailInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        passwordInput.focus();
+                    }
+                });
+                
+                passwordInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        loginBtn.click();
+                    }
                 });
                 
                 // --- 地圖與定位邏輯 ---
@@ -2362,6 +2452,5 @@ const goOutBtn = document.getElementById('go-out-btn'), arriveBtn = document.get
         });
     </script>
 </body>
-
 
 </html>
