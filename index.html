@@ -79,7 +79,7 @@
                         <span>登入系統</span>
                     </button>
                     <p id="login-message" class="text-red-500 text-sm text-center min-h-[10px]"></p>
-                    <p class="text-center text-gray-600 text-xs mt-2">V1.2.2</p>
+                    <p class="text-center text-gray-600 text-xs mt-2">V1.2.3</p>
                 </div>
             </main>
         </div>
@@ -123,6 +123,10 @@
 
                     <!-- 儀表板頁面 -->
                     <div id="dashboard-page">
+                         <!-- Date Time Display -->
+                        <div id="datetime-display" class="h-[50px] px-6 border border-gray-200 bg-white flex-shrink-0 flex items-center justify-center text-xl font-semibold text-gray-800 rounded-t-lg -mt-6 -mx-6 mb-6">
+                            <!-- Date and time will be injected here by JavaScript -->
+                        </div>
                         <!-- 狀態顯示區 -->
                         <div id="status-card" class="bg-white rounded-lg p-5 mb-6 text-center border transition-all">
                              <div class="flex justify-between items-center">
@@ -614,6 +618,7 @@
             
             // --- 頁面與導覽按鈕 ---
             const dashboardPage = document.getElementById('dashboard-page');
+            const datetimeDisplay = document.getElementById('datetime-display');
             const checkinPage = document.getElementById('checkin-page');
             const settingsPage = document.getElementById('settings-page');
             const navDashboardBtn = document.getElementById('nav-dashboard-btn');
@@ -723,6 +728,7 @@
             const eyeOffIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"></path><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"></path><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"></path><line x1="2" x2="22" y1="2" y2="22"></line></svg>`;
             
             let workDurationInterval = null, unsubscribeFromHistory = null, unsubscribeFromAccounts = null, unsubscribeFromStatus=null;
+            let dateTimeInterval = null;
             let currentPosition = null;
             let cameraStream = null;
             let currentUserRole = null;
@@ -744,6 +750,25 @@
                     return false;
                 }
                 return true;
+            }
+            
+            // --- 時間與日期工具函式 ---
+            function getTaipeiDateString(date = new Date()) {
+                const options = { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Asia/Taipei' };
+                const formatter = new Intl.DateTimeFormat('en-CA', options); // 'en-CA' format is YYYY-MM-DD
+                return formatter.format(date);
+            }
+
+            function updateDateTime() {
+                if (!datetimeDisplay) return;
+                const now = new Date();
+                const options = {
+                    year: 'numeric', month: '2-digit', day: '2-digit',
+                    hour: '2-digit', minute: '2-digit', second: '2-digit',
+                    hour12: false,
+                    timeZone: 'Asia/Taipei'
+                };
+                datetimeDisplay.textContent = new Intl.DateTimeFormat('zh-TW', options).format(now);
             }
 
             // --- 主程式邏輯 ---
@@ -789,11 +814,16 @@
                         mainView.classList.remove('hidden');
                         mainView.classList.add('flex');
                         
-                        const today = new Date();
-                        historyDatePicker.value = today.toISOString().split('T')[0];
-                        listenToRecordsByDate(user.uid, today);
+                        const todayString = getTaipeiDateString();
+                        historyDatePicker.value = todayString;
+                        listenToRecordsByDate(user.uid, todayString);
                         listenToTodayStatus(user.uid);
                         getInitialLocation();
+                        
+                        if (dateTimeInterval) clearInterval(dateTimeInterval);
+                        updateDateTime();
+                        dateTimeInterval = setInterval(updateDateTime, 1000);
+                        
                         showPage('dashboard');
                     } else {
                         currentUserData = null;
@@ -812,6 +842,7 @@
                         if (unsubscribeFromAccounts) unsubscribeFromAccounts();
                         if (unsubscribeFromStatus) unsubscribeFromStatus();
                         if (workDurationInterval) clearInterval(workDurationInterval);
+                        if (dateTimeInterval) clearInterval(dateTimeInterval);
                         
                         cleanupLocationOnLogout();
                         clearMainView();
@@ -921,9 +952,10 @@
                     nextPhotoBtn.addEventListener('click', () => showPhoto(currentPhotoIndex + 1));
 
                     // 日期選擇器
-                    historyDatePicker.addEventListener('change', () => {
-                        const selectedDate = new Date(historyDatePicker.value);
-                        listenToRecordsByDate(auth.currentUser.uid, selectedDate);
+                    historyDatePicker.addEventListener('change', (e) => {
+                        if (auth.currentUser) {
+                            listenToRecordsByDate(auth.currentUser.uid, e.target.value);
+                        }
                     });
 
                     // 事件代理
@@ -964,10 +996,12 @@
                     settingsTabNav.classList.add('hidden');
                     checkinTabNav.classList.add('hidden');
                     subTabNav.style.visibility = 'hidden';
+                    datetimeDisplay.style.display = 'none';
 
 
                     if (pageName === 'dashboard') {
                         dashboardPage.classList.remove('hidden');
+                        datetimeDisplay.style.display = 'flex';
                         setActiveTab(navDashboardBtn);
                     } else if (pageName === 'checkin') {
                         checkinPage.classList.remove('hidden');
@@ -1578,9 +1612,13 @@
                     } catch (error) {
                         console.error("新增帳號時發生詳細錯誤:", error);
                         let message = '新增帳號失敗。';
-                        if (error.code === 'auth/email-already-in-use') message = '此電子郵件已被註冊。';
-                        else if (error.code === 'auth/weak-password') message = '密碼強度不足。';
-                        else if (error.code === 'permission-denied') message = '權限不足。';
+                        if (error.code === 'auth/email-already-in-use') {
+                            message = '此電子郵件已被註冊。';
+                        } else if (error.code === 'auth/weak-password') {
+                            message = '密碼強度不足，請設定至少6位數的密碼。';
+                        } else if (error.code === 'permission-denied') {
+                            message = '權限不足。請檢查 Firebase 安全規則是否允許管理員新增使用者資料與照片。';
+                        }
                         showMessage(message, 'error');
                     } finally {
                         await deleteApp(tempApp); // 清理臨時實例
@@ -1697,14 +1735,15 @@
                 function listenToTodayStatus(userId) {
                      if (unsubscribeFromStatus) unsubscribeFromStatus();
                     
-                    const today = new Date();
-                    const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-                    const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+                    const todayString = getTaipeiDateString();
+                    const startOfDay = new Date(`${todayString}T00:00:00+08:00`);
+                    const nextDay = new Date(startOfDay);
+                    nextDay.setDate(nextDay.getDate() + 1);
 
                     const q = query(collection(db, "clock_records"), 
                         where("userId", "==", userId),
                         where("timestamp", ">=", startOfDay),
-                        where("timestamp", "<", endOfDay)
+                        where("timestamp", "<", nextDay)
                     );
 
                     unsubscribeFromStatus = onSnapshot(q, (snapshot) => {
@@ -1717,16 +1756,17 @@
                     });
                 }
 
-                function listenToRecordsByDate(userId, date) {
+                function listenToRecordsByDate(userId, dateString) {
                     if (unsubscribeFromHistory) unsubscribeFromHistory();
                     
-                    const startOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-                    const endOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1);
+                    const startOfDay = new Date(`${dateString}T00:00:00+08:00`);
+                    const nextDay = new Date(startOfDay);
+                    nextDay.setDate(nextDay.getDate() + 1);
 
                     const q = query(collection(db, "clock_records"), 
                         where("userId", "==", userId),
                         where("timestamp", ">=", startOfDay),
-                        where("timestamp", "<", endOfDay)
+                        where("timestamp", "<", nextDay)
                     );
 
                     unsubscribeFromHistory = onSnapshot(q, (snapshot) => {
@@ -1750,7 +1790,7 @@
                     
                     if (isClockedIn) {
                         currentStatusEl.textContent = '工作中';
-                        statusCardEl.className = 'bg-green-50 rounded-lg p-5 mb-6 text-center border border-green-500 transition-all';
+                        statusCardEl.className = 'bg-green-50 rounded-lg p-5 mb-6 text-center border transition-all';
                         currentStatusEl.className = 'text-2xl font-bold text-green-600';
                     } else {
                         currentStatusEl.textContent = history.length > 0 ? '已下班' : '尚未打卡';
