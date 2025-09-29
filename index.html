@@ -42,46 +42,14 @@
             height: 100%;
             object-fit: cover;
         }
-        
-        /* 響應式設計 - 手機優先 */
-        @media (max-width: 450px) {
-            #root-container {
-                width: calc(100% - 20px) !important;
-                max-width: none !important;
-                margin: 40px 10px !important;
-                border-radius: 1rem !important;
-            }
-            
-            body {
-                overflow: hidden;
-            }
-            
-            #bottom-nav {
-                border-bottom-left-radius: 1rem !important;
-                border-bottom-right-radius: 1rem !important;
-            }
-        }
-        
-        /* 確保登入頁面在手機上也能正確顯示 */
-        @media (max-height: 600px) {
-            #login-view {
-                min-height: auto !important;
-            }
-        }
-        
-        /* 確保內容區域可以正確捲動 */
-        #main-view {
-            position: relative;
-            height: 100%;
-        }
     </style>
 </head>
 <body class="bg-red-600 flex justify-center items-center min-h-screen">
 
-    <div id="root-container" class="w-[calc(100%-20px)] max-w-[400px] h-[calc(100vh-20px)] max-h-[750px] bg-white rounded-2xl shadow-lg overflow-hidden flex flex-col transition-all duration-300 ease-in-out mx-auto my-[10px]">
+    <div id="root-container" class="w-[380px] h-[480px] max-w-none bg-white rounded-2xl shadow-lg overflow-hidden flex flex-col transition-all duration-300 ease-in-out">
         
         <!-- 登入畫面 -->
-        <div id="login-view" class="flex-1 overflow-y-auto flex flex-col min-h-[480px]">
+        <div id="login-view" class="flex-1 overflow-y-auto flex flex-col">
             <header class="bg-white p-6 text-center">
                 <img id="login-logo" src="https://static.wixstatic.com/media/6148f9_56377cef73c1498f95a2c3057b89f2ed~mv2.png" alt="西北保全 Logo" class="mx-auto" style="width: 120px; height: 60px;">
                 <h1 class="text-xl font-bold text-red-600 mt-4">西北勤務打卡系統</h1>
@@ -111,15 +79,14 @@
                         <span>登入系統</span>
                     </button>
                     <p id="login-message" class="text-red-500 text-sm text-center min-h-[10px]"></p>
-                    <p class="text-center text-gray-600 text-xs mt-2">V1.3.9</p>
+                    <p class="text-center text-gray-600 text-xs mt-2">V1.2.2</p>
                 </div>
             </main>
         </div>
 
         <!-- 主操作畫面 -->
-        <div id="main-view" class="hidden flex flex-col flex-1">
-            <!-- 頁首 -->
-            <header class="flex-shrink-0 bg-red-600 text-white p-3 flex justify-between items-center shadow-md h-[70px]">
+        <div id="main-view" class="hidden flex-1 flex flex-col relative">
+            <header class="absolute top-0 left-0 w-full z-20 bg-red-600 text-white p-3 flex justify-between items-center shadow-md h-[70px]">
                 <div class="flex items-center space-x-4">
                     <img src="https://static.wixstatic.com/media/6148f9_56377cef73c1498f95a2c3057b89f2ed~mv2.png" alt="西北保全 Logo" style="width: 80px; height: 40px; object-fit: contain;">
                     <div>
@@ -133,33 +100,23 @@
             </header>
 
             <!-- 中間內容區 (包含子導覽與可滾動內容) -->
-            <div class="flex-1 flex flex-col min-h-0">
-                 <!-- Date Time Display / Sub Nav Container -->
-                <div class="flex-shrink-0 h-[50px] border-b border-gray-200 bg-gray-100">
-                    <div id="datetime-display" class="h-full px-6 bg-white flex items-center justify-center text-xl font-semibold text-gray-800">
-                        <!-- Date and time will be injected here by JavaScript -->
-                    </div>
-                     <!-- 子導覽列 -->
-                    <div id="sub-tab-nav" class="h-full px-6">
-                        <!-- 追蹤頁面專用 -->
-                        <nav id="tracking-tab-nav" class="hidden -mb-px flex space-x-6 h-full items-center" aria-label="Tabs">
-                            <button id="tracking-personnel-tab-btn" class="whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm border-red-500 text-red-600">人員狀態</button>
-                        </nav>
-                        <!-- 設定頁面專用 -->
-                        <nav id="settings-tab-nav" class="hidden -mb-px flex space-x-6 h-full items-center" aria-label="Tabs">
-                            <button id="settings-account-tab-btn" class="whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm border-red-500 text-red-600">帳號</button>
-                            <button id="settings-rules-tab-btn" class="whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">規則</button>
-                        </nav>
-                         <!-- 打卡頁面專用 -->
-                        <nav id="checkin-tab-nav" class="hidden -mb-px flex space-x-6 h-full items-center" aria-label="Tabs">
-                            <button id="checkin-location-tab-btn" class="whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm border-red-500 text-red-600">定位打卡</button>
-                            <button id="checkin-history-tab-btn" class="whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">打卡紀錄</button>
-                        </nav>
-                    </div>
+            <div class="flex-1 flex flex-col mt-[70px] mb-[70px] overflow-hidden">
+                 <!-- 子導覽列 -->
+                <div id="sub-tab-nav" class="h-[50px] px-6 border-b border-gray-200 bg-gray-100 flex-shrink-0">
+                     <!-- 設定頁面專用 -->
+                    <nav id="settings-tab-nav" class="hidden -mb-px flex space-x-6 h-full items-center" aria-label="Tabs">
+                        <button id="settings-account-tab-btn" class="whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm">帳號</button>
+                        <button id="settings-rules-tab-btn" class="whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm">規則</button>
+                    </nav>
+                     <!-- 打卡頁面專用 -->
+                    <nav id="checkin-tab-nav" class="hidden -mb-px flex space-x-6 h-full items-center" aria-label="Tabs">
+                        <button id="checkin-location-tab-btn" class="whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm">定位打卡</button>
+                        <button id="checkin-history-tab-btn" class="whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm">打卡紀錄</button>
+                    </nav>
                 </div>
                 
                 <!-- 可滾動的頁面內容 -->
-                <main class="flex-1 overflow-y-auto p-6 bg-gray-100 min-h-0">
+                <main class="flex-1 overflow-y-auto p-6 bg-gray-100">
                     <div id="message-box" class="hidden p-4 mb-4 text-sm rounded-lg" role="alert">
                         <span class="font-medium" id="message-content"></span>
                     </div>
@@ -232,60 +189,20 @@
                         </div>
                     </div>
 
-                    <!-- 追蹤頁面 -->
-                    <div id="tracking-page" class="hidden h-full">
-                        <!-- Tab content -->
-                        <div class="h-full flex flex-col">
-                            <!-- Personnel Status Tab Content -->
-                            <div id="tracking-personnel-content" class="h-full flex flex-col">
-                                <div class="flex justify-between items-center mb-4 flex-shrink-0">
-                                    <h3 class="text-lg font-semibold text-gray-800">人員狀態列表</h3>
-                                    <button id="refresh-personnel-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 7v9h9"/><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/></svg>
-                                        <span>重新整理</span>
-                                    </button>
-                                </div>
-                                <div class="flex-1 overflow-y-auto">
-                                    <div class="overflow-x-auto">
-                                        <table class="min-w-full bg-white border border-gray-200 rounded-lg">
-                                            <thead class="bg-gray-50">
-                                                <tr>
-                                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">移動</th>
-                                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">姓名</th>
-                                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">職稱</th>
-                                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">狀態</th>
-                                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">追蹤</th>
-                                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">聯絡</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody id="personnel-list" class="bg-white divide-y divide-gray-200">
-                                                <tr>
-                                                    <td colspan="6" class="px-4 py-8 text-center text-gray-500">正在載入人員資料...</td>
-                                                </tr>
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
                     <!-- 設定頁面 -->
-                    <div id="settings-page" class="hidden h-full">
+                    <div id="settings-page" class="hidden">
                         <!-- Tab content -->
-                        <div class="h-full flex flex-col">
+                        <div>
                             <!-- Account Tab Content -->
-                            <div id="settings-account-content" class="h-full flex flex-col">
-                                <div class="flex justify-end mb-4 flex-shrink-0">
+                            <div id="settings-account-content">
+                                <div class="flex justify-end mb-4">
                                     <button id="add-account-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                                         <span>新增帳號</span>
                                     </button>
                                 </div>
-                                <div class="flex-1 overflow-y-auto">
-                                    <div id="account-list" class="space-y-3">
-                                        <p class="text-gray-500 text-center py-4">正在載入帳號資料...</p>
-                                    </div>
+                                <div id="account-list" class="space-y-3">
+                                    <p class="text-gray-500 text-center py-4">正在載入帳號資料...</p>
                                 </div>
                             </div>
 
@@ -298,27 +215,12 @@
                 </main>
             </div>
 
-            <!-- 測試按鈕 - 用於除錯分頁功能 -->
-            <div id="debug-buttons" class="fixed top-20 right-4 bg-white p-4 rounded-lg shadow-lg border z-50">
-                <h3 class="text-sm font-bold mb-2 text-gray-700">測試按鈕</h3>
-                <div class="space-y-2">
-                    <button onclick="showPage('dashboard')" class="w-full px-3 py-1 bg-blue-500 text-white text-xs rounded">儀表板</button>
-                    <button onclick="showPage('checkin')" class="w-full px-3 py-1 bg-green-500 text-white text-xs rounded">打卡</button>
-                    <button onclick="showPage('tracking')" class="w-full px-3 py-1 bg-purple-500 text-white text-xs rounded">追蹤</button>
-                    <button onclick="showPage('settings')" class="w-full px-3 py-1 bg-red-500 text-white text-xs rounded">設定</button>
-                </div>
-                <div class="mt-3 pt-3 border-t">
-                    <div class="text-xs text-gray-600 mb-1">當前頁面: <span id="current-page-debug">-</span></div>
-                    <div class="text-xs text-gray-600">分頁狀態: <span id="tab-status-debug">-</span></div>
-                </div>
-            </div>
-
             <!-- 底部導覽列 -->
-            <nav id="bottom-nav" class="flex-shrink-0 border-t bg-gray-50 h-[70px] flex items-center">
+            <nav id="bottom-nav" class="absolute bottom-0 left-0 w-full z-20 border-t bg-gray-50 h-[70px] flex items-center">
                 <div class="flex justify-around w-full">
-                    <button id="nav-tracking-btn" class="flex-1 p-3 text-center text-gray-500 flex flex-col items-center justify-center space-y-1 transition-colors duration-200">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 10 10"/><path d="M12 6a6 6 0 1 0 10 10"/><circle cx="12" cy="12" r="2"/></svg>
-                        <span class="text-xs font-medium">追蹤</span>
+                    <button id="nav-settings-btn" class="hidden flex-1 p-3 text-center text-gray-500 flex flex-col items-center justify-center space-y-1 transition-colors duration-200">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                        <span class="text-xs font-medium">設定</span>
                     </button>
                     <button id="nav-dashboard-btn" class="flex-1 p-3 text-center text-gray-500 flex flex-col items-center justify-center space-y-1 transition-colors duration-200">
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
@@ -327,10 +229,6 @@
                     <button id="nav-checkin-btn" class="flex-1 p-3 text-center text-gray-500 flex flex-col items-center justify-center space-y-1 transition-colors duration-200">
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0Z"/><circle cx="12" cy="10" r="3"/></svg>
                         <span class="text-xs font-medium">打卡</span>
-                    </button>
-                    <button id="nav-settings-btn" class="flex-1 p-3 text-center text-gray-500 flex flex-col items-center justify-center space-y-1 transition-colors duration-200">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-                        <span class="text-xs font-medium">設定</span>
                     </button>
                 </div>
             </nav>
@@ -716,14 +614,11 @@
             
             // --- 頁面與導覽按鈕 ---
             const dashboardPage = document.getElementById('dashboard-page');
-                const datetimeDisplay = document.getElementById('datetime-display');
-                const checkinPage = document.getElementById('checkin-page');
-                const settingsPage = document.getElementById('settings-page');
-                const trackingPage = document.getElementById('tracking-page');
+            const checkinPage = document.getElementById('checkin-page');
+            const settingsPage = document.getElementById('settings-page');
             const navDashboardBtn = document.getElementById('nav-dashboard-btn');
-                const navCheckinBtn = document.getElementById('nav-checkin-btn');
-                const navSettingsBtn = document.getElementById('nav-settings-btn');
-                const navTrackingBtn = document.getElementById('nav-tracking-btn');
+            const navCheckinBtn = document.getElementById('nav-checkin-btn');
+            const navSettingsBtn = document.getElementById('nav-settings-btn');
             const subTabNav = document.getElementById('sub-tab-nav');
             const settingsTabNav = document.getElementById('settings-tab-nav');
             const checkinTabNav = document.getElementById('checkin-tab-nav');
@@ -731,13 +626,9 @@
 
             // --- 打卡子頁面 ---
             const checkinLocationTabBtn = document.getElementById('checkin-location-tab-btn');
-                const checkinHistoryTabBtn = document.getElementById('checkin-history-tab-btn');
-                const checkinLocationContent = document.getElementById('checkin-location-content');
-                const checkinHistoryContent = document.getElementById('checkin-history-content');
-                
-                // --- 追蹤子頁面 ---
-                const trackingPersonnelTabBtn = document.getElementById('tracking-personnel-tab-btn');
-                const trackingPersonnelContent = document.getElementById('tracking-personnel-content');
+            const checkinHistoryTabBtn = document.getElementById('checkin-history-tab-btn');
+            const checkinLocationContent = document.getElementById('checkin-location-content');
+            const checkinHistoryContent = document.getElementById('checkin-history-content');
 
 
             // --- 設定頁面元素 ---
@@ -832,7 +723,6 @@
             const eyeOffIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"></path><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"></path><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"></path><line x1="2" x2="22" y1="2" y2="22"></line></svg>`;
             
             let workDurationInterval = null, unsubscribeFromHistory = null, unsubscribeFromAccounts = null, unsubscribeFromStatus=null;
-            let dateTimeInterval = null;
             let currentPosition = null;
             let cameraStream = null;
             let currentUserRole = null;
@@ -855,25 +745,6 @@
                 }
                 return true;
             }
-            
-            // --- 時間與日期工具函式 ---
-            function getTaipeiDateString(date = new Date()) {
-                const options = { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Asia/Taipei' };
-                const formatter = new Intl.DateTimeFormat('en-CA', options); // 'en-CA' format is YYYY-MM-DD
-                return formatter.format(date);
-            }
-
-            function updateDateTime() {
-                if (!datetimeDisplay) return;
-                const now = new Date();
-                const options = {
-                    year: 'numeric', month: '2-digit', day: '2-digit',
-                    hour: '2-digit', minute: '2-digit', second: '2-digit',
-                    hour12: false,
-                    timeZone: 'Asia/Taipei'
-                };
-                datetimeDisplay.textContent = new Intl.DateTimeFormat('zh-TW', options).format(now);
-            }
 
             // --- 主程式邏輯 ---
             if (checkFirebaseConfig()) {
@@ -883,24 +754,7 @@
                 const storage = getStorage(app);
 
                 initializeLoginScreen();
-                
-                // 等待DOM完全載入後再初始化導航
-                document.addEventListener('DOMContentLoaded', function() {
-                    // 重新獲取所有導航按鈕元素
-                    window.navSettingsBtn = document.getElementById('nav-settings-btn');
-                    window.navDashboardBtn = document.getElementById('nav-dashboard-btn');
-                    window.navTrackingBtn = document.getElementById('nav-tracking-btn');
-                    window.navCheckinBtn = document.getElementById('nav-checkin-btn');
-                    
-                    // 除錯：檢查導航按鈕是否存在
-                    console.log('DOMContentLoaded - 導航按鈕元素檢查:');
-                    console.log('navSettingsBtn:', window.navSettingsBtn);
-                    console.log('navDashboardBtn:', window.navDashboardBtn);
-                    console.log('navTrackingBtn:', window.navTrackingBtn);
-                    console.log('navCheckinBtn:', window.navCheckinBtn);
-                    
-                    initializeNavigation();
-                }); 
+                initializeNavigation(); 
                 
                 onAuthStateChanged(auth, async (user) => {
                     if (user) {
@@ -924,12 +778,7 @@
                             currentUserRole = '員工'; 
                         }
 
-                        if (window.navSettingsBtn) {
-                            window.navSettingsBtn.style.display = (currentUserRole === '管理員') ? 'flex' : 'none';
-                        }
-                        if (window.navTrackingBtn) {
-                            window.navTrackingBtn.style.display = (currentUserRole === '管理員') ? 'flex' : 'none';
-                        }
+                        navSettingsBtn.style.display = (currentUserRole === '管理員') ? 'flex' : 'none';
                         
                         rootContainer.classList.remove('w-[380px]', 'h-[480px]');
                         rootContainer.classList.add('w-[400px]', 'h-[750px]');
@@ -940,16 +789,11 @@
                         mainView.classList.remove('hidden');
                         mainView.classList.add('flex');
                         
-                        const todayString = getTaipeiDateString();
-                        historyDatePicker.value = todayString;
-                        listenToRecordsByDate(user.uid, todayString);
+                        const today = new Date();
+                        historyDatePicker.value = today.toISOString().split('T')[0];
+                        listenToRecordsByDate(user.uid, today);
                         listenToTodayStatus(user.uid);
                         getInitialLocation();
-                        
-                        if (dateTimeInterval) clearInterval(dateTimeInterval);
-                        updateDateTime();
-                        dateTimeInterval = setInterval(updateDateTime, 1000);
-                        
                         showPage('dashboard');
                     } else {
                         currentUserData = null;
@@ -968,7 +812,6 @@
                         if (unsubscribeFromAccounts) unsubscribeFromAccounts();
                         if (unsubscribeFromStatus) unsubscribeFromStatus();
                         if (workDurationInterval) clearInterval(workDurationInterval);
-                        if (dateTimeInterval) clearInterval(dateTimeInterval);
                         
                         cleanupLocationOnLogout();
                         clearMainView();
@@ -977,61 +820,19 @@
                 
                 // --- 頁面切換與互動邏輯 ---
                 function initializeNavigation() {
-                     console.log('initializeNavigation called');
-                     // 主導覽
-                     if (window.navSettingsBtn) {
-                         window.navSettingsBtn.addEventListener('click', () => {
-                             console.log('Settings button clicked');
-                             showPage('settings');
-                         });
-                         console.log('Settings button event listener added');
-                     } else {
-                         console.error('navSettingsBtn not found!');
-                     }
-                     
-                     if (window.navDashboardBtn) {
-                         window.navDashboardBtn.addEventListener('click', () => {
-                             console.log('Dashboard button clicked');
-                             showPage('dashboard');
-                         });
-                         console.log('Dashboard button event listener added');
-                     } else {
-                         console.error('navDashboardBtn not found!');
-                     }
-                     
-                     if (window.navTrackingBtn) {
-                         window.navTrackingBtn.addEventListener('click', () => {
-                             console.log('Tracking button clicked');
-                             showPage('tracking');
-                         });
-                         console.log('Tracking button event listener added');
-                     } else {
-                         console.error('navTrackingBtn not found!');
-                     }
-                     
-                     if (window.navCheckinBtn) {
-                         window.navCheckinBtn.addEventListener('click', () => { 
-                             console.log('Checkin button clicked');
-                             showPage('checkin');
-                             forceRelocate();
-                         });
-                         console.log('Checkin button event listener added');
-                     } else {
-                         console.error('navCheckinBtn not found!');
-                     }
+                    // 主導覽
+                    navSettingsBtn.addEventListener('click', () => showPage('settings'));
+                    navDashboardBtn.addEventListener('click', () => showPage('dashboard'));
+                    navCheckinBtn.addEventListener('click', () => { 
+                        showPage('checkin');
+                        forceRelocate();
+                    });
                     relocateBtn.addEventListener('click', forceRelocate);
                     profileBtn.addEventListener('click', openProfileModal);
                     
                     // 打卡子導覽
-                    checkinLocationTabBtn.addEventListener('click', () => {
-                    showCheckinTab('location');
-                });
-                checkinHistoryTabBtn.addEventListener('click', () => {
-                    showCheckinTab('history');
-                });
-                trackingPersonnelTabBtn.addEventListener('click', () => {
-                    showTrackingTab('personnel');
-                });
+                    checkinLocationTabBtn.addEventListener('click', () => showCheckinTab('location'));
+                    checkinHistoryTabBtn.addEventListener('click', () => showCheckinTab('history'));
 
                     // Easter Egg
                     const loginLogo = document.getElementById('login-logo');
@@ -1083,12 +884,8 @@
                     closeMapModalBtn.addEventListener('click', closeMapModal);
 
                     // 設定頁面
-                    settingsAccountTabBtn.addEventListener('click', () => {
-                    showSettingsTab('account');
-                });
-                settingsRulesTabBtn.addEventListener('click', () => {
-                    showSettingsTab('rules');
-                });
+                    settingsAccountTabBtn.addEventListener('click', () => showSettingsTab('account'));
+                    settingsRulesTabBtn.addEventListener('click', () => showSettingsTab('rules'));
                     
                     // 新增帳號 Modal
                     addAccountBtn.addEventListener('click', openAddAccountModal);
@@ -1124,10 +921,9 @@
                     nextPhotoBtn.addEventListener('click', () => showPhoto(currentPhotoIndex + 1));
 
                     // 日期選擇器
-                    historyDatePicker.addEventListener('change', (e) => {
-                        if (auth.currentUser) {
-                            listenToRecordsByDate(auth.currentUser.uid, e.target.value);
-                        }
+                    historyDatePicker.addEventListener('change', () => {
+                        const selectedDate = new Date(historyDatePicker.value);
+                        listenToRecordsByDate(auth.currentUser.uid, selectedDate);
                     });
 
                     // 事件代理
@@ -1154,7 +950,7 @@
                 }
 
                 function setActiveTab(activeBtn) {
-                    [navDashboardBtn, navCheckinBtn, navSettingsBtn, navTrackingBtn].forEach(btn => {
+                    [navDashboardBtn, navCheckinBtn, navSettingsBtn].forEach(btn => {
                         btn.classList.remove('text-red-600', 'bg-red-50');
                         btn.classList.add('text-gray-500');
                     });
@@ -1162,52 +958,34 @@
                 }
 
                 function showPage(pageName) {
-                    console.log('showPage called with:', pageName);
                     dashboardPage.classList.add('hidden');
                     checkinPage.classList.add('hidden');
                     settingsPage.classList.add('hidden');
-                    trackingPage.classList.add('hidden');
                     settingsTabNav.classList.add('hidden');
                     checkinTabNav.classList.add('hidden');
-                    trackingTabNav.classList.add('hidden');
-                    subTabNav.classList.add('hidden');
-                    datetimeDisplay.classList.add('hidden');
+                    subTabNav.style.visibility = 'hidden';
 
-                    // 更新除錯訊息
-                    const currentPageDebug = document.getElementById('current-page-debug');
-                    const tabStatusDebug = document.getElementById('tab-status-debug');
-                    if (currentPageDebug) currentPageDebug.textContent = pageName;
-                    if (tabStatusDebug) tabStatusDebug.textContent = '頁面切換中...';
 
                     if (pageName === 'dashboard') {
                         dashboardPage.classList.remove('hidden');
-                        datetimeDisplay.classList.remove('hidden');
                         setActiveTab(navDashboardBtn);
                     } else if (pageName === 'checkin') {
                         checkinPage.classList.remove('hidden');
                         checkinTabNav.classList.remove('hidden');
-                        subTabNav.classList.remove('hidden');
+                        subTabNav.style.visibility = 'visible';
                         setActiveTab(navCheckinBtn);
                         showCheckinTab('location');
                     } else if (pageName === 'settings') {
                         settingsPage.classList.remove('hidden');
                         settingsTabNav.classList.remove('hidden');
-                        subTabNav.classList.remove('hidden');
+                        subTabNav.style.visibility = 'visible';
                         setActiveTab(navSettingsBtn);
                         showSettingsTab('account');
                         listenToAccounts();
-                    } else if (pageName === 'tracking') {
-                        trackingPage.classList.remove('hidden');
-                        trackingTabNav.classList.remove('hidden');
-                        subTabNav.classList.remove('hidden');
-                        setActiveTab(navTrackingBtn);
-                        showTrackingTab('personnel');
-                        loadPersonnelData();
                     }
                 }
                 
                 function showSettingsTab(tabName) {
-                    console.log('showSettingsTab called with:', tabName);
                     const activeClasses = 'border-red-500 text-red-600';
                     const inactiveClasses = 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300';
                     
@@ -1223,13 +1001,9 @@
                         settingsRulesTabBtn.className = `whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm ${activeClasses}`;
                         settingsAccountTabBtn.className = `whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm ${inactiveClasses}`;
                     }
-                    
-                    const tabStatusDebug = document.getElementById('tab-status-debug');
-                    if (tabStatusDebug) tabStatusDebug.textContent = `設定 - ${tabName}`;
                 }
 
                 function showCheckinTab(tabName) {
-                    console.log('showCheckinTab called with:', tabName);
                     const activeClasses = 'border-red-500 text-red-600';
                     const inactiveClasses = 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300';
                     
@@ -1238,133 +1012,12 @@
                         checkinHistoryContent.classList.add('hidden');
                         checkinLocationTabBtn.className = `whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm ${activeClasses}`;
                         checkinHistoryTabBtn.className = `whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm ${inactiveClasses}`;
-
                     } else if (tabName === 'history') {
                         checkinLocationContent.classList.add('hidden');
                         checkinHistoryContent.classList.remove('hidden');
                         checkinHistoryTabBtn.className = `whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm ${activeClasses}`;
                         checkinLocationTabBtn.className = `whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm ${inactiveClasses}`;
                     }
-                    
-                    const tabStatusDebug = document.getElementById('tab-status-debug');
-                    if (tabStatusDebug) tabStatusDebug.textContent = `打卡 - ${tabName}`;
-                }
-
-                function showTrackingTab(tabName) {
-                    console.log('showTrackingTab called with:', tabName);
-                    const activeClasses = 'border-red-500 text-red-600';
-                    const inactiveClasses = 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300';
-                    
-                    // 隱藏所有追蹤頁面內容
-                    trackingPersonnelContent.classList.add('hidden');
-                    
-                    // 重設所有追蹤分頁按鈕為非活躍狀態
-                    trackingPersonnelTabBtn.className = `whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm ${inactiveClasses}`;
-                    
-                    if (tabName === 'personnel') {
-                        trackingPersonnelContent.classList.remove('hidden');
-                        trackingPersonnelTabBtn.className = `whitespace-nowrap h-full flex items-center px-1 border-b-2 font-medium text-sm ${activeClasses}`;
-                    }
-                    
-                    const tabStatusDebug = document.getElementById('tab-status-debug');
-                    if (tabStatusDebug) tabStatusDebug.textContent = `追蹤 - ${tabName}`;
-                }
-
-                function loadPersonnelData() {
-                    const personnelList = document.getElementById('personnel-list');
-                    personnelList.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-gray-500">正在載入人員資料...</td></tr>';
-                    
-                    const accountsRef = ref(db, 'accounts');
-                    onValue(accountsRef, (snapshot) => {
-                        const accounts = snapshot.val();
-                        if (!accounts) {
-                            personnelList.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-gray-500">暫無人員資料</td></tr>';
-                            return;
-                        }
-
-                        let html = '';
-                        Object.keys(accounts).forEach((key, index) => {
-                            const account = accounts[key];
-                            const status = account.status || '離線';
-                            const statusColor = status === '在線' ? 'text-green-600' : status === '離線' ? 'text-gray-500' : 'text-orange-500';
-                            
-                            html += `
-                                <tr class="hover:bg-gray-50" data-id="${key}">
-                                    <td class="px-4 py-3 text-sm">
-                                        <button class="move-btn text-gray-400 hover:text-gray-600" data-direction="up" data-index="${index}">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>
-                                        </button>
-                                        <button class="move-btn text-gray-400 hover:text-gray-600" data-direction="down" data-index="${index}">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-                                        </button>
-                                    </td>
-                                    <td class="px-4 py-3 text-sm font-medium text-gray-900">${account.name || '未知'}</td>
-                                    <td class="px-4 py-3 text-sm text-gray-500">${account.title || '未設定'}</td>
-                                    <td class="px-4 py-3 text-sm">
-                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColor}">
-                                            ${status}
-                                        </span>
-                                    </td>
-                                    <td class="px-4 py-3 text-sm">
-                                        <button class="track-btn bg-green-100 hover:bg-green-200 text-green-800 px-2 py-1 rounded text-xs font-medium">
-                                            追蹤
-                                        </button>
-                                    </td>
-                                    <td class="px-4 py-3 text-sm">
-                                        <button class="contact-btn bg-blue-100 hover:bg-blue-200 text-blue-800 px-2 py-1 rounded text-xs font-medium">
-                                            聯絡
-                                        </button>
-                                    </td>
-                                </tr>
-                            `;
-                        });
-                        
-                        personnelList.innerHTML = html;
-                        
-                        // 添加事件監聽器
-                        personnelList.addEventListener('click', (e) => {
-                            const moveBtn = e.target.closest('.move-btn');
-                            const trackBtn = e.target.closest('.track-btn');
-                            const contactBtn = e.target.closest('.contact-btn');
-                            
-                            if (moveBtn) {
-                                const direction = moveBtn.dataset.direction;
-                                const index = parseInt(moveBtn.dataset.index);
-                                movePersonnelRow(index, direction);
-                            } else if (trackBtn) {
-                                const row = trackBtn.closest('tr');
-                                const name = row.querySelector('td:nth-child(2)').textContent;
-                                showMessage(`開始追蹤 ${name}`, 'success');
-                            } else if (contactBtn) {
-                                const row = contactBtn.closest('tr');
-                                const name = row.querySelector('td:nth-child(2)').textContent;
-                                showMessage(`聯絡 ${name}`, 'info');
-                            }
-                        });
-                    }, (error) => {
-                        console.error('載入人員資料失敗:', error);
-                        personnelList.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-red-500">載入失敗</td></tr>';
-                    });
-                }
-
-                function movePersonnelRow(index, direction) {
-                    const personnelList = document.getElementById('personnel-list');
-                    const rows = Array.from(personnelList.querySelectorAll('tr'));
-                    
-                    if (direction === 'up' && index > 0) {
-                        // 向上移動
-                        const currentRow = rows[index];
-                        const previousRow = rows[index - 1];
-                        personnelList.insertBefore(currentRow, previousRow);
-                    } else if (direction === 'down' && index < rows.length - 1) {
-                        // 向下移動
-                        const currentRow = rows[index];
-                        const nextRow = rows[index + 1];
-                        personnelList.insertBefore(nextRow, currentRow);
-                    }
-                    
-                    // 重新載入以更新索引
-                    loadPersonnelData();
                 }
 
                 function forceRelocate() {
@@ -1925,13 +1578,9 @@
                     } catch (error) {
                         console.error("新增帳號時發生詳細錯誤:", error);
                         let message = '新增帳號失敗。';
-                        if (error.code === 'auth/email-already-in-use') {
-                            message = '此電子郵件已被註冊。';
-                        } else if (error.code === 'auth/weak-password') {
-                            message = '密碼強度不足，請設定至少6位數的密碼。';
-                        } else if (error.code === 'permission-denied') {
-                            message = '權限不足。請檢查 Firebase 安全規則是否允許管理員新增使用者資料與照片。';
-                        }
+                        if (error.code === 'auth/email-already-in-use') message = '此電子郵件已被註冊。';
+                        else if (error.code === 'auth/weak-password') message = '密碼強度不足。';
+                        else if (error.code === 'permission-denied') message = '權限不足。';
                         showMessage(message, 'error');
                     } finally {
                         await deleteApp(tempApp); // 清理臨時實例
@@ -2048,15 +1697,14 @@
                 function listenToTodayStatus(userId) {
                      if (unsubscribeFromStatus) unsubscribeFromStatus();
                     
-                    const todayString = getTaipeiDateString();
-                    const startOfDay = new Date(`${todayString}T00:00:00+08:00`);
-                    const nextDay = new Date(startOfDay);
-                    nextDay.setDate(nextDay.getDate() + 1);
+                    const today = new Date();
+                    const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                    const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
 
                     const q = query(collection(db, "clock_records"), 
                         where("userId", "==", userId),
                         where("timestamp", ">=", startOfDay),
-                        where("timestamp", "<", nextDay)
+                        where("timestamp", "<", endOfDay)
                     );
 
                     unsubscribeFromStatus = onSnapshot(q, (snapshot) => {
@@ -2069,17 +1717,16 @@
                     });
                 }
 
-                function listenToRecordsByDate(userId, dateString) {
+                function listenToRecordsByDate(userId, date) {
                     if (unsubscribeFromHistory) unsubscribeFromHistory();
                     
-                    const startOfDay = new Date(`${dateString}T00:00:00+08:00`);
-                    const nextDay = new Date(startOfDay);
-                    nextDay.setDate(nextDay.getDate() + 1);
+                    const startOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+                    const endOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1);
 
                     const q = query(collection(db, "clock_records"), 
                         where("userId", "==", userId),
                         where("timestamp", ">=", startOfDay),
-                        where("timestamp", "<", nextDay)
+                        where("timestamp", "<", endOfDay)
                     );
 
                     unsubscribeFromHistory = onSnapshot(q, (snapshot) => {
@@ -2103,7 +1750,7 @@
                     
                     if (isClockedIn) {
                         currentStatusEl.textContent = '工作中';
-                        statusCardEl.className = 'bg-green-50 rounded-lg p-5 mb-6 text-center border transition-all';
+                        statusCardEl.className = 'bg-green-50 rounded-lg p-5 mb-6 text-center border border-green-500 transition-all';
                         currentStatusEl.className = 'text-2xl font-bold text-green-600';
                     } else {
                         currentStatusEl.textContent = history.length > 0 ? '已下班' : '尚未打卡';
@@ -2235,5 +1882,4 @@
         });
     </script>
 </body>
-
 </html>
