@@ -48,9 +48,9 @@
             #root-container {
                 width: calc(100% - 20px) !important;
                 max-width: none !important;
-                margin: 10px auto !important;
+                margin: 10px 10px 50px !important;
                 border-radius: 1rem !important;
-                height: calc(100vh - 20px) !important;
+                height: calc(100vh - 60px) !important;
                 max-height: none !important;
             }
             
@@ -80,12 +80,11 @@
             flex-direction: column;
         }
         
-        /* 主容器調整 - 上下各留10px間距 */
+        /* 主頁佈局調整 */
         #root-container {
-            margin: 10px auto !important;
+            margin: 10px auto 50px !important;
         }
         
-        /* 頁首固定靠上 */
         #main-view header {
             position: absolute;
             top: 0;
@@ -95,18 +94,6 @@
             z-index: 20;
         }
         
-        /* 中間內容區域 - 響應式調整 */
-        #main-view .flex-1.flex-col {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            margin-top: 70px;
-            margin-bottom: 70px;
-            height: calc(100% - 140px);
-            overflow: hidden;
-        }
-        
-        /* 頁尾固定靠下 */
         #bottom-nav {
             position: absolute;
             bottom: 0;
@@ -114,6 +101,13 @@
             right: 0;
             height: 70px;
             z-index: 20;
+        }
+        
+        #main-view .flex-1.flex-col {
+            margin-top: 70px;
+            margin-bottom: 70px;
+            height: calc(100% - 140px);
+            overflow: hidden;
         }
     </style>
 </head>
@@ -152,7 +146,7 @@
                         <span>登入系統</span>
                     </button>
                     <p id="login-message" class="text-red-500 text-sm text-center min-h-[10px]"></p>
-                    <p class="text-center text-gray-600 text-xs mt-2">V1.4.1</p>
+                    <p class="text-center text-gray-600 text-xs mt-2">V1.3.1</p>
                 </div>
             </main>
         </div>
@@ -195,7 +189,7 @@
                 </div>
                 
                 <!-- 可滾動的頁面內容 -->
-                <main class="flex-1 overflow-y-auto p-6 bg-gray-100">
+                <main class="flex-1 overflow-y-auto p-6 bg-gray-100 h-[calc(100%-50px)]">
                     <div id="message-box" class="hidden p-4 mb-4 text-sm rounded-lg" role="alert">
                         <span class="font-medium" id="message-content"></span>
                     </div>
@@ -1999,5 +1993,4 @@
         });
     </script>
 </body>
-
 </html>
