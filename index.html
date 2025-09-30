@@ -170,7 +170,7 @@
                         <span>登入系統</span>
                     </button>
                     <p id="login-message" class="text-red-500 text-sm text-center min-h-[10px]"></p>
-                    <p class="text-center text-gray-600 text-xs mt-2">開發測試版V2</p>
+                    <p class="text-center text-gray-600 text-xs mt-2">開發測試版V3</p>
                 </div>
             </main>
         </div>
@@ -875,29 +875,7 @@
             }
 
             
-                // --- 所有人狀態列表 ---
-                function listenToAllUsersStatus() {
-                  const usersRef = collection(db, "users");
-                  unsubscribeFromAccounts = onSnapshot(usersRef, async (snapshot) => {
-                    const container = document.getElementById('users-status-list');
-                    if (!container) return;
-                    container.innerHTML = "";
-                    for (const docSnap of snapshot.docs) {
-                      const user = docSnap.data();
-                      if (user.status === 'deleted') continue;
-                      try {
-                        const checkinRef = collection(db, "users", docSnap.id, "checkins");
-                        const q = query(checkinRef, orderBy("timestamp", "desc"), limit(1));
-                        const checkinSnap = await getDocs(q);
-                        let lastStatus = "尚未打卡", photoURL = null, mapURL = null;
-                        if (!checkinSnap.empty) {
-                          const last = checkinSnap.docs[0].data();
-                          const ts = last.timestamp?.toDate ? last.timestamp.toDate() : null;
-                          lastStatus = last.type + (ts ? (" " + ts.toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit"})) : "");
-                          photoURL = last.photoURL || null;
-                          mapURL = last.mapURL || null;
-                        }
-                        const div = document.createElement("div");
+                                        const div = document.createElement("div");
                         div.className = "flex items-center space-x-4 border-b pb-3";
                         div.innerHTML = `
                           <img src="${user.photoURL || 'https://placehold.co/96x96'}" class="w-12 h-12 rounded-full object-cover border">
@@ -910,6 +888,74 @@
                         `;
                         container.appendChild(div);
                       } catch(e) {
+                        console.error("Error fetching last checkin", e);
+                      }
+                    }
+                  });
+                }
+
+            
+                // --- 所有人狀態列表 (使用 clock_records 集合) ---
+                function listenToAllUsersStatus() {
+                  const usersRef = collection(db, "users");
+                  unsubscribeFromAccounts = onSnapshot(usersRef, async (snapshot) => {
+                    const container = document.getElementById('users-status-list');
+                    if (!container) return;
+                    container.innerHTML = "";
+
+                    for (const docSnap of snapshot.docs) {
+                      const user = { id: docSnap.id, ...docSnap.data() };
+                      if (user.status === 'deleted') continue;
+
+                      try {
+                        // 查詢 clock_records 中這個 userId 的最後一筆紀錄
+                        const q = query(
+                          collection(db, "clock_records"),
+                          where("userId", "==", user.id),
+                          orderBy("timestamp", "desc"),
+                          limit(1)
+                        );
+                        const checkinSnap = await getDocs(q);
+
+                        let lastStatus = "尚未打卡", photoURL = null, mapURL = null;
+                        if (!checkinSnap.empty) {
+                          const last = checkinSnap.docs[0].data();
+                          const ts = last.timestamp?.toDate ? last.timestamp.toDate() : null;
+                          const typeText = last.type === "in" ? "上班" : "下班";
+                          lastStatus = typeText + (ts ? (" " + ts.toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit"})) : "");
+
+                          // 取打卡照片
+                          if (last.photoURLs) {
+                            if (Array.isArray(last.photoURLs)) {
+                              photoURL = last.photoURLs[0];
+                            } else {
+                              photoURL = last.photoURLs;
+                            }
+                          }
+
+                          // 取地圖 URL
+                          if (last.coords) {
+                            const lat = last.coords.latitude;
+                            const lng = last.coords.longitude;
+                            mapURL = `https://www.google.com/maps?q=${lat},${lng}`;
+                          }
+                        }
+
+                        // 動態產生 UI
+                        const div = document.createElement("div");
+                        div.className = "flex items-center space-x-4 border-b pb-3";
+                        div.innerHTML = `
+                          <img src="${user.photoURL || 'https://placehold.co/96x96'}" class="w-12 h-12 rounded-full object-cover border">
+                          <div class="flex-1">
+                            <p class="font-semibold">${user.name || user.username}</p>
+                            <p class="text-sm text-gray-600">最後狀態：${lastStatus}</p>
+                            ${mapURL ? `<button class="text-blue-500 text-sm" onclick="openMap('${mapURL}')">查看地圖</button>` : ""}
+                          </div>
+                          ${photoURL ? `<img src="${photoURL}" class="w-16 h-16 rounded-lg object-cover cursor-pointer" onclick="openPhotoViewer('${photoURL}')">` : ""}
+                        `;
+                        container.appendChild(div);
+
+                      } catch (e) {
                         console.error("Error fetching last checkin", e);
                       }
                     }
