@@ -170,7 +170,7 @@
                         <span>登入系統</span>
                     </button>
                     <p id="login-message" class="text-red-500 text-sm text-center min-h-[10px]"></p>
-                    <p class="text-center text-gray-600 text-xs mt-2">開發測試版</p>
+                    <p class="text-center text-gray-600 text-xs mt-2">開發測試版V1</p>
                 </div>
             </main>
         </div>
@@ -233,6 +233,20 @@
                                 </div>
                              </div>
                         </div>
+                        <div id="dashboard-page">
+    <div id="status-card" class="bg-white rounded-lg p-5 mb-6 text-center border transition-all">
+        ...
+    </div>
+
+    <div id="all-users-status-container" class="hidden">
+        <h3 class="text-lg font-semibold text-gray-800 mb-3 border-b pb-2">
+            團隊成員狀態
+        </h3>
+        <div id="all-users-status-list" class="space-y-3 max-h-[400px] overflow-y-auto pr-2">
+            <p class="text-gray-500 text-center py-4">正在載入團隊狀態...</p>
+        </div>
+    </div>
+    </div>
                     </div>
 
                     <!-- 打卡頁面 -->
@@ -834,6 +848,10 @@
             let viewerPhotos = [];
             let currentPhotoIndex = 0;
             let tempPhotos = [];
+            // ... 找到這幾行
+            let workDurationInterval = null, unsubscribeFromHistory = null, unsubscribeFromAccounts = null, unsubscribeFromStatus=null;
+            // 在後面加上 , unsubscribeFromAllRecords = null; 變成：
+            let workDurationInterval = null, unsubscribeFromHistory = null, unsubscribeFromAccounts = null, unsubscribeFromStatus=null, unsubscribeFromAllRecords = null;
 
             // --- Firebase 設定檢查 ---
             function checkFirebaseConfig() {
@@ -1065,19 +1083,19 @@
                         if (deleteButton) openDeleteConfirmModal(deleteButton.dataset.id, deleteButton.dataset.name);
                     });
 
-                    historyLogEl.addEventListener('click', (e) => {
-                        const mapButton = e.target.closest('.map-link-btn');
-                        if (mapButton) {
-                            const lat = mapButton.dataset.lat;
-                            const lon = mapButton.dataset.lon;
-                            if (lat && lon) showMapModal(parseFloat(lat), parseFloat(lon));
-                        }
-                        const photosButton = e.target.closest('.view-photos-btn');
-                        if(photosButton){
-                            const photos = JSON.parse(photosButton.dataset.photos);
-                            openPhotoViewer(photos);
-                        }
-                    });
+                    mainView.addEventListener('click', (e) => {
+    const mapButton = e.target.closest('.map-link-btn');
+    if (mapButton) {
+        const lat = mapButton.dataset.lat;
+        const lon = mapButton.dataset.lon;
+        if (lat && lon) showMapModal(parseFloat(lat), parseFloat(lon));
+    }
+    const photosButton = e.target.closest('.view-photos-btn');
+    if(photosButton){
+        const photos = JSON.parse(photosButton.dataset.photos);
+        openPhotoViewer(photos);
+    }
+});
                 }
 
                 function setActiveTab(activeBtn) {
@@ -1098,11 +1116,22 @@
                     datetimeDisplay.style.display = 'none';
 
 
-                    if (pageName === 'dashboard') {
-                        dashboardPage.classList.remove('hidden');
-                        datetimeDisplay.style.display = 'flex';
-                        setActiveTab(navDashboardBtn);
-                    } else if (pageName === 'checkin') {
+                    // 在 showPage 函式中找到這個 if 區塊
+if (pageName === 'dashboard') {
+    dashboardPage.classList.remove('hidden');
+    datetimeDisplay.style.display = 'flex';
+    setActiveTab(navDashboardBtn);
+
+    const container = document.getElementById('all-users-status-container');
+    if (currentUserRole === '管理員') {
+        container.classList.remove('hidden'); // 如果是管理員，顯示區塊
+        listenToAllUsersStatus(); // 並開始監聽資料
+    } else {
+        container.classList.add('hidden'); // 否則隱藏
+        if (unsubscribeFromAllRecords) unsubscribeFromAllRecords(); // 如果之前有監聽，就停止它
+    }
+
+} else if (pageName === 'checkin') {
                         checkinPage.classList.remove('hidden');
                         checkinTabNav.classList.remove('hidden');
                         subTabNav.style.display = 'block';
@@ -1531,6 +1560,118 @@
                         toggleButtonLoading(submitProfileEditBtn, false);
                     }
                 }
+
+// ===== 開始貼上這裡 =====
+
+// 監聽所有使用者的最新狀態
+async function listenToAllUsersStatus() {
+    if (unsubscribeFromAllRecords) unsubscribeFromAllRecords();
+
+    const allUsersStatusList = document.getElementById('all-users-status-list');
+    allUsersStatusList.innerHTML = `<p class="text-gray-500 text-center py-4">正在載入團隊狀態...</p>`;
+
+    try {
+        // 1. 取得所有非刪除狀態的使用者
+        const usersSnapshot = await getDocs(query(collection(db, "users"), where("status", "!=", "deleted")));
+        const users = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+        // 2. 建立今天的時間範圍查詢
+        const todayString = getTaipeiDateString();
+        const startOfDay = new Date(`${todayString}T00:00:00+08:00`);
+        const endOfDay = new Date(`${todayString}T23:59:59+08:00`);
+
+        const recordsQuery = query(
+            collection(db, "clock_records"),
+            where("timestamp", ">=", startOfDay),
+            where("timestamp", "<=", endOfDay),
+            orderBy("timestamp", "desc")
+        );
+
+        // 3. 監聽所有打卡紀錄的變化
+        unsubscribeFromAllRecords = onSnapshot(recordsQuery, (snapshot) => {
+            const allRecords = snapshot.docs.map(doc => doc.data());
+
+            // 處理紀錄，找出每個使用者的最後一筆
+            const latestStatusMap = new Map();
+            for (const record of allRecords) {
+                if (!latestStatusMap.has(record.userId)) {
+                    latestStatusMap.set(record.userId, record);
+                }
+            }
+
+            // 組合使用者資料與他們的最新狀態
+            const combinedData = users.map(user => {
+                const latestRecord = latestStatusMap.get(user.id);
+                return {
+                    ...user,
+                    lastStatus: latestRecord ? latestRecord.type : 'offline',
+                    lastLocation: latestRecord ? latestRecord.coords : null,
+                    lastTimestamp: latestRecord ? latestRecord.timestamp.toDate() : null
+                };
+            });
+
+            renderAllUsersStatus(combinedData);
+        });
+    } catch (error) {
+        console.error("無法載入團隊狀態:", error);
+        allUsersStatusList.innerHTML = `<p class="text-red-500 text-center py-4">載入失敗，可能是權限不足。</p>`;
+    }
+}
+
+// 渲染所有使用者狀態列表的畫面
+function renderAllUsersStatus(data) {
+    const listEl = document.getElementById('all-users-status-list');
+    listEl.innerHTML = '';
+    if (data.length === 0) {
+        listEl.innerHTML = `<p class="text-gray-500 text-center py-4">目前沒有團隊成員資料</p>`;
+        return;
+    }
+
+    data.forEach(user => {
+        const card = document.createElement('div');
+        card.className = 'bg-white p-3 rounded-lg border flex items-center justify-between';
+
+        let statusText, statusColor;
+        switch(user.lastStatus) {
+            case 'in':
+                statusText = '工作中';
+                statusColor = 'text-green-600';
+                break;
+            case 'out':
+                statusText = '已下班';
+                statusColor = 'text-gray-500';
+                break;
+            default:
+                statusText = '離線/未打卡';
+                statusColor = 'text-red-600';
+                break;
+        }
+
+        const photoSrc = user.photoURL || 'https://placehold.co/96x96/e2e8f0/4a5568?text=Photo';
+        const mapBtnHtml = user.lastLocation ? `
+            <button data-lat="${user.lastLocation.latitude}" data-lon="${user.lastLocation.longitude}" class="map-link-btn text-sm text-indigo-500 hover:text-indigo-700 flex items-center space-x-1">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+                <span>地圖</span>
+            </button>
+        ` : '';
+
+        card.innerHTML = `
+            <div class="flex items-center space-x-3 flex-1">
+                <img src="${photoSrc}" alt="${user.name}" class="h-10 w-10 rounded-full object-cover">
+                <div class="flex-1">
+                    <p class="font-bold text-gray-800">${user.name}</p>
+                    <p class="text-sm ${statusColor}">${statusText}</p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-3">
+                ${mapBtnHtml}
+            </div>
+        `;
+        listEl.appendChild(card);
+    });
+}
+
+
                  // --- 照片檢視 Modal ---
                 function openPhotoViewer(urls) {
                     if (!urls || urls.length === 0) return;
@@ -2023,5 +2164,3 @@
 </body>
 
 </html>
-
-
