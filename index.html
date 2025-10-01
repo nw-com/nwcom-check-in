@@ -11,7 +11,7 @@
     
     <!-- 自定義腳本 -->
     <script src="js/dashboard-functions.js"></script>
-    <script src="features.js" defer></script>
+    <script src="js/features.js" defer></script>
     
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
@@ -71,10 +71,21 @@
         }
         .main-container {
             width: 400px;
-            height: 750px;
+            height: calc(100vh - 60px);
             box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
             border-radius: 1.5rem;
             overflow: hidden;
+            margin: 10px 10px 50px 10px;
+        }
+        .header {
+            height: 70px;
+        }
+        .footer {
+            height: 70px;
+        }
+        .content-area {
+            height: calc(100% - 140px);
+            overflow-y: auto;
         }
         .hide { display: none !important; }
         .tab-btn.active {
