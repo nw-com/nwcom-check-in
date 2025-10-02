@@ -41,8 +41,8 @@ function getStatusDisplayText(status, location) {
         case '抵達': return location ? `抵達-${location}` : '抵達';
         case '離開': return location ? `離開-${location}` : '離開';
         case '返回': return '返回-辦公室';
-        case '臨時請假': return '請假中';
-        case '特殊勤務': return '出勤中';
+        case '臨時請假': return location ? `請假-${location}` : '請假中';
+        case '特殊勤務': return location ? `出勤-${location}` : '出勤中';
         default: return '尚未打卡';
     }
 }

@@ -50,11 +50,23 @@ function updateStatusTextAndStyle(statusText, statusDisplay) {
             statusDisplay.className = 'mb-4 p-3 rounded-lg text-center bg-pink-100 text-pink-800';
             break;
         case '臨時請假':
-            statusText.textContent = '請假中';
+            let leaveReasonText = '請假中';
+            // 根據請假審核狀態顯示不同文字
+            if (state.leaveStatus === 'approved') {
+                leaveReasonText = '已請假';
+            }
+            if (state.leaveReason) {
+                leaveReasonText = `${leaveReasonText}-${state.leaveReason}`;
+            }
+            statusText.textContent = leaveReasonText;
             statusDisplay.className = 'mb-4 p-3 rounded-lg text-center bg-orange-100 text-orange-800';
             break;
         case '特殊勤務':
-            statusText.textContent = '出勤中';
+            let dutyText = '出勤中';
+            if (state.dutyType) {
+                dutyText = `出勤-${state.dutyType}`;
+            }
+            statusText.textContent = dutyText;
             statusDisplay.className = 'mb-4 p-3 rounded-lg text-center bg-purple-100 text-purple-800';
             break;
         default:
@@ -98,6 +110,9 @@ function updateStatusDisplay() {
                 if (doc.exists && doc.data().clockInStatus) {
                     state.clockInStatus = doc.data().clockInStatus;
                     state.outboundLocation = doc.data().outboundLocation || null;
+                    state.dutyType = doc.data().dutyType || null;
+                    state.leaveReason = doc.data().leaveReason || null;
+                    state.leaveStatus = doc.data().leaveStatus || null;
                 }
                 
                 // 根據狀態更新顯示
@@ -144,6 +159,18 @@ function updateDashboardStatus() {
                 break;
             case '返回':
                 statusText = '返回-辦公室';
+                break;
+            case '臨時請假':
+                statusText = '請假中';
+                if (state.leaveReason) {
+                    statusText = `請假-${state.leaveReason}`;
+                }
+                break;
+            case '特殊勤務':
+                statusText = '出勤中';
+                if (state.dutyType) {
+                    statusText = `出勤-${state.dutyType}`;
+                }
                 break;
             default:
                 statusText = '尚未打卡';
@@ -421,11 +448,6 @@ function createLocationInputModal() {
 
 // 臨時請假彈窗
 function openTempLeaveModal() {
-    if (!state.currentLocation) {
-        showToast("無法取得目前位置，請稍後再試", true);
-        return;
-    }
-    
     // 創建彈窗背景
     const backdrop = document.createElement('div');
     backdrop.id = 'modal-backdrop';
@@ -441,16 +463,76 @@ function openTempLeaveModal() {
     title.className = 'text-lg font-bold mb-4 text-center';
     title.textContent = '臨時請假';
     
-    // 請假原因輸入框
+    // 創建請假事由選擇
     const reasonLabel = document.createElement('label');
     reasonLabel.className = 'block text-sm font-medium text-gray-700 mb-1';
-    reasonLabel.textContent = '請假原因';
+    reasonLabel.textContent = '請假事由';
     
-    const reasonInput = document.createElement('textarea');
-    reasonInput.id = 'leave-reason';
-    reasonInput.className = 'w-full border border-gray-300 rounded-md p-2 mb-4';
-    reasonInput.rows = 3;
-    reasonInput.placeholder = '請輸入請假原因';
+    const reasonSelect = document.createElement('select');
+    reasonSelect.id = 'leave-reason-select';
+    reasonSelect.className = 'w-full border border-gray-300 rounded-md p-2 mb-4';
+    
+    // 添加選項
+    const options = ['病假', '事假', '其他'];
+    options.forEach(option => {
+        const optionElement = document.createElement('option');
+        optionElement.value = option;
+        optionElement.textContent = option;
+        reasonSelect.appendChild(optionElement);
+    });
+    
+    // 創建其他原因輸入框（當選擇"其他"時顯示）
+    const otherReasonInput = document.createElement('input');
+    otherReasonInput.id = 'other-leave-reason';
+    otherReasonInput.type = 'text';
+    otherReasonInput.className = 'w-full border border-gray-300 rounded-md p-2 mb-4 hidden';
+    otherReasonInput.placeholder = '請輸入請假原因';
+    
+    // 添加選擇變更事件
+    reasonSelect.addEventListener('change', () => {
+        if (reasonSelect.value === '其他') {
+            otherReasonInput.classList.remove('hidden');
+        } else {
+            otherReasonInput.classList.add('hidden');
+        }
+    });
+    
+    // 創建日期時間區間
+    const startDateLabel = document.createElement('label');
+    startDateLabel.className = 'block text-sm font-medium text-gray-700 mb-1';
+    startDateLabel.textContent = '開始時間';
+    
+    const startDateInput = document.createElement('input');
+    startDateInput.id = 'leave-start-time';
+    startDateInput.type = 'datetime-local';
+    startDateInput.className = 'w-full border border-gray-300 rounded-md p-2 mb-4';
+    
+    // 設置預設值為當前時間
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    startDateInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
+    
+    const endDateLabel = document.createElement('label');
+    endDateLabel.className = 'block text-sm font-medium text-gray-700 mb-1';
+    endDateLabel.textContent = '結束時間';
+    
+    const endDateInput = document.createElement('input');
+    endDateInput.id = 'leave-end-time';
+    endDateInput.type = 'datetime-local';
+    endDateInput.className = 'w-full border border-gray-300 rounded-md p-2 mb-4';
+    
+    // 設置預設值為當前時間加8小時
+    const endTime = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+    const endYear = endTime.getFullYear();
+    const endMonth = String(endTime.getMonth() + 1).padStart(2, '0');
+    const endDay = String(endTime.getDate()).padStart(2, '0');
+    const endHours = String(endTime.getHours()).padStart(2, '0');
+    const endMinutes = String(endTime.getMinutes()).padStart(2, '0');
+    endDateInput.value = `${endYear}-${endMonth}-${endDay}T${endHours}:${endMinutes}`;
     
     // 按鈕容器
     const buttonContainer = document.createElement('div');
@@ -466,13 +548,79 @@ function openTempLeaveModal() {
     const confirmButton = document.createElement('button');
     confirmButton.className = 'px-4 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600';
     confirmButton.textContent = '確認請假';
-    confirmButton.addEventListener('click', () => {
-        const reason = document.getElementById('leave-reason').value.trim();
-        if (reason) {
+    confirmButton.addEventListener('click', async () => {
+        // 獲取請假事由
+        let reason = reasonSelect.value;
+        if (reason === '其他') {
+            reason = otherReasonInput.value.trim();
+            if (!reason) {
+                showToast('請輸入請假原因', true);
+                return;
+            }
+        }
+        
+        // 獲取時間區間
+        const startTime = new Date(startDateInput.value);
+        const endTime = new Date(endDateInput.value);
+        
+        // 驗證時間
+        if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
+            showToast('請輸入有效的時間', true);
+            return;
+        }
+        
+        if (startTime >= endTime) {
+            showToast('結束時間必須晚於開始時間', true);
+            return;
+        }
+        
+        try {
+            showLoading(true);
+            
+            // 獲取當前用戶
+            const user = firebase.auth().currentUser;
+            if (!user) {
+                showToast('請先登入', true);
+                showLoading(false);
+                return;
+            }
+            
+            // 創建請假記錄
+            const leaveData = {
+                userId: user.uid,
+                userName: state.currentUser.displayName || user.email,
+                reason: reason,
+                startTime: firebase.firestore.Timestamp.fromDate(startTime),
+                endTime: firebase.firestore.Timestamp.fromDate(endTime),
+                status: 'pending', // 待審核
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            };
+            
+            // 保存到 Firestore
+            await firebase.firestore().collection('leaves').add(leaveData);
+            
+            // 更新用戶狀態
+            await firebase.firestore().collection('users').doc(user.uid).update({
+                clockInStatus: '臨時請假',
+                leaveReason: reason,
+                leaveStartTime: firebase.firestore.Timestamp.fromDate(startTime),
+                leaveEndTime: firebase.firestore.Timestamp.fromDate(endTime)
+            });
+            
+            // 更新本地狀態
+            state.clockInStatus = '臨時請假';
+            
+            // 更新狀態顯示
+            updateStatusDisplay();
+            updateButtonStatus();
+            
+            showToast('請假申請已提交');
             closeAllModals();
-            openCameraModal('臨時請假', state.currentLocation, { reason });
-        } else {
-            showToast('請輸入請假原因', true);
+        } catch (error) {
+            console.error('提交請假申請失敗:', error);
+            showToast('提交請假申請失敗，請稍後再試', true);
+        } finally {
+            showLoading(false);
         }
     });
     
@@ -481,7 +629,12 @@ function openTempLeaveModal() {
     buttonContainer.appendChild(confirmButton);
     modal.appendChild(title);
     modal.appendChild(reasonLabel);
-    modal.appendChild(reasonInput);
+    modal.appendChild(reasonSelect);
+    modal.appendChild(otherReasonInput);
+    modal.appendChild(startDateLabel);
+    modal.appendChild(startDateInput);
+    modal.appendChild(endDateLabel);
+    modal.appendChild(endDateInput);
     modal.appendChild(buttonContainer);
     
     // 添加到頁面
@@ -491,11 +644,6 @@ function openTempLeaveModal() {
 
 // 特殊勤務彈窗
 function openSpecialDutyModal() {
-    if (!state.currentLocation) {
-        showToast("無法取得目前位置，請稍後再試", true);
-        return;
-    }
-    
     // 創建彈窗背景
     const backdrop = document.createElement('div');
     backdrop.id = 'modal-backdrop';
@@ -511,16 +659,87 @@ function openSpecialDutyModal() {
     title.className = 'text-lg font-bold mb-4 text-center';
     title.textContent = '特殊勤務';
     
-    // 勤務說明輸入框
+    // 創建勤務項目選擇
     const dutyLabel = document.createElement('label');
     dutyLabel.className = 'block text-sm font-medium text-gray-700 mb-1';
-    dutyLabel.textContent = '勤務說明';
+    dutyLabel.textContent = '勤務項目';
     
-    const dutyInput = document.createElement('textarea');
-    dutyInput.id = 'duty-description';
-    dutyInput.className = 'w-full border border-gray-300 rounded-md p-2 mb-4';
-    dutyInput.rows = 3;
-    dutyInput.placeholder = '請輸入特殊勤務說明';
+    const dutySelect = document.createElement('select');
+    dutySelect.id = 'duty-type-select';
+    dutySelect.className = 'w-full border border-gray-300 rounded-md p-2 mb-4';
+    
+    // 添加選項
+    const options = ['例行督察', '簡報', '例會', '區大', '臨時會', '其他'];
+    options.forEach(option => {
+        const optionElement = document.createElement('option');
+        optionElement.value = option;
+        optionElement.textContent = option;
+        dutySelect.appendChild(optionElement);
+    });
+    
+    // 創建其他項目輸入框（當選擇"其他"時顯示）
+    const otherDutyInput = document.createElement('input');
+    otherDutyInput.id = 'other-duty-type';
+    otherDutyInput.type = 'text';
+    otherDutyInput.className = 'w-full border border-gray-300 rounded-md p-2 mb-4 hidden';
+    otherDutyInput.placeholder = '請輸入勤務項目';
+    
+    // 添加選擇變更事件
+    dutySelect.addEventListener('change', () => {
+        if (dutySelect.value === '其他') {
+            otherDutyInput.classList.remove('hidden');
+        } else {
+            otherDutyInput.classList.add('hidden');
+        }
+    });
+    
+    // 創建地點輸入
+    const locationLabel = document.createElement('label');
+    locationLabel.className = 'block text-sm font-medium text-gray-700 mb-1';
+    locationLabel.textContent = '地點';
+    
+    const locationInput = document.createElement('input');
+    locationInput.id = 'duty-location';
+    locationInput.type = 'text';
+    locationInput.className = 'w-full border border-gray-300 rounded-md p-2 mb-4';
+    locationInput.placeholder = '請輸入勤務地點';
+    
+    // 創建日期時間區間
+    const startDateLabel = document.createElement('label');
+    startDateLabel.className = 'block text-sm font-medium text-gray-700 mb-1';
+    startDateLabel.textContent = '開始時間';
+    
+    const startDateInput = document.createElement('input');
+    startDateInput.id = 'duty-start-time';
+    startDateInput.type = 'datetime-local';
+    startDateInput.className = 'w-full border border-gray-300 rounded-md p-2 mb-4';
+    
+    // 設置預設值為當前時間
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    startDateInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
+    
+    const endDateLabel = document.createElement('label');
+    endDateLabel.className = 'block text-sm font-medium text-gray-700 mb-1';
+    endDateLabel.textContent = '結束時間';
+    
+    const endDateInput = document.createElement('input');
+    endDateInput.id = 'duty-end-time';
+    endDateInput.type = 'datetime-local';
+    endDateInput.className = 'w-full border border-gray-300 rounded-md p-2 mb-4';
+    
+    // 設置預設值為當前時間加4小時
+    const endTime = new Date(now.getTime() + 4 * 60 * 60 * 1000);
+    const endYear = endTime.getFullYear();
+    const endMonth = String(endTime.getMonth() + 1).padStart(2, '0');
+    const endDay = String(endTime.getDate()).padStart(2, '0');
+    const endHours = String(endTime.getHours()).padStart(2, '0');
+    const endMinutes = String(endTime.getMinutes()).padStart(2, '0');
+    endDateInput.value = `${endYear}-${endMonth}-${endDay}T${endHours}:${endMinutes}`;
     
     // 按鈕容器
     const buttonContainer = document.createElement('div');
@@ -536,13 +755,87 @@ function openSpecialDutyModal() {
     const confirmButton = document.createElement('button');
     confirmButton.className = 'px-4 py-2 bg-indigo-500 text-white rounded-md hover:bg-indigo-600';
     confirmButton.textContent = '確認勤務';
-    confirmButton.addEventListener('click', () => {
-        const description = document.getElementById('duty-description').value.trim();
-        if (description) {
+    confirmButton.addEventListener('click', async () => {
+        // 獲取勤務項目
+        let dutyType = dutySelect.value;
+        if (dutyType === '其他') {
+            dutyType = otherDutyInput.value.trim();
+            if (!dutyType) {
+                showToast('請輸入勤務項目', true);
+                return;
+            }
+        }
+        
+        // 獲取地點
+        const location = locationInput.value.trim();
+        if (!location) {
+            showToast('請輸入勤務地點', true);
+            return;
+        }
+        
+        // 獲取時間區間
+        const startTime = new Date(startDateInput.value);
+        const endTime = new Date(endDateInput.value);
+        
+        // 驗證時間
+        if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
+            showToast('請輸入有效的時間', true);
+            return;
+        }
+        
+        if (startTime >= endTime) {
+            showToast('結束時間必須晚於開始時間', true);
+            return;
+        }
+        
+        try {
+            showLoading(true);
+            
+            // 獲取當前用戶
+            const user = firebase.auth().currentUser;
+            if (!user) {
+                showToast('請先登入', true);
+                showLoading(false);
+                return;
+            }
+            
+            // 創建特殊勤務記錄
+            const dutyData = {
+                userId: user.uid,
+                userName: state.currentUser.displayName || user.email,
+                dutyType: dutyType,
+                location: location,
+                startTime: firebase.firestore.Timestamp.fromDate(startTime),
+                endTime: firebase.firestore.Timestamp.fromDate(endTime),
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            };
+            
+            // 保存到 Firestore
+            await firebase.firestore().collection('specialDuties').add(dutyData);
+            
+            // 更新用戶狀態
+            await firebase.firestore().collection('users').doc(user.uid).update({
+                clockInStatus: '特殊勤務',
+                dutyType: dutyType,
+                dutyLocation: location,
+                dutyStartTime: firebase.firestore.Timestamp.fromDate(startTime),
+                dutyEndTime: firebase.firestore.Timestamp.fromDate(endTime)
+            });
+            
+            // 更新本地狀態
+            state.clockInStatus = '特殊勤務';
+            
+            // 更新狀態顯示
+            updateStatusDisplay();
+            updateButtonStatus();
+            
+            showToast('特殊勤務已登記');
             closeAllModals();
-            openCameraModal('特殊勤務', state.currentLocation, { description });
-        } else {
-            showToast('請輸入勤務說明', true);
+        } catch (error) {
+            console.error('登記特殊勤務失敗:', error);
+            showToast('登記特殊勤務失敗，請稍後再試', true);
+        } finally {
+            showLoading(false);
         }
     });
     
@@ -551,7 +844,14 @@ function openSpecialDutyModal() {
     buttonContainer.appendChild(confirmButton);
     modal.appendChild(title);
     modal.appendChild(dutyLabel);
-    modal.appendChild(dutyInput);
+    modal.appendChild(dutySelect);
+    modal.appendChild(otherDutyInput);
+    modal.appendChild(locationLabel);
+    modal.appendChild(locationInput);
+    modal.appendChild(startDateLabel);
+    modal.appendChild(startDateInput);
+    modal.appendChild(endDateLabel);
+    modal.appendChild(endDateInput);
     modal.appendChild(buttonContainer);
     
     // 添加到頁面
