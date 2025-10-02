@@ -178,7 +178,7 @@
         <div class="text-center mb-8">
             <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mx-auto text-red-600"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"></path><path d="m9 12 2 2 4-4"></path></svg>
             <h1 class="text-2xl font-bold text-gray-800 mt-4">西北勤務打卡系統</h1>
-            <p class="text-gray-500">雲端測試版V2.2.3</p>
+            <p class="text-gray-500">雲端測試版V2.2.0</p>
         </div>
         <form id="login-form">
             <div class="mb-4">
@@ -753,7 +753,10 @@
                         
                         // 外出打卡需要先輸入地點
                         if (type === "外出") {
-                            openLocationInputModal(type, state.currentLocation);
+                            openLocationInputModal();
+                        } else if (type === "抵達" || type === "離開" || type === "返回") {
+                            // 抵達、離開、返回打卡也需要拍照
+                            openCameraModal(type, state.currentLocation);
                         } else if (type === "臨時請假" || type === "特殊勤務") {
                             // 不執行相機操作
                         } else {
@@ -1630,9 +1633,10 @@
                         
                         // 日期過濾
                         const selectedDate = date ? new Date(date) : null;
+                        let nextDay = null;
                         if (selectedDate) {
                             selectedDate.setHours(0, 0, 0, 0);
-                            const nextDay = new Date(selectedDate);
+                            nextDay = new Date(selectedDate);
                             nextDay.setDate(nextDay.getDate() + 1);
                         }
                         
@@ -1643,7 +1647,7 @@
                             const leaveId = doc.id;
                             
                             // 如果選擇了日期，檢查請假時間是否在所選日期範圍內
-                            if (selectedDate) {
+                            if (selectedDate && nextDay) {
                                 const startTime = leave.startTime.toDate();
                                 const endTime = leave.endTime.toDate();
                                 
@@ -1841,7 +1845,7 @@
                                 <img src="${user.avatarUrl || `https://placehold.co/32x32/EFEFEF/333333?text=${user.name.charAt(0)}`}" class="w-8 h-8 rounded-full mr-3 object-cover">
                                 <div>
                                     <p class="font-medium text-sm text-gray-800">${user.name}</p>
-                                    <p class="text-xs text-gray-500">${user.status || '未打卡'}</p>
+                                    <p class="text-xs text-gray-500">${getStatusDisplayText(user.status, user.lastLocation?.address) || '未打卡'}</p>
                                 </div>
                             </div>
                             <span class="text-xs text-gray-400">${user.lastClockInTime ? timeAgo(user.lastClockInTime.toDate()) : '無紀錄'}</span>
@@ -1866,7 +1870,7 @@
                                 content: `
                                     <div class="p-1">
                                         <p class="font-bold">${user.name}</p>
-                                        <p>狀態: ${user.status}</p>
+                                        <p>狀態: ${getStatusDisplayText(user.status, user.lastLocation?.address)}</p>
                                         <p>時間: ${user.lastClockInTime ? user.lastClockInTime.toDate().toLocaleTimeString('zh-TW') : 'N/A'}</p>
                                     </div>
                                 `
@@ -3649,5 +3653,4 @@
         });
     </script>
 </body>
-
 </html>

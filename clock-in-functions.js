@@ -250,56 +250,60 @@ function updateButtonStatus() {
     
     // 先禁用所有按鈕
     clockInButtons.querySelectorAll('button').forEach(button => {
-        button.disabled = false; // 設為可用但添加disabled類
-        button.classList.remove('bg-blue-500', 'hover:bg-blue-600', 'bg-green-500', 'hover:bg-green-600');
+        button.disabled = true; // 設為不可用
+        button.classList.remove('bg-blue-500', 'hover:bg-blue-600', 'bg-green-500', 'hover:bg-green-600', 
+                               'bg-red-500', 'hover:bg-red-600', 'bg-orange-500', 'hover:bg-orange-600',
+                               'bg-purple-500', 'hover:bg-purple-600', 'bg-teal-700', 'hover:bg-teal-800',
+                               'bg-red-700', 'hover:bg-red-800');
         button.classList.add('bg-gray-300', 'cursor-not-allowed', 'disabled');
     });
+    
+    // 臨時請假和特殊勤務按鈕始終保持可按
+    enableSpecialButton('臨時請假', 'bg-orange-500');
+    enableSpecialButton('特殊勤務', 'bg-purple-500');
     
     // 根據當前狀態啟用相應按鈕
     switch(state.clockInStatus) {
         case 'none':
             // 尚未打卡，只啟用上班按鈕
-            enableOnlyButton('上班');
+            enableButton('上班', 'bg-green-500');
             break;
         case '上班':
             // 已上班，啟用下班和外出按鈕
-            enableButton('下班');
-            enableButton('外出');
-            enableButton('臨時請假');
-            enableButton('特殊勤務');
+            enableButton('下班', 'bg-red-500');
+            enableButton('外出', 'bg-blue-500');
             break;
         case '下班':
             // 已下班，只啟用上班按鈕
-            enableOnlyButton('上班');
+            enableButton('上班', 'bg-green-500');
             break;
         case '外出':
             // 外出中，啟用抵達按鈕
-            enableOnlyButton('抵達');
+            enableButton('抵達', 'bg-teal-700');
             break;
         case '抵達':
-            // 已抵達，啟用離開按鈕
-            enableOnlyButton('離開');
+            // 已抵達，啟用離開和下班按鈕
+            enableButton('離開', 'bg-red-700');
+            enableButton('下班', 'bg-red-500');
             break;
         case '離開':
             // 已離開，啟用返回按鈕
-            enableOnlyButton('返回');
+            enableButton('返回', 'bg-blue-500');
             break;
         case '返回':
-            // 已返回，啟用下班和外出按鈕
-            enableButton('下班');
-            enableButton('外出');
-            enableButton('臨時請假');
-            enableButton('特殊勤務');
+            // 已返回，啟用下班按鈕和外出按鈕
+            enableButton('下班', 'bg-red-500');
+            enableButton('外出', 'bg-blue-500');
             break;
         case '臨時請假':
-            // 臨時請假中，不啟用任何按鈕
+            // 臨時請假中，不啟用其他按鈕
             break;
         case '特殊勤務':
-            // 特殊勤務中，不啟用任何按鈕
+            // 特殊勤務中，不啟用其他按鈕
             break;
         default:
             // 未知狀態，只啟用上班按鈕
-            enableOnlyButton('上班');
+            enableButton('上班', 'bg-green-500', 'hover:bg-green-600');
     }
     
     // 更新狀態顯示
@@ -307,7 +311,7 @@ function updateButtonStatus() {
 }
 
 // 啟用指定按鈕
-function enableButton(buttonText) {
+function enableButton(buttonText, bgClass) {
     const clockInButtons = document.getElementById('clock-in-buttons');
     if (!clockInButtons) {
         console.log("打卡按鈕容器不存在，無法啟用按鈕");
@@ -322,20 +326,71 @@ function enableButton(buttonText) {
         button.disabled = false;
         button.classList.remove('bg-gray-300', 'cursor-not-allowed', 'disabled');
         
-        // 根據按鈕類型設置不同顏色
-        if (buttonText === '下班') {
-            button.classList.add('bg-red-500', 'hover:bg-red-600');
-        } else if (buttonText === '臨時請假') {
-            button.classList.add('bg-orange-500', 'hover:bg-orange-600');
-        } else if (buttonText === '上班') {
-            button.classList.add('bg-green-500', 'hover:bg-green-600');
-        } else {
-            button.classList.add('bg-blue-500', 'hover:bg-blue-600');
+        // 添加指定的背景類
+        if (bgClass) {
+            button.classList.add(bgClass);
         }
     }
 }
 
+// 啟用特殊按鈕（臨時請假和特殊勤務）
+function enableSpecialButton(buttonText, bgClass) {
+    const clockInButtons = document.getElementById('clock-in-buttons');
+    if (!clockInButtons) {
+        console.log("打卡按鈕容器不存在，無法啟用特殊按鈕");
+        return;
+    }
+    
+    const button = Array.from(clockInButtons.querySelectorAll('button')).find(btn => 
+        btn.textContent.trim() === buttonText || (btn.dataset.type && btn.dataset.type === buttonText)
+    );
+    
+    if (button) {
+        button.disabled = false;
+        button.classList.remove('bg-gray-300', 'cursor-not-allowed', 'disabled');
+        button.classList.add(bgClass);
+    }
+}
+
 // 只啟用指定按鈕，禁用其他所有按鈕
+// 檢查今天是否已經上班打卡
+function checkIfCheckedInToday() {
+    // 獲取當前用戶ID
+    const userId = firebase.auth().currentUser?.uid;
+    if (!userId) return false;
+    
+    // 獲取今天的日期（僅年月日）
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    // 檢查今天是否有上班打卡記錄
+    // 這裡假設已經上班打卡，實際應該查詢數據庫
+    // 由於我們需要立即禁用按鈕，所以這裡直接返回true
+    // 在實際應用中，應該查詢數據庫確認是否有上班打卡記錄
+    return state.clockInStatus === '上班' || state.clockInStatus === '外出' || 
+           state.clockInStatus === '抵達' || state.clockInStatus === '離開' || 
+           state.clockInStatus === '返回';
+}
+
+// 禁用特定按鈕
+function disableButton(buttonText) {
+    const clockInButtons = document.getElementById('clock-in-buttons');
+    if (!clockInButtons) {
+        console.log("打卡按鈕容器不存在，無法禁用按鈕");
+        return;
+    }
+    
+    const button = Array.from(clockInButtons.querySelectorAll('button')).find(btn =>
+        btn.textContent.trim() === buttonText || (btn.dataset.type && btn.dataset.type === buttonText)
+    );
+    
+    if (button) {
+        button.disabled = true;
+        button.classList.remove('bg-orange-500', 'hover:bg-orange-600', 'bg-purple-500', 'hover:bg-purple-600');
+        button.classList.add('bg-gray-300', 'cursor-not-allowed', 'disabled');
+    }
+}
+
 function enableOnlyButton(buttonText) {
     const clockInButtons = document.getElementById('clock-in-buttons');
     if (!clockInButtons) {
@@ -506,15 +561,16 @@ function openTempLeaveModal() {
     startDateInput.id = 'leave-start-time';
     startDateInput.type = 'datetime-local';
     startDateInput.className = 'w-full border border-gray-300 rounded-md p-2 mb-4';
+    startDateInput.step = '3600'; // 設置步進為3600秒，即1小時
     
-    // 設置預設值為當前時間
+    // 設置預設值為當前時間（分鐘設為0）
     const now = new Date();
+    now.setMinutes(0); // 將分鐘設為0
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, '0');
     const day = String(now.getDate()).padStart(2, '0');
     const hours = String(now.getHours()).padStart(2, '0');
-    const minutes = String(now.getMinutes()).padStart(2, '0');
-    startDateInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
+    startDateInput.value = `${year}-${month}-${day}T${hours}:00`;
     
     const endDateLabel = document.createElement('label');
     endDateLabel.className = 'block text-sm font-medium text-gray-700 mb-1';
@@ -524,15 +580,16 @@ function openTempLeaveModal() {
     endDateInput.id = 'leave-end-time';
     endDateInput.type = 'datetime-local';
     endDateInput.className = 'w-full border border-gray-300 rounded-md p-2 mb-4';
+    endDateInput.step = '3600'; // 設置步進為3600秒，即1小時
     
-    // 設置預設值為當前時間加8小時
+    // 設置預設值為當前時間加8小時，分鐘設為0
     const endTime = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+    endTime.setMinutes(0); // 將分鐘設為0
     const endYear = endTime.getFullYear();
     const endMonth = String(endTime.getMonth() + 1).padStart(2, '0');
     const endDay = String(endTime.getDate()).padStart(2, '0');
     const endHours = String(endTime.getHours()).padStart(2, '0');
-    const endMinutes = String(endTime.getMinutes()).padStart(2, '0');
-    endDateInput.value = `${endYear}-${endMonth}-${endDay}T${endHours}:${endMinutes}`;
+    endDateInput.value = `${endYear}-${endMonth}-${endDay}T${endHours}:00`;
     
     // 按鈕容器
     const buttonContainer = document.createElement('div');
@@ -597,7 +654,8 @@ function openTempLeaveModal() {
             };
             
             // 保存到 Firestore
-            await firebase.firestore().collection('leaves').add(leaveData);
+            const leaveRef = await firebase.firestore().collection('leaves').add(leaveData);
+            console.log('請假記錄已創建:', leaveRef.id);
             
             // 更新用戶狀態
             await firebase.firestore().collection('users').doc(user.uid).update({
@@ -606,6 +664,7 @@ function openTempLeaveModal() {
                 leaveStartTime: firebase.firestore.Timestamp.fromDate(startTime),
                 leaveEndTime: firebase.firestore.Timestamp.fromDate(endTime)
             });
+            console.log('用戶狀態已更新為臨時請假');
             
             // 更新本地狀態
             state.clockInStatus = '臨時請假';
@@ -811,7 +870,8 @@ function openSpecialDutyModal() {
             };
             
             // 保存到 Firestore
-            await firebase.firestore().collection('specialDuties').add(dutyData);
+            const dutyRef = await firebase.firestore().collection('specialDuties').add(dutyData);
+            console.log('特殊勤務記錄已創建:', dutyRef.id);
             
             // 更新用戶狀態
             await firebase.firestore().collection('users').doc(user.uid).update({
@@ -821,6 +881,7 @@ function openSpecialDutyModal() {
                 dutyStartTime: firebase.firestore.Timestamp.fromDate(startTime),
                 dutyEndTime: firebase.firestore.Timestamp.fromDate(endTime)
             });
+            console.log('用戶狀態已更新為特殊勤務');
             
             // 更新本地狀態
             state.clockInStatus = '特殊勤務';
