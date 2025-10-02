@@ -178,7 +178,7 @@
         <div class="text-center mb-8">
             <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mx-auto text-red-600"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"></path><path d="m9 12 2 2 4-4"></path></svg>
             <h1 class="text-2xl font-bold text-gray-800 mt-4">西北勤務打卡系統</h1>
-            <p class="text-gray-500">雲端測試版  V2.2.6</p>
+            <p class="text-gray-500">雲端測試版V2.2.0</p>
         </div>
         <form id="login-form">
             <div class="mb-4">
@@ -745,7 +745,7 @@
                         }
                         
                         if (!state.currentLocation) {
-                            showToast("無法取得目前位置，請稍後再試", true);
+                            alert("無法取得目前位置，請稍後再試");
                             return;
                         }
                         
@@ -753,7 +753,72 @@
                         
                         // 外出打卡需要先輸入地點
                         if (type === "外出") {
-                            openLocationInputModal();
+                            // 直接打開地點輸入彈窗
+                            const backdrop = document.createElement('div');
+                            backdrop.id = 'modal-backdrop';
+                            backdrop.className = 'fixed inset-0 bg-black bg-opacity-50 z-40';
+                            backdrop.addEventListener('click', () => {
+                                document.body.removeChild(backdrop);
+                                document.body.removeChild(modal);
+                            });
+                            
+                            // 創建彈窗
+                            const modal = document.createElement('div');
+                            modal.id = 'location-input-modal';
+                            modal.className = 'fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg p-6 z-50 w-80';
+                            
+                            // 創建標題
+                            const title = document.createElement('h3');
+                            title.className = 'text-lg font-semibold mb-4';
+                            title.textContent = '請輸入外出地點';
+                            
+                            // 創建輸入框
+                            const input = document.createElement('input');
+                            input.id = 'outbound-location';
+                            input.type = 'text';
+                            input.className = 'w-full border border-gray-300 rounded-md p-2 mb-4';
+                            input.placeholder = '例如：客戶公司、醫院等';
+                            
+                            // 創建按鈕容器
+                            const buttonContainer = document.createElement('div');
+                            buttonContainer.className = 'flex justify-end space-x-2';
+                            
+                            // 創建取消按鈕
+                            const cancelButton = document.createElement('button');
+                            cancelButton.className = 'px-4 py-2 bg-gray-200 text-gray-800 rounded-md';
+                            cancelButton.textContent = '取消';
+                            cancelButton.addEventListener('click', () => {
+                                document.body.removeChild(backdrop);
+                                document.body.removeChild(modal);
+                            });
+                            
+                            // 創建確認按鈕
+                            const confirmButton = document.createElement('button');
+                            confirmButton.className = 'px-4 py-2 bg-blue-500 text-white rounded-md';
+                            confirmButton.textContent = '確認';
+                            confirmButton.addEventListener('click', () => {
+                                const locationText = document.getElementById('outbound-location').value.trim();
+                                 if (locationText) {
+                                     state.outboundLocation = locationText;
+                                     document.body.removeChild(backdrop);
+                                     document.body.removeChild(modal);
+                                     // 打開相機
+                                     openCameraModal(type, locationText);
+                                 } else {
+                                     alert('請輸入外出地點');
+                                 }
+                            });
+                            
+                            // 組裝彈窗
+                            buttonContainer.appendChild(cancelButton);
+                            buttonContainer.appendChild(confirmButton);
+                            modal.appendChild(title);
+                            modal.appendChild(input);
+                            modal.appendChild(buttonContainer);
+                            
+                            // 添加到頁面
+                            document.body.appendChild(backdrop);
+                            document.body.appendChild(modal);
                         } else if (type === "抵達" || type === "離開" || type === "返回") {
                             // 抵達、離開、返回打卡也需要拍照
                             openCameraModal(type, state.currentLocation);
@@ -3653,6 +3718,4 @@
         });
     </script>
 </body>
-
 </html>
-
