@@ -178,7 +178,7 @@
         <div class="text-center mb-8">
             <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mx-auto text-red-600"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"></path><path d="m9 12 2 2 4-4"></path></svg>
             <h1 class="text-2xl font-bold text-gray-800 mt-4">西北勤務打卡系統</h1>
-            <p class="text-gray-500">雲端測試版  V2.2.2</p>
+            <p class="text-gray-500">雲端測試版V2.2.0</p>
         </div>
         <form id="login-form">
             <div class="mb-4">
@@ -421,12 +421,16 @@
                 const navTracking = document.getElementById('nav-tracking');
                 const navSettings = document.getElementById('nav-settings');
 
-                if (state.currentUserData.role !== 'admin') {
-                    navTracking.classList.add('hide');
-                    navSettings.classList.add('hide');
-                } else {
+                // 管理員可以看到所有按鈕，主管可以看到追蹤按鈕
+                if (state.currentUserData.role === 'admin') {
                     navTracking.classList.remove('hide');
                     navSettings.classList.remove('hide');
+                } else if (state.currentUserData.role === 'manager') {
+                    navTracking.classList.remove('hide');
+                    navSettings.classList.add('hide');
+                } else {
+                    navTracking.classList.add('hide');
+                    navSettings.classList.add('hide');
                 }
                 
                 loginPage.classList.add('hide');
@@ -473,7 +477,7 @@
                 const router = {
                     'dashboard': renderDashboard,
                     'clock-in': () => renderClockIn(subPage || 'location'),
-                    'tracking': () => state.currentUserData.role === 'admin' ? renderTracking(subPage || 'map') : renderAccessDenied(),
+                    'tracking': () => state.currentUserData.role === 'admin' || state.currentUserData.role === 'manager' ? renderTracking(subPage || 'map') : renderAccessDenied(),
                     'settings': () => state.currentUserData.role === 'admin' ? renderSettings(subPage || 'accounts') : renderAccessDenied(),
                     'features': () => renderFeatures(subPage || 'news')
                 };
@@ -1953,7 +1957,15 @@
                                     <p class="text-sm text-gray-500">${user.email}</p>
                                     <div class="flex items-center">
                                         <p class="text-xs text-gray-400 mr-2">${user.phone || ''}</p>
-                                        <span class="text-xs px-2 py-1 rounded-full ${user.role === 'admin' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}">${user.role === 'admin' ? '管理員' : '員工'}</span>
+                                        <span class="text-xs px-2 py-1 rounded-full ${
+  user.role === 'admin' ? 'bg-red-100 text-red-700' : 
+  user.role === 'manager' ? 'bg-purple-100 text-purple-700' : 
+  'bg-blue-100 text-blue-700'
+}">${
+  user.role === 'admin' ? '管理員' : 
+  user.role === 'manager' ? '主管' : 
+  '員工'
+}</span>
                                     </div>
                                 </div>
                             </div>
@@ -2717,10 +2729,8 @@
                                     <img id="user-avatar-preview" src="${isEditing && user.avatarUrl ? user.avatarUrl : defaultAvatar}" class="w-20 h-20 rounded-full object-cover">
                                     <input type="file" id="user-avatar-upload" class="hidden" accept="image/*">
                                     <div class="flex space-x-2">
-                                        ${!isEditing ? `
                                         <button type="button" id="user-upload-avatar-btn" class="text-sm px-3 py-1 bg-gray-200 rounded-md">上傳照片</button>
                                         <button type="button" id="user-camera-avatar-btn" class="text-sm px-3 py-1 bg-gray-200 rounded-md">開啟相機</button>
-                                        ` : `<p class="text-sm text-gray-500">已存在帳號無法編輯頭像</p>`}
                                     </div>
                                 </div>
                                 
@@ -2755,6 +2765,7 @@
                                     <label for="user-role" class="block text-sm font-medium text-gray-700">角色 (必填)</label>
                                     <select id="user-role" class="w-full mt-1 px-3 py-2 border rounded-md">
                                         <option value="user" ${isEditing && user.role === 'user' ? 'selected' : ''}>員工 (User)</option>
+                                        <option value="manager" ${isEditing && user.role === 'manager' ? 'selected' : ''}>主管 (Manager)</option>
                                         <option value="admin" ${isEditing && user.role === 'admin' ? 'selected' : ''}>管理員 (Admin)</option>
                                     </select>
                                 </div>
@@ -2777,16 +2788,23 @@
                 const avatarUploadInput = document.getElementById('user-avatar-upload');
 
                 // --- Avatar Logic ---
-                if (!isEditing) {
-                    document.getElementById('user-upload-avatar-btn').addEventListener('click', () => avatarUploadInput.click());
-                    avatarUploadInput.addEventListener('change', (e) => {
-                        const file = e.target.files[0];
-                        if (file) {
-                            newUserAvatarFile = file;
-                            avatarPreview.src = URL.createObjectURL(file);
-                        }
-                    });
-                    document.getElementById('user-camera-avatar-btn').addEventListener('click', () => {
+                // 允許所有用戶（包括編輯現有用戶）上傳頭像
+                const uploadBtn = document.getElementById('user-upload-avatar-btn');
+                if (uploadBtn) {
+                    uploadBtn.addEventListener('click', () => avatarUploadInput.click());
+                }
+                
+                avatarUploadInput.addEventListener('change', (e) => {
+                    const file = e.target.files[0];
+                    if (file) {
+                        newUserAvatarFile = file;
+                        avatarPreview.src = URL.createObjectURL(file);
+                    }
+                });
+                
+                const cameraBtn = document.getElementById('user-camera-avatar-btn');
+                if (cameraBtn) {
+                    cameraBtn.addEventListener('click', () => {
                         openAvatarCameraModal((blob) => {
                             if (blob) {
                                 newUserAvatarFile = blob;
@@ -3631,6 +3649,4 @@
         });
     </script>
 </body>
-
 </html>
-

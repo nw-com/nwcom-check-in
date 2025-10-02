@@ -1,0 +1,50 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 為了讓儀表板能顯示所有員工的狀態，允許所有登入的使用者讀取所有人的基本資料。
+    // 使用者仍然只能更新自己的個人資料，但管理員可以更新所有用戶資料。
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow update: if request.auth.uid == userId || 
+                     get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      // 只有管理員可以建立或刪除使用者文件
+      allow create, delete: if get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // 允許所有登入的使用者讀取所有人的打卡紀錄。
+    // 注意：Firestore 的讀取權限是針對整個文件，無法只開放部分欄位。
+    // 使用者仍然只能為自己建立打卡紀錄。
+    match /clockInRecords/{recordId} {
+      allow create: if request.auth.uid == request.resource.data.userId;
+      allow read: if request.auth != null;
+      // 為確保紀錄的完整性，不允許更新或刪除
+      allow update, delete: if false;
+    }
+    
+    // 只有管理員可以讀寫計點規則
+    match /pointRules/{ruleId} {
+      allow read, write: if get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // 允許用戶和管理員上傳和更新大頭照
+    match /userAvatars/{userId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth.uid == userId || 
+                    get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // 允許用戶提交請假申請
+    match /leaves/{leaveId} {
+      allow create: if request.auth.uid == request.resource.data.userId;
+      allow read: if request.auth != null;
+      allow update, delete: if false;
+    }
+    
+    // 允許用戶提交特殊勤務申請
+    match /specialDuties/{dutyId} {
+      allow create: if request.auth.uid == request.resource.data.userId;
+      allow read: if request.auth != null;
+      allow update, delete: if false;
+    }
+  }
+}
