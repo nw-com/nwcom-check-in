@@ -10,6 +10,11 @@ if (typeof state.clockInStatus === 'undefined') {
     state.clockInStatus = 'none';
 }
 
+// 一次性錯誤提示旗標（避免重複提示）
+if (typeof state.autoSettingsErrorPromptShown === 'undefined') {
+    state.autoSettingsErrorPromptShown = false;
+}
+
 // 根據狀態更新顯示文本和樣式
 function updateStatusTextAndStyle(statusText, statusDisplay) {
     switch(state.clockInStatus) {
@@ -20,6 +25,10 @@ function updateStatusTextAndStyle(statusText, statusDisplay) {
         case '下班':
             statusText.textContent = '已下班';
             statusDisplay.className = 'mb-4 p-3 rounded-lg text-center bg-red-100 text-red-800';
+            break;
+        case '已下班-未打卡':
+            statusText.textContent = '已下班-未打卡';
+            statusDisplay.className = 'mb-4 p-3 rounded-lg text-center bg-yellow-100 text-yellow-800';
             break;
         case '外出':
             let outboundText = '外出中';
@@ -139,6 +148,9 @@ function updateDashboardStatus() {
             case '下班':
                 statusText = '已下班';
                 break;
+            case '已下班-未打卡':
+                statusText = '已下班-未打卡';
+                break;
             case '外出':
                 statusText = '外出中';
                 if (state.outboundLocation) {
@@ -231,6 +243,12 @@ function initClockInButtonStatus() {
         
         // 更新狀態顯示
         updateStatusDisplay();
+        
+        // 檢查是否有超時需要自動下班打卡的情況
+        setTimeout(() => {
+            checkAndHandleOvertimeClockOut();
+        }, 1000); // 延遲1秒執行，確保狀態已更新
+        
     }).catch(error => {
         console.error("獲取用戶狀態失敗:", error);
         showToast("獲取用戶狀態失敗，請重新整理頁面", true);
@@ -261,6 +279,21 @@ function updateButtonStatus() {
     // 臨時請假和特殊勤務按鈕始終保持可按
     enableSpecialButton('臨時請假', 'bg-orange-500');
     enableSpecialButton('特殊勤務', 'bg-purple-500');
+
+    // 複合循環按鈕（外出/抵達/離開/返回）動態設定器
+    const setOutboundCycleButton = (nextType, label, bgClass) => {
+        const cycleBtn = document.getElementById('outbound-cycle-btn');
+        if (!cycleBtn) return;
+        cycleBtn.dataset.type = nextType;
+        cycleBtn.textContent = label;
+        cycleBtn.disabled = false;
+        cycleBtn.classList.remove('bg-gray-300', 'cursor-not-allowed', 'disabled',
+                                  'bg-blue-500', 'hover:bg-blue-600', 'bg-teal-700', 'hover:bg-teal-800',
+                                  'bg-red-700', 'hover:bg-red-800');
+        if (bgClass) {
+            cycleBtn.classList.add(bgClass);
+        }
+    };
     
     // 根據當前狀態啟用相應按鈕
     switch(state.clockInStatus) {
@@ -269,31 +302,36 @@ function updateButtonStatus() {
             enableButton('上班', 'bg-green-500');
             break;
         case '上班':
-            // 已上班，啟用下班和外出按鈕
+            // 已上班，啟用下班與循環按鈕（下一步：外出）
             enableButton('下班', 'bg-red-500');
-            enableButton('外出', 'bg-blue-500');
+            setOutboundCycleButton('外出', '外出打卡', 'bg-blue-500');
             break;
         case '下班':
             // 已下班，只啟用上班按鈕
             enableButton('上班', 'bg-green-500');
             break;
+        case '已下班-未打卡':
+            // 已下班但未打卡，啟用上班和下班按鈕
+            enableButton('上班', 'bg-green-500');
+            enableButton('下班', 'bg-red-500');
+            break;
         case '外出':
-            // 外出中，啟用抵達按鈕
-            enableButton('抵達', 'bg-teal-700');
+            // 外出中，循環按鈕切換至「抵達」
+            setOutboundCycleButton('抵達', '抵達打卡', 'bg-teal-700');
             break;
         case '抵達':
-            // 已抵達，啟用離開和下班按鈕
-            enableButton('離開', 'bg-red-700');
+            // 已抵達，循環按鈕切換至「離開」，同時可下班
+            setOutboundCycleButton('離開', '離開打卡', 'bg-red-700');
             enableButton('下班', 'bg-red-500');
             break;
         case '離開':
-            // 已離開，啟用返回按鈕
-            enableButton('返回', 'bg-blue-500');
+            // 已離開，循環按鈕切換至「返回」
+            setOutboundCycleButton('返回', '返回打卡', 'bg-blue-500');
             break;
         case '返回':
-            // 已返回，啟用下班按鈕和外出按鈕
+            // 已返回，循環按鈕回到「外出」，同時可下班
             enableButton('下班', 'bg-red-500');
-            enableButton('外出', 'bg-blue-500');
+            setOutboundCycleButton('外出', '外出打卡', 'bg-blue-500');
             break;
         case '臨時請假':
             // 臨時請假中，不啟用其他按鈕
@@ -947,14 +985,338 @@ function closeAllModals() {
     }
 }
 
-// 添加事件監聽器
-document.addEventListener('DOMContentLoaded', function() {
-    // 外出按鈕
-    const outboundButton = document.querySelector('#clock-in-buttons button:nth-child(3)');
-    if (outboundButton) {
-        outboundButton.addEventListener('click', openLocationInputModal);
+// 自動下班打卡相關變數
+let autoClockOutTimer = null;
+let autoClockOutSettings = {
+    enabled: false,
+    workHours: 8,
+    loaded: false
+};
+
+// 載入自動下班打卡設定
+async function loadAutoClockOutSettings() {
+    try {
+        const user = firebase.auth().currentUser;
+        // 未登入時不讀取遠端設定，使用預設值
+        if (!user) {
+            autoClockOutSettings.enabled = false;
+            autoClockOutSettings.workHours = 8;
+            autoClockOutSettings.loaded = false;
+            console.log('未登入，略過遠端自動下班設定載入，使用預設值');
+            return autoClockOutSettings;
+        }
+
+        const settingsRef = firebase.firestore().collection('settings').doc('general');
+        const doc = await settingsRef.get();
+        autoClockOutSettings.loaded = true;
+
+        if (doc.exists) {
+            const settings = doc.data() || {};
+            // 啟用旗標健全化處理（支援布林或可轉換值）
+            const enabledRaw = settings.enableAutoClockOut;
+            autoClockOutSettings.enabled = typeof enabledRaw === 'boolean' ? enabledRaw : !!enabledRaw;
+
+            // 工時健全化：需為正數，否則回退為8
+            let hours = parseFloat(settings.workHours);
+            if (!isFinite(hours) || hours <= 0) {
+                hours = 8;
+            }
+            autoClockOutSettings.workHours = hours;
+        } else {
+            // 設定文件不存在，使用預設值
+            autoClockOutSettings.enabled = false;
+            autoClockOutSettings.workHours = 8;
+        }
+
+        return autoClockOutSettings;
+    } catch (error) {
+        console.error('載入自動下班打卡設定失敗:', error);
+        // 失敗時使用安全預設
+        autoClockOutSettings.enabled = false;
+        autoClockOutSettings.workHours = 8;
+        autoClockOutSettings.loaded = false;
+        // 一次性提示
+        if (!state.autoSettingsErrorPromptShown && typeof showToast === 'function') {
+            state.autoSettingsErrorPromptShown = true;
+            showToast('無法讀取自動下班設定，已使用預設值', true);
+            // 60 秒後允許再次提示
+            setTimeout(() => { state.autoSettingsErrorPromptShown = false; }, 60000);
+        }
+        return autoClockOutSettings;
+    }
+}
+
+// 啟動自動下班打卡計時器
+function startAutoClockOutTimer() {
+    // 清除現有計時器
+    if (autoClockOutTimer) {
+        clearTimeout(autoClockOutTimer);
+        autoClockOutTimer = null;
     }
     
+    // 如果未啟用自動下班打卡，則不啟動計時器
+    if (!autoClockOutSettings.enabled) {
+        return;
+    }
+    
+    // 計算工作時數的毫秒數
+    const workHoursMs = autoClockOutSettings.workHours * 60 * 60 * 1000;
+    
+    console.log(`啟動自動下班打卡計時器，將在 ${autoClockOutSettings.workHours} 小時後自動下班打卡`);
+    
+    // 設定計時器
+    autoClockOutTimer = setTimeout(async () => {
+        try {
+            await performAutoClockOut();
+        } catch (error) {
+            console.error('自動下班打卡失敗:', error);
+        }
+    }, workHoursMs);
+}
+
+// 執行自動下班打卡
+async function performAutoClockOut() {
+    try {
+        const user = firebase.auth().currentUser;
+        if (!user) {
+            console.error('用戶未登入，無法執行自動下班打卡');
+            return;
+        }
+        
+        // 檢查當前狀態是否為上班
+        const userDoc = await firebase.firestore().collection('users').doc(user.uid).get();
+        if (!userDoc.exists || userDoc.data().clockInStatus !== '上班') {
+            console.log('當前狀態不是上班，取消自動下班打卡');
+            return;
+        }
+        
+        // 獲取最後的位置信息
+        const lastLocation = userDoc.data().lastLocation;
+        if (!lastLocation) {
+            console.error('無法獲取最後位置，自動下班打卡失敗');
+            return;
+        }
+        
+        // 創建自動下班打卡記錄
+        const recordData = {
+            userId: user.uid,
+            type: '自動下班',
+            timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+            location: lastLocation,
+            photoUrls: [],
+            descriptions: [],
+            isAutomatic: true
+        };
+        
+        // 保存打卡記錄
+        await firebase.firestore().collection('clockInRecords').add(recordData);
+        
+        // 更新用戶狀態為「已下班-未打卡」
+        const userUpdateData = {
+            status: '已下班-未打卡',
+            clockInStatus: '已下班-未打卡',
+            lastClockInTime: firebase.firestore.FieldValue.serverTimestamp(),
+            autoClockOutTime: firebase.firestore.FieldValue.serverTimestamp()
+        };
+        
+        await firebase.firestore().collection('users').doc(user.uid).update(userUpdateData);
+        
+        // 更新本地狀態
+        state.clockInStatus = '已下班-未打卡';
+        
+        // 更新頁面顯示
+        updateStatusDisplay();
+        
+        // 顯示通知
+        showToast('已自動執行下班打卡，狀態：已下班-未打卡');
+        
+        console.log('自動下班打卡執行成功');
+        
+    } catch (error) {
+        console.error('自動下班打卡執行失敗:', error);
+        showToast('自動下班打卡失敗，請手動打卡', true);
+    }
+}
+
+// 停止自動下班打卡計時器
+function stopAutoClockOutTimer() {
+    if (autoClockOutTimer) {
+        clearTimeout(autoClockOutTimer);
+        autoClockOutTimer = null;
+        console.log('已停止自動下班打卡計時器');
+    }
+}
+
+// 檢查當前用戶是否已超時並需要自動下班打卡
+async function checkAndHandleOvertimeClockOut() {
+    try {
+        const user = firebase.auth().currentUser;
+        if (!user) {
+            console.log('用戶未登入，無法檢查超時狀態');
+            return;
+        }
+        
+        // 載入自動下班打卡設定
+        await loadAutoClockOutSettings();
+        
+        // 如果未啟用自動下班打卡，則不處理
+        if (!autoClockOutSettings.enabled) {
+            console.log('自動下班打卡未啟用，跳過超時檢查');
+            return;
+        }
+        
+        // 獲取用戶當前狀態
+        const userDoc = await firebase.firestore().collection('users').doc(user.uid).get();
+        if (!userDoc.exists) {
+            console.log('用戶資料不存在');
+            return;
+        }
+        
+        const userData = userDoc.data();
+        const currentStatus = userData.clockInStatus;
+        const lastClockInTime = userData.lastClockInTime;
+        
+        // 只處理上班狀態的用戶
+        if (currentStatus !== '上班' || !lastClockInTime) {
+            console.log(`當前狀態：${currentStatus}，不需要檢查超時`);
+            return;
+        }
+        
+        // 計算上班時間
+        const clockInTime = lastClockInTime.toDate ? lastClockInTime.toDate() : new Date(lastClockInTime);
+        const now = new Date();
+        const workingHours = (now - clockInTime) / (1000 * 60 * 60); // 轉換為小時
+        
+        console.log(`用戶已工作 ${workingHours.toFixed(2)} 小時，設定工作時數：${autoClockOutSettings.workHours} 小時`);
+        
+        // 如果已超過設定的工作時數，執行自動下班打卡
+        if (workingHours >= autoClockOutSettings.workHours) {
+            console.log('檢測到超時上班，執行自動下班打卡');
+            await performAutoClockOut();
+        } else {
+            // 如果還沒超時，計算剩餘時間並啟動計時器
+            const remainingHours = autoClockOutSettings.workHours - workingHours;
+            const remainingMs = remainingHours * 60 * 60 * 1000;
+            
+            console.log(`距離自動下班還有 ${remainingHours.toFixed(2)} 小時，啟動計時器`);
+            
+            // 清除現有計時器
+            if (autoClockOutTimer) {
+                clearTimeout(autoClockOutTimer);
+            }
+            
+            // 設定新的計時器
+            autoClockOutTimer = setTimeout(async () => {
+                try {
+                    await performAutoClockOut();
+                } catch (error) {
+                    console.error('自動下班打卡失敗:', error);
+                }
+            }, remainingMs);
+        }
+        
+    } catch (error) {
+        console.error('檢查超時狀態失敗:', error);
+    }
+}
+
+// 檢查所有用戶的超時狀態（管理員功能）
+async function checkAllUsersOvertimeStatus() {
+    try {
+        // 載入自動下班打卡設定
+        await loadAutoClockOutSettings();
+        
+        if (!autoClockOutSettings.enabled) {
+            console.log('自動下班打卡未啟用，跳過全員超時檢查');
+            return;
+        }
+        
+        // 獲取所有用戶
+        const usersSnapshot = await firebase.firestore().collection('users').get();
+        const overtimeUsers = [];
+        
+        usersSnapshot.forEach(doc => {
+            const userData = doc.data();
+            const userId = doc.id;
+            const currentStatus = userData.clockInStatus;
+            const lastClockInTime = userData.lastClockInTime;
+            
+            // 只檢查上班狀態的用戶
+            if (currentStatus === '上班' && lastClockInTime) {
+                const clockInTime = lastClockInTime.toDate ? lastClockInTime.toDate() : new Date(lastClockInTime);
+                const now = new Date();
+                const workingHours = (now - clockInTime) / (1000 * 60 * 60);
+                
+                if (workingHours >= autoClockOutSettings.workHours) {
+                    overtimeUsers.push({
+                        userId,
+                        displayName: userData.displayName || userData.email || userId,
+                        workingHours: workingHours.toFixed(2),
+                        clockInTime: clockInTime
+                    });
+                }
+            }
+        });
+        
+        if (overtimeUsers.length > 0) {
+            console.log(`發現 ${overtimeUsers.length} 位用戶超時：`, overtimeUsers);
+            
+            // 自動為所有超時用戶執行下班打卡並更新狀態
+            for (const ou of overtimeUsers) {
+                try {
+                    const userRef = firebase.firestore().collection('users').doc(ou.userId);
+                    const userDoc = await userRef.get();
+                    const data = userDoc.exists ? userDoc.data() : {};
+                    const lastLocation = data.lastLocation || '系統自動-未知位置';
+                    
+                    const recordData = {
+                        userId: ou.userId,
+                        type: '自動下班',
+                        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                        location: lastLocation,
+                        photoUrls: [],
+                        descriptions: [],
+                        isAutomatic: true
+                    };
+                    
+                    await firebase.firestore().collection('clockInRecords').add(recordData);
+                    
+                    await userRef.update({
+                        status: '已下班-未打卡',
+                        clockInStatus: '已下班-未打卡',
+                        autoClockOutTime: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                } catch (err) {
+                    console.error(`自動下班處理失敗（${ou.userId}）:`, err);
+                }
+            }
+            
+            if (typeof window !== 'undefined' && typeof window.showToast === 'function') {
+                window.showToast(`已自動為 ${overtimeUsers.length} 位同事執行下班打卡，狀態更新為「已下班-未打卡」`);
+            } else {
+                alert(`已自動為 ${overtimeUsers.length} 位同事執行下班打卡，狀態更新為「已下班-未打卡」`);
+            }
+        } else {
+            console.log('沒有發現超時的用戶');
+        }
+        
+        return overtimeUsers;
+        
+    } catch (error) {
+        console.error('檢查全員超時狀態失敗:', error);
+        return [];
+    }
+}
+
+// 將函數添加到全域作用域
+window.checkAndHandleOvertimeClockOut = checkAndHandleOvertimeClockOut;
+window.checkAllUsersOvertimeStatus = checkAllUsersOvertimeStatus;
+
+// 添加事件監聽器
+document.addEventListener('DOMContentLoaded', function() {
     // 初始化打卡按鈕狀態
     setTimeout(initClockInButtonStatus, 1000);
+    
+    // 載入自動下班打卡設定
+    setTimeout(loadAutoClockOutSettings, 1000);
 });

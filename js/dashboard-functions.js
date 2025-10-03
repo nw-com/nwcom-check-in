@@ -7,7 +7,7 @@
  * @returns {string} 格式化的工作時間
  */
 function calculateWorkingTime(status, clockInTime) {
-    if (!clockInTime || status === '下班' || status === '未打卡') {
+    if (!clockInTime || status === '下班' || status === '未打卡' || status === '已下班-未打卡') {
         return '';
     }
     
@@ -37,6 +37,7 @@ function getStatusDisplayText(status, location) {
     switch(status) {
         case '上班': return '上班中-辦公室';
         case '下班': return '已下班';
+        case '已下班-未打卡': return '已下班-未打卡';
         case '外出': return location ? `外出-${location}` : '外出中';
         case '抵達': return location ? `抵達-${location}` : '抵達';
         case '離開': return location ? `離開-${location}` : '離開';
@@ -54,6 +55,7 @@ function getStatusDisplayText(status, location) {
  */
 function getStatusColor(status) {
     if (status.includes('上班中')) return 'text-green-600';
+    if (status.includes('已下班-未打卡')) return 'text-yellow-600';
     if (status.includes('已下班')) return 'text-red-600';
     if (status.includes('外出-')) return 'text-emerald-700';
     if (status.includes('抵達-')) return 'text-blue-600';
