@@ -206,7 +206,7 @@ function initClockInButtonStatus() {
     // 檢查按鈕容器是否存在
     const clockInButtons = document.getElementById('clock-in-buttons');
     if (!clockInButtons) {
-        console.log("打卡按鈕容器不存在，稍後重試");
+        console.debug("打卡按鈕容器不存在，稍後重試");
         setTimeout(initClockInButtonStatus, 500);
         return;
     }
@@ -262,7 +262,7 @@ function updateButtonStatus() {
     // 先檢查按鈕容器是否存在
     const clockInButtons = document.getElementById('clock-in-buttons');
     if (!clockInButtons) {
-        console.log("打卡按鈕容器不存在，無法更新按鈕狀態");
+        console.debug("打卡按鈕容器不存在，無法更新按鈕狀態");
         return;
     }
     
@@ -352,7 +352,7 @@ function updateButtonStatus() {
 function enableButton(buttonText, bgClass) {
     const clockInButtons = document.getElementById('clock-in-buttons');
     if (!clockInButtons) {
-        console.log("打卡按鈕容器不存在，無法啟用按鈕");
+        console.debug("打卡按鈕容器不存在，無法啟用按鈕");
         return;
     }
     
@@ -375,7 +375,7 @@ function enableButton(buttonText, bgClass) {
 function enableSpecialButton(buttonText, bgClass) {
     const clockInButtons = document.getElementById('clock-in-buttons');
     if (!clockInButtons) {
-        console.log("打卡按鈕容器不存在，無法啟用特殊按鈕");
+        console.debug("打卡按鈕容器不存在，無法啟用特殊按鈕");
         return;
     }
     
@@ -414,7 +414,7 @@ function checkIfCheckedInToday() {
 function disableButton(buttonText) {
     const clockInButtons = document.getElementById('clock-in-buttons');
     if (!clockInButtons) {
-        console.log("打卡按鈕容器不存在，無法禁用按鈕");
+        console.debug("打卡按鈕容器不存在，無法禁用按鈕");
         return;
     }
     
@@ -432,7 +432,7 @@ function disableButton(buttonText) {
 function enableOnlyButton(buttonText) {
     const clockInButtons = document.getElementById('clock-in-buttons');
     if (!clockInButtons) {
-        console.log("打卡按鈕容器不存在，無法啟用按鈕");
+        console.debug("打卡按鈕容器不存在，無法啟用按鈕");
         return;
     }
     
@@ -1105,7 +1105,8 @@ async function performAutoClockOut() {
             location: lastLocation,
             photoUrls: [],
             descriptions: [],
-            isAutomatic: true
+            isAutomatic: true,
+            deviceId: (window.state && window.state.deviceId) ? window.state.deviceId : 'unknown-device'
         };
         
         // 保存打卡記錄
@@ -1276,7 +1277,8 @@ async function checkAllUsersOvertimeStatus() {
                         location: lastLocation,
                         photoUrls: [],
                         descriptions: [],
-                        isAutomatic: true
+                        isAutomatic: true,
+                        deviceId: (window.state && window.state.deviceId) ? window.state.deviceId : 'unknown-device'
                     };
                     
                     await firebase.firestore().collection('clockInRecords').add(recordData);
@@ -1314,9 +1316,7 @@ window.checkAllUsersOvertimeStatus = checkAllUsersOvertimeStatus;
 
 // 添加事件監聽器
 document.addEventListener('DOMContentLoaded', function() {
-    // 初始化打卡按鈕狀態
-    setTimeout(initClockInButtonStatus, 1000);
-    
-    // 載入自動下班打卡設定
+    // 僅在定位打卡子頁面渲染後，由該頁面呼叫 initClockInButtonStatus。
+    // 保留設定載入，可供自動下班邏輯使用（例如上班打卡後啟動計時器）。
     setTimeout(loadAutoClockOutSettings, 1000);
 });
