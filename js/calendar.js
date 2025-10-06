@@ -53,6 +53,8 @@ function renderCalendarOverview(container) {
     const currentDate = new Date();
     const currentYear = currentDate.getFullYear();
     const currentMonth = currentDate.getMonth();
+    // 使用可變日期狀態以支援連續月份切換
+    let displayedDate = new Date(currentYear, currentMonth, 1);
     
     container.innerHTML = `
         <div class="p-4 space-y-4">
@@ -82,20 +84,22 @@ function renderCalendarOverview(container) {
             </div>
         </div>`;
     
-    generateCalendar(currentYear, currentMonth);
-    loadMonthlyEvents(currentYear, currentMonth);
+    generateCalendar(displayedDate.getFullYear(), displayedDate.getMonth());
+    loadMonthlyEvents(displayedDate.getFullYear(), displayedDate.getMonth());
     
     // 月份切換事件
     document.getElementById('prev-month').addEventListener('click', () => {
-        const newDate = new Date(currentYear, currentMonth - 1);
-        generateCalendar(newDate.getFullYear(), newDate.getMonth());
-        loadMonthlyEvents(newDate.getFullYear(), newDate.getMonth());
+        // 向前一個月（自目前顯示的月份）
+        displayedDate.setMonth(displayedDate.getMonth() - 1);
+        generateCalendar(displayedDate.getFullYear(), displayedDate.getMonth());
+        loadMonthlyEvents(displayedDate.getFullYear(), displayedDate.getMonth());
     });
     
     document.getElementById('next-month').addEventListener('click', () => {
-        const newDate = new Date(currentYear, currentMonth + 1);
-        generateCalendar(newDate.getFullYear(), newDate.getMonth());
-        loadMonthlyEvents(newDate.getFullYear(), newDate.getMonth());
+        // 向後一個月（自目前顯示的月份）
+        displayedDate.setMonth(displayedDate.getMonth() + 1);
+        generateCalendar(displayedDate.getFullYear(), displayedDate.getMonth());
+        loadMonthlyEvents(displayedDate.getFullYear(), displayedDate.getMonth());
     });
 }
 

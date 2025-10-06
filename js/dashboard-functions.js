@@ -7,7 +7,7 @@
  * @returns {string} 格式化的工作時間
  */
 function calculateWorkingTime(status, clockInTime) {
-    if (!clockInTime || status === '下班' || status === '未打卡') {
+    if (!clockInTime || status === '下班' || status === '未打卡' || status === '已下班-未打卡') {
         return '';
     }
     
@@ -35,13 +35,14 @@ function calculateWorkingTime(status, clockInTime) {
  */
 function getStatusDisplayText(status, location) {
     switch(status) {
-        case '上班': return '上班中-辦公室';
+        case '上班': return '上班中-在辦公司';
         case '下班': return '已下班';
+        case '已下班-未打卡': return '已下班-未打卡';
         case '外出': return location ? `外出-${location}` : '外出中';
         case '抵達': return location ? `抵達-${location}` : '抵達';
         case '離開': return location ? `離開-${location}` : '離開';
-        case '返回': return '返回-辦公室';
-        case '臨時請假': return location ? `請假-${location}` : '請假中';
+        case '返回': return '返回-在辦公司';
+        case '臨時請假': return '請假申請';
         case '特殊勤務': return location ? `出勤-${location}` : '出勤中';
         default: return '尚未打卡';
     }
@@ -53,14 +54,13 @@ function getStatusDisplayText(status, location) {
  * @returns {string} 對應的CSS顏色類
  */
 function getStatusColor(status) {
-    if (status.includes('上班中')) return 'text-green-600';
+    if (status.includes('上班')) return 'text-green-600';
+    if (status.includes('已下班-未打卡')) return 'text-yellow-600';
     if (status.includes('已下班')) return 'text-red-600';
-    if (status.includes('外出-')) return 'text-emerald-700';
-    if (status.includes('抵達-')) return 'text-blue-600';
-    if (status.includes('離開-')) return 'text-amber-800';
-    if (status.includes('返回-')) return 'text-pink-600';
-    if (status.includes('請假中')) return 'text-orange-500';
-    if (status.includes('出勤中')) return 'text-purple-600';
+    if (status.includes('外出') || status.includes('抵達') || status.includes('離開')) return 'text-blue-600';
+    if (status.includes('返回')) return 'text-green-600';
+    if (status.includes('請假')) return 'text-orange-600';
+    if (status.includes('出勤')) return 'text-purple-600';
     return 'text-gray-500';
 }
 

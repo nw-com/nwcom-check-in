@@ -164,7 +164,7 @@ function updateDashboardStatus() {
         let statusText = '';
         switch(state.clockInStatus) {
             case '上班':
-                statusText = '上班中-在辦公司';
+                statusText = '上班中-辦公室';
                 break;
             case '下班':
                 statusText = '已下班';
@@ -191,7 +191,7 @@ function updateDashboardStatus() {
                 }
                 break;
             case '返回':
-                statusText = '返回-在辦公司';
+                statusText = '返回-辦公室';
                 break;
         case '臨時請假':
             statusText = (state.leaveStatus === 'approved') ? '已請假' : '請假申請';
