@@ -33,17 +33,36 @@ function calculateWorkingTime(status, clockInTime) {
  * @param {string} location - 位置信息
  * @returns {string} 格式化的狀態文本
  */
-function getStatusDisplayText(status, location) {
+function getStatusDisplayText(status, location, dutyType) {
     switch(status) {
-        case '上班': return '上班中-在辦公司';
+        case '上班': return '上班中-辦公室';
         case '下班': return '已下班';
         case '已下班-未打卡': return '已下班-未打卡';
-        case '外出': return location ? `外出-${location}` : '外出中';
-        case '抵達': return location ? `抵達-${location}` : '抵達';
-        case '離開': return location ? `離開-${location}` : '離開';
-        case '返回': return '返回-在辦公司';
+        case '外出': {
+            if (dutyType && location) return `外出-${dutyType}-${location}`;
+            if (dutyType) return `外出-${dutyType}`;
+            if (location) return `外出-${location}`;
+            return '外出中';
+        }
+        case '抵達': {
+            if (dutyType && location) return `抵達-${dutyType}-${location}`;
+            if (dutyType) return `抵達-${dutyType}`;
+            if (location) return `抵達-${location}`;
+            return '抵達';
+        }
+        case '離開': {
+            if (dutyType && location) return `離開-${dutyType}-${location}`;
+            if (dutyType) return `離開-${dutyType}`;
+            if (location) return `離開-${location}`;
+            return '離開';
+        }
+        case '返回': return '返回-辦公室';
         case '臨時請假': return '請假申請';
-        case '特殊勤務': return location ? `出勤-${location}` : '出勤中';
+        case '特殊勤務': {
+            if (dutyType) return `出勤-${dutyType}`;
+            if (location) return `出勤-${location}`;
+            return '出勤中';
+        }
         default: return '尚未打卡';
     }
 }

@@ -664,7 +664,7 @@
                                             </div>
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap">
-                                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(getStatusDisplayText(r.type || '未知', r.locationName || null))}">${getStatusDisplayText(r.type || '未知', r.locationName || null)}</span>
+<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(getStatusDisplayText(r.type || '未知', r.locationName || null, r.dutyType || null))}">${getStatusDisplayText(r.type || '未知', r.locationName || null, r.dutyType || null)}</span>
                                             ${hasAnomalies ? '<div class="text-xs text-red-600 mt-1">c?�Xa�M�M</div>' : ''}
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${ts.toLocaleString('zh-TW')}</td>
@@ -860,30 +860,38 @@
                     // e??a??a??a�M?e!��c?oc??a??c?�Le�?
                     const visibleUsersList = users.filter(user => visibleUsers[user.id] !== false);
                     
+                    // e|?a�M?c?�L��a�P: a�M?c?-/e??a?? > a??a?o/a?�ge??/e?�Fe?? > a�M?c?-/a�P2a�M?c?--a?aa??a?! > e?�La??e??a??/a?�Xa??a??
+                    const statusPriority = (s) => {
+                        switch (s) {
+                            case 'a�M?c?-':
+                            case 'e??a??':
+                                return 1;
+                            case 'a??a?o':
+                            case 'a?�ge??':
+                            case 'e?�Fe??':
+                                return 2;
+                            case 'a�M?c?-':
+                            case 'a�P2a�M?c?--a?aa??a?!':
+                                return 3;
+                            case 'e?�La??e??a??':
+                            case 'a?�Xa??a??':
+                                return 4;
+                            default:
+                                return 5;
+                        }
+                    };
+
                     visibleUsersList.sort((a, b) => {
-                        // e|?a??a??c?�a??a??ao?i??a�?a�M?c?-a�M-a�?c??a??a?�La?�a??e?�F
-                        const statusA = getStatusDisplayText(a.clockInStatus || 'a?aa??a?!', a.lastLocation);
-                        const statusB = getStatusDisplayText(b.clockInStatus || 'a?aa??a?!', b.lastLocation);
-                        
-                        if (statusA.includes('a�M?c?-a�M-') && !statusB.includes('a�M?c?-a�M-')) {
-                            return -1;
-                        }
-                        if (!statusA.includes('a�M?c?-a�M-') && statusB.includes('a�M?c?-a�M-')) {
-                            return 1;
-                        }
-                        
-                        // a|?a??e??a?��a�?a�M?c?-a�M-a�?c?�a??i??a??a??a??a?!a??e??a??ao?i??e??a?ce??a�M?e?�Fi??
-                        if (statusA.includes('a�M?c?-a�M-') && statusB.includes('a�M?c?-a�M-')) {
-                            const timeA = a.lastClockInTime ? a.lastClockInTime.toDate() : new Date(0);
-                            const timeB = b.lastClockInTime ? b.lastClockInTime.toDate() : new Date(0);
-                            return timeA - timeB;
-                        }
-                        
-                        // a??a??a??a3?a??a��?a??a??ao?
+                        const prA = statusPriority(a.clockInStatus || '');
+                        const prB = statusPriority(b.clockInStatus || '');
+                        if (prA !== prB) return prA - prB;
+                        const tA = a.lastUpdated ? (a.lastUpdated.toDate ? a.lastUpdated.toDate() : new Date(a.lastUpdated)) : new Date(0);
+                        const tB = b.lastUpdated ? (b.lastUpdated.toDate ? b.lastUpdated.toDate() : new Date(b.lastUpdated)) : new Date(0);
+                        if (tA.getTime() !== tB.getTime()) return tB - tA;
                         return a.name.localeCompare(b.name, 'zh-Hant');
                     }).forEach(user => {
                         const locationText = user.clockInStatus === 'a??a?o' && user.outboundLocation ? user.outboundLocation : user.lastLocation;
-                        const statusText = getStatusDisplayText(user.clockInStatus || 'a?aa??a?!', locationText);
+                        const statusText = getStatusDisplayText(user.clockInStatus || 'a?aa??a?!', locationText, user.dutyType);
                         const statusColor = getStatusColor(statusText);
                         if (user.id === state.currentUser.uid) {
                             myStatusFound = true;
@@ -981,21 +989,38 @@
                     }
                     const visibleUsersList = users.filter(user => visibleUsers[user.id] !== false);
                     
-                    // a??ao?i??a�M?c?-a�M-a?aa??i??c??a??a??e??i??a?�a??a��?a??
-                    visibleUsersList.sort((a, b) => {
-                        const statusA = getStatusDisplayText(a.clockInStatus || 'a?aa??a?!', a.lastLocation);
-                        const statusB = getStatusDisplayText(b.clockInStatus || 'a?aa??a?!', b.lastLocation);
-                        if (statusA.includes('a�M?c?-a�M-') && !statusB.includes('a�M?c?-a�M-')) return -1;
-                        if (!statusA.includes('a�M?c?-a�M-') && statusB.includes('a�M?c?-a�M-')) return 1;
-                        if (statusA.includes('a�M?c?-a�M-') && statusB.includes('a�M?c?-a�M-')) {
-                            const timeA = a.lastClockInTime ? a.lastClockInTime.toDate() : new Date(0);
-                            const timeB = b.lastClockInTime ? b.lastClockInTime.toDate() : new Date(0);
-                            return timeA - timeB;
+                    // 排序：狀態優先級 + 最近更新時間（新至舊） + 姓名
+                    const statusPriority = (s) => {
+                        switch (s) {
+                            case '上班':
+                            case '返回':
+                                return 1;
+                            case '外出':
+                            case '抵達':
+                            case '離開':
+                                return 2;
+                            case '下班':
+                            case '已下班-未打卡':
+                                return 3;
+                            case '臨時請假':
+                            case '特殊勤務':
+                                return 4;
+                            default:
+                                return 5;
                         }
+                    };
+
+                    visibleUsersList.sort((a, b) => {
+                        const prA = statusPriority(a.clockInStatus || '');
+                        const prB = statusPriority(b.clockInStatus || '');
+                        if (prA !== prB) return prA - prB;
+                        const tA = a.lastUpdated ? (a.lastUpdated.toDate ? a.lastUpdated.toDate() : new Date(a.lastUpdated)) : new Date(0);
+                        const tB = b.lastUpdated ? (b.lastUpdated.toDate ? b.lastUpdated.toDate() : new Date(b.lastUpdated)) : new Date(0);
+                        if (tA.getTime() !== tB.getTime()) return tB - tA;
                         return a.name.localeCompare(b.name, 'zh-Hant');
                     }).forEach(user => {
                         const locationText = user.clockInStatus === 'a??a?o' && user.outboundLocation ? user.outboundLocation : user.lastLocation;
-                        const statusText = getStatusDisplayText(user.clockInStatus || 'a?aa??a?!', locationText);
+                        const statusText = getStatusDisplayText(user.clockInStatus || 'a?aa??a?!', locationText, user.dutyType);
                         const statusColor = getStatusColor(statusText);
                         const clockInTime = user.lastClockInTime ? new Date(user.lastClockInTime.toDate()) : null;
                         const timeFormatted = clockInTime ? clockInTime.toLocaleString('zh-TW', {year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'}) : 'N/A';
@@ -1965,7 +1990,7 @@
                         filtered.forEach(record => {
                             const card = document.createElement('div');
                             card.className = 'bg-white p-3 rounded-lg shadow-sm border mb-3';
-                            const statusText = getStatusDisplayText(record.type || '未知', record.locationName || null);
+const statusText = getStatusDisplayText(record.type || '未知', record.locationName || null, record.dutyType || null);
                             const statusColor = getStatusColor(statusText);
                             card.innerHTML = `
                                 <div class="flex justify-between items-start">
@@ -2136,7 +2161,7 @@
                     <div class="h-full w-full relative">
                         <div id="group-map" class="h-full w-full"></div>
                         <div id="group-map-loader" class="absolute inset-0 bg-white/70 flex items-center justify-center"><div class="loader"></div></div>
-                        <button id="group-map-center-btn" class="absolute bottom-3 right-3 bg-white text-gray-700 border border-gray-300 rounded-full shadow px-3 py-2 flex items-center hover:bg-gray-50">
+<button id="group-map-center-btn" class="absolute top-3 right-3 z-10 bg-white text-gray-700 border border-gray-300 rounded-full shadow px-3 py-2 flex items-center hover:bg-gray-50">
                             <i data-lucide="focus" class="w-4 h-4 mr-2"></i>回到公司
                         </button>
                         <div class="absolute bottom-0 left-0 right-0 p-2">
@@ -2213,7 +2238,7 @@
                                 <img src="${user.avatarUrl || `https://placehold.co/32x32/EFEFEF/333333?text=${user.name.charAt(0)}`}" class="w-8 h-8 rounded-full mr-3 object-cover">
                                 <div>
                                     <p class="font-medium text-sm text-gray-800">${user.name}</p>
-                                    <p class="text-xs text-gray-500">${getStatusDisplayText(user.status, user.lastLocation?.address) || 'a?aa??a?!'}</p>
+<p class="text-xs text-gray-500">${getStatusDisplayText(user.status, user.lastLocation?.address, user.dutyType) || 'a?aa??a?!'}</p>
                                 </div>
                             </div>
                             <span class="text-xs text-gray-400">${user.lastClockInTime ? 'a?�e??c?�a??a??e??i??' + timeAgo(user.lastClockInTime.toDate()) : 'c?!c���e??'}</span>
@@ -2228,7 +2253,7 @@
                             const infoWindow = new google.maps.InfoWindow({ content: `
                                 <div class="p-1">
                                     <p class="font-bold">${user.name}</p>
-                                    <p>c?�a??: ${getStatusDisplayText(user.status, user.lastLocation?.address)}</p>
+<p>c?�a??: ${getStatusDisplayText(user.status, user.lastLocation?.address, user.dutyType)}</p>
                                     <p>a?�e??c?�a??a??e??: ${user.lastClockInTime ? formatDateTime(user.lastClockInTime) : 'N/A'}</p>
                                 </div>` });
                             marker.addListener('click', () => infoWindow.open({ anchor: marker, map: state.groupMap }));
@@ -2326,7 +2351,7 @@
                                     <div class="font-semibold">${userName}</div>
                                     <div class="text-sm text-gray-500">${time.toLocaleString('zh-TW')}</div>
                                     <div class="mt-1 flex items-center">
-                                        <span class="px-2 py-0.5 rounded text-sm ${getStatusBgColor(getStatusDisplayText(record.type || '未知', record.locationName || null))}">${getStatusDisplayText(record.type || '未知', record.locationName || null)}</span>
+<span class="px-2 py-0.5 rounded text-sm ${getStatusBgColor(getStatusDisplayText(record.type || '未知', record.locationName || null, record.dutyType || null))}">${getStatusDisplayText(record.type || '未知', record.locationName || null, record.dutyType || null)}</span>
                         ${record.location && typeof record.location.latitude === 'number' && typeof record.location.longitude === 'number' ? `<span class="ml-2 text-sm text-gray-500">${record.location.latitude.toFixed(6)}, ${record.location.longitude.toFixed(6)}</span>` : ''}
                                     </div>
                                     <div class="mt-1 text-xs text-gray-500">裝置ID: ${record.deviceId || '未知'}</div>
@@ -2389,7 +2414,7 @@
                     <div class="h-full w-full relative">
                         <div id="tracking-map" class="h-full w-full"></div>
                         <div id="tracking-map-loader" class="absolute inset-0 bg-white/70 flex items-center justify-center"><div class="loader"></div></div>
-                        <button id="tracking-map-center-btn" class="absolute bottom-3 right-3 bg-white text-gray-700 border border-gray-300 rounded-full shadow px-3 py-2 flex items-center hover:bg-gray-50">
+<button id="tracking-map-center-btn" class="absolute top-3 right-3 z-10 bg-white text-gray-700 border border-gray-300 rounded-full shadow px-3 py-2 flex items-center hover:bg-gray-50">
                             <i data-lucide="focus" class="w-4 h-4 mr-2"></i>回到公司
                         </button>
                         <div class="absolute bottom-0 left-0 right-0 p-2">
@@ -2561,7 +2586,7 @@
                                             <div class="font-semibold">${userName}</div>
                                             <div class="text-sm text-gray-500">${time.toLocaleString('zh-TW')}</div>
                                             <div class="mt-1 flex items-center">
-                                                <span class="px-2 py-0.5 rounded text-sm ${getStatusBgColor(getStatusDisplayText(record.type || '未知', record.locationName || null))}">${getStatusDisplayText(record.type || '未知', record.locationName || null)}</span>
+<span class="px-2 py-0.5 rounded text-sm ${getStatusBgColor(getStatusDisplayText(record.type || '未知', record.locationName || null, record.dutyType || null))}">${getStatusDisplayText(record.type || '未知', record.locationName || null, record.dutyType || null)}</span>
                         ${record.location && typeof record.location.latitude === 'number' && typeof record.location.longitude === 'number' ? `<span class="ml-2 text-sm text-gray-500">${record.location.latitude.toFixed(6)}, ${record.location.longitude.toFixed(6)}</span>` : ''}
                                             </div>
                                             ${record.deviceId ? `<div class="mt-1 text-xs text-gray-500">e�G?c?RID: ${record.deviceId}</div>` : ''}

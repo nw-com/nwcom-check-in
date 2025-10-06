@@ -655,7 +655,7 @@
                             recs.forEach(r => {
                                 const rowClass = hasAnomalies ? 'bg-red-50' : '';
                                 const ts = r.timestamp?.toDate?.() || (r.timestamp ? new Date(r.timestamp) : new Date());
-                                const statusText = getStatusDisplayText(r.type || '未知', r.locationName || null);
+const statusText = getStatusDisplayText(r.type || '未知', r.locationName || null, r.dutyType || null);
                                 const statusColorClass = getStatusColor(statusText);
                                 html += `
                                     <tr class="${rowClass}">
@@ -864,30 +864,39 @@
                     // 過濾掉不顯示的使用者
                     const visibleUsersList = users.filter(user => visibleUsers[user.id] !== false);
                     
+                    // 狀態優先級：上班/返回 > 外出/抵達/離開 > 下班/未打卡 > 請假/特殊勤務
+                    const statusPriority = (s) => {
+                        switch (s) {
+                            case '上班':
+                            case '返回':
+                                return 1;
+                            case '外出':
+                            case '抵達':
+                            case '離開':
+                                return 2;
+                            case '下班':
+                            case '已下班-未打卡':
+                                return 3;
+                            case '臨時請假':
+                            case '特殊勤務':
+                                return 4;
+                            default:
+                                return 5;
+                        }
+                    };
+
                     visibleUsersList.sort((a, b) => {
-                        // 首先按狀態排序：「上班中」的排在最前面
-                        const statusA = getStatusDisplayText(a.clockInStatus || '未打卡', a.lastLocation);
-                        const statusB = getStatusDisplayText(b.clockInStatus || '未打卡', b.lastLocation);
-                        
-                        if (statusA.includes('上班中') && !statusB.includes('上班中')) {
-                            return -1;
-                        }
-                        if (!statusA.includes('上班中') && statusB.includes('上班中')) {
-                            return 1;
-                        }
-                        
-                        // 如果都是「上班中」狀態，則按打卡時間排序（越早越上面）
-                        if (statusA.includes('上班中') && statusB.includes('上班中')) {
-                            const timeA = a.lastClockInTime ? a.lastClockInTime.toDate() : new Date(0);
-                            const timeB = b.lastClockInTime ? b.lastClockInTime.toDate() : new Date(0);
-                            return timeA - timeB;
-                        }
-                        
-                        // 其他情況按姓名排序
+                        const prA = statusPriority(a.clockInStatus || '');
+                        const prB = statusPriority(b.clockInStatus || '');
+                        if (prA !== prB) return prA - prB;
+                        // 同優先級用最近更新時間（lastUpdated）新到舊
+                        const tA = a.lastUpdated ? (a.lastUpdated.toDate ? a.lastUpdated.toDate() : new Date(a.lastUpdated)) : new Date(0);
+                        const tB = b.lastUpdated ? (b.lastUpdated.toDate ? b.lastUpdated.toDate() : new Date(b.lastUpdated)) : new Date(0);
+                        if (tA.getTime() !== tB.getTime()) return tB - tA;
                         return a.name.localeCompare(b.name, 'zh-Hant');
                     }).forEach(user => {
                         const locationText = user.clockInStatus === '外出' && user.outboundLocation ? user.outboundLocation : user.lastLocation;
-                        const statusText = getStatusDisplayText(user.clockInStatus || '未打卡', locationText);
+                        const statusText = getStatusDisplayText(user.clockInStatus || '未打卡', locationText, user.dutyType);
                         const statusColor = getStatusColor(statusText);
                         if (user.id === state.currentUser.uid) {
                             myStatusFound = true;
@@ -985,21 +994,38 @@
                     }
                     const visibleUsersList = users.filter(user => visibleUsers[user.id] !== false);
                     
-                    // 排序：上班中優先，然後時間，最後姓名
-                    visibleUsersList.sort((a, b) => {
-                        const statusA = getStatusDisplayText(a.clockInStatus || '未打卡', a.lastLocation);
-                        const statusB = getStatusDisplayText(b.clockInStatus || '未打卡', b.lastLocation);
-                        if (statusA.includes('上班中') && !statusB.includes('上班中')) return -1;
-                        if (!statusA.includes('上班中') && statusB.includes('上班中')) return 1;
-                        if (statusA.includes('上班中') && statusB.includes('上班中')) {
-                            const timeA = a.lastClockInTime ? a.lastClockInTime.toDate() : new Date(0);
-                            const timeB = b.lastClockInTime ? b.lastClockInTime.toDate() : new Date(0);
-                            return timeA - timeB;
+                    // 排序：狀態優先級 + 最近更新時間（新至舊） + 姓名
+                    const statusPriority = (s) => {
+                        switch (s) {
+                            case '上班':
+                            case '返回':
+                                return 1;
+                            case '外出':
+                            case '抵達':
+                            case '離開':
+                                return 2;
+                            case '下班':
+                            case '已下班-未打卡':
+                                return 3;
+                            case '臨時請假':
+                            case '特殊勤務':
+                                return 4;
+                            default:
+                                return 5;
                         }
+                    };
+
+                    visibleUsersList.sort((a, b) => {
+                        const prA = statusPriority(a.clockInStatus || '');
+                        const prB = statusPriority(b.clockInStatus || '');
+                        if (prA !== prB) return prA - prB;
+                        const tA = a.lastUpdated ? (a.lastUpdated.toDate ? a.lastUpdated.toDate() : new Date(a.lastUpdated)) : new Date(0);
+                        const tB = b.lastUpdated ? (b.lastUpdated.toDate ? b.lastUpdated.toDate() : new Date(b.lastUpdated)) : new Date(0);
+                        if (tA.getTime() !== tB.getTime()) return tB - tA;
                         return a.name.localeCompare(b.name, 'zh-Hant');
                     }).forEach(user => {
                         const locationText = user.clockInStatus === '外出' && user.outboundLocation ? user.outboundLocation : user.lastLocation;
-                        const statusText = getStatusDisplayText(user.clockInStatus || '未打卡', locationText);
+                        const statusText = getStatusDisplayText(user.clockInStatus || '未打卡', locationText, user.dutyType);
                         const statusColor = getStatusColor(statusText);
                         const clockInTime = user.lastClockInTime ? new Date(user.lastClockInTime.toDate()) : null;
                         const timeFormatted = clockInTime ? clockInTime.toLocaleString('zh-TW', {year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'}) : 'N/A';
@@ -1969,7 +1995,7 @@
                         filtered.forEach(record => {
                             const card = document.createElement('div');
                             card.className = 'bg-white p-3 rounded-lg shadow-sm border mb-3';
-                            const statusText = getStatusDisplayText(record.type || '未知', record.locationName || null);
+const statusText = getStatusDisplayText(record.type || '未知', record.locationName || null, record.dutyType || null);
                             const statusColor = getStatusColor(statusText);
                             card.innerHTML = `
                                 <div class="flex justify-between items-start">
@@ -2140,7 +2166,7 @@
                     <div class="h-full w-full relative">
                         <div id="group-map" class="h-full w-full"></div>
                         <div id="group-map-loader" class="absolute inset-0 bg-white/70 flex items-center justify-center"><div class="loader"></div></div>
-                        <button id="group-map-center-btn" class="absolute bottom-3 right-3 bg-white text-gray-700 border border-gray-300 rounded-full shadow px-3 py-2 flex items-center hover:bg-gray-50">
+<button id="group-map-center-btn" class="absolute top-3 right-3 z-10 bg-white text-gray-700 border border-gray-300 rounded-full shadow px-3 py-2 flex items-center hover:bg-gray-50">
                             <i data-lucide="focus" class="w-4 h-4 mr-2"></i>回到公司
                         </button>
                         <div class="absolute bottom-0 left-0 right-0 p-2">
@@ -2217,7 +2243,7 @@
                                 <img src="${user.avatarUrl || `https://placehold.co/32x32/EFEFEF/333333?text=${user.name.charAt(0)}`}" class="w-8 h-8 rounded-full mr-3 object-cover">
                                 <div>
                                     <p class="font-medium text-sm text-gray-800">${user.name}</p>
-                                    <p class="text-xs text-gray-500">${getStatusDisplayText(user.status, user.lastLocation?.address) || '未打卡'}</p>
+<p class="text-xs text-gray-500">${getStatusDisplayText(user.status, user.lastLocation?.address, user.dutyType) || '未打卡'}</p>
                                 </div>
                             </div>
                             <span class="text-xs text-gray-400">${user.lastClockInTime ? '最近狀態時間：' + timeAgo(user.lastClockInTime.toDate()) : '無紀錄'}</span>
@@ -2232,7 +2258,7 @@
                             const infoWindow = new google.maps.InfoWindow({ content: `
                                 <div class="p-1">
                                     <p class="font-bold">${user.name}</p>
-                                    <p>狀態: ${getStatusDisplayText(user.status, user.lastLocation?.address)}</p>
+<p>狀態: ${getStatusDisplayText(user.status, user.lastLocation?.address, user.dutyType)}</p>
                                     <p>最近狀態時間: ${user.lastClockInTime ? formatDateTime(user.lastClockInTime) : 'N/A'}</p>
                                 </div>` });
                             marker.addListener('click', () => infoWindow.open({ anchor: marker, map: state.groupMap }));
@@ -2330,7 +2356,7 @@
                                     <div class="font-semibold">${userName}</div>
                                     <div class="text-sm text-gray-500">${time.toLocaleString('zh-TW')}</div>
                                     <div class="mt-1 flex items-center">
-                                        <span class="px-2 py-0.5 rounded text-sm ${getStatusBgColor(getStatusDisplayText(record.type || '未知', record.locationName || null))}">${getStatusDisplayText(record.type || '未知', record.locationName || null)}</span>
+<span class="px-2 py-0.5 rounded text-sm ${getStatusBgColor(getStatusDisplayText(record.type || '未知', record.locationName || null, record.dutyType || null))}">${getStatusDisplayText(record.type || '未知', record.locationName || null, record.dutyType || null)}</span>
                         ${record.location && typeof record.location.latitude === 'number' && typeof record.location.longitude === 'number' ? `<span class="ml-2 text-sm text-gray-500">${record.location.latitude.toFixed(6)}, ${record.location.longitude.toFixed(6)}</span>` : ''}
                                     </div>
                                     <div class="mt-1 text-xs text-gray-500">裝置ID: ${record.deviceId || '未知'}</div>
@@ -2393,7 +2419,7 @@
                     <div class="h-full w-full relative">
                         <div id="tracking-map" class="h-full w-full"></div>
                         <div id="tracking-map-loader" class="absolute inset-0 bg-white/70 flex items-center justify-center"><div class="loader"></div></div>
-                        <button id="tracking-map-center-btn" class="absolute bottom-3 right-3 bg-white text-gray-700 border border-gray-300 rounded-full shadow px-3 py-2 flex items-center hover:bg-gray-50">
+<button id="tracking-map-center-btn" class="absolute top-3 right-3 z-10 bg-white text-gray-700 border border-gray-300 rounded-full shadow px-3 py-2 flex items-center hover:bg-gray-50">
                             <i data-lucide="focus" class="w-4 h-4 mr-2"></i>回到公司
                         </button>
                         <div class="absolute bottom-0 left-0 right-0 p-2">
@@ -2563,7 +2589,7 @@
                                             <div class="font-semibold">${userName}</div>
                                             <div class="text-sm text-gray-500">${time.toLocaleString('zh-TW')}</div>
                                             <div class="mt-1 flex items-center">
-                                                <span class="px-2 py-0.5 rounded text-sm ${getStatusBgColor(getStatusDisplayText(record.type || '未知', record.locationName || null))}">${getStatusDisplayText(record.type || '未知', record.locationName || null)}</span>
+                                                <span class="px-2 py-0.5 rounded text-sm ${getStatusBgColor(getStatusDisplayText(record.type || '未知', record.locationName || null, record.dutyType || null))}">${getStatusDisplayText(record.type || '未知', record.locationName || null, record.dutyType || null)}</span>
                         ${record.location && typeof record.location.latitude === 'number' && typeof record.location.longitude === 'number' ? `<span class="ml-2 text-sm text-gray-500">${record.location.latitude.toFixed(6)}, ${record.location.longitude.toFixed(6)}</span>` : ''}
                                             </div>
                                             <div class="mt-1 text-xs text-gray-500">裝置ID: ${record.deviceId || '未知'}</div>
