@@ -22,6 +22,7 @@
     <style>
         body {
             font-family: 'Inter', 'Noto Sans TC', sans-serif;
+            background-color: #1f2937; /* 深灰色背景 */
         }
         .main-container {
             width: 400px;
@@ -29,7 +30,7 @@
             box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
             border-radius: 1.5rem;
             overflow: hidden;
-            margin: 50px 10px 50px 10px;
+            margin: 50px 10px 50px 10px; /* 上50 下50 左10 右10 */
         }
         .header {
             height: 70px;
@@ -4777,7 +4778,7 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
 
                             <div class="p-4 border-t">
                                 <button id="logout-btn" class="w-full bg-gray-200 text-gray-700 py-2 rounded-md hover:bg-gray-300">登出</button>
-                                <p class="mt-6 text-center">
+                                <p class="mt-2 text-center">
                                     <a href="#" id="privacy-policy-link" class="text-blue-600 underline">隱私權政策</a>
                                 </p>
                             </div>
@@ -4814,7 +4815,7 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                 if (privacyLink) {
                     privacyLink.addEventListener('click', (e) => {
                         e.preventDefault();
-                        openPrivacyPolicyWindow(privacyLink);
+                        openPrivacyPolicyWindow();
                     });
                 }
 
@@ -4940,8 +4941,8 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                 })();
             }
 
-            // 在個人資料視窗上開小視窗顯示隱私權政策（不新開視窗）
-            function openPrivacyPolicyWindow(triggerEl = null) {
+            // 開新視窗顯示隱私權政策
+            function openPrivacyPolicyWindow() {
                 const appName = '西北打卡';
                 const policyHtml = `<!doctype html>
  <html lang="zh-Hant">
@@ -5000,31 +5001,46 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
       </div>
     </body>
   </html>`;
-                // 直接以站內小視窗呈現（不新開視窗）
-                const overlayId = `privacy-inline-${Date.now()}`;
-                const contentOnly = policyHtml.replace(/^[\s\S]*<body[^>]*>/i, '').replace(/<\/body>[\s\S]*$/i, '');
-                const hostModal = triggerEl ? triggerEl.closest('.modal-content') : null;
-                const container = hostModal || document.body;
-                if (hostModal) { hostModal.classList.add('relative'); }
-                const inlineHTML = `
-                  <div id="${overlayId}" class="${hostModal ? 'absolute' : 'fixed'} inset-0 ${hostModal ? '' : 'z-[60]'} bg-black/20 backdrop-blur-sm flex items-center justify-center">
-                    <div class="w-[92%] max-w-[500px] bg-white rounded-lg shadow-xl flex flex-col">
-                      <div class="flex justify-between items-center p-3 border-b">
-                        <h3 class="font-bold text-base">隱私權政策 - 西北打卡</h3>
-                        <button class="close-btn text-gray-500 hover:text-gray-700"><i data-lucide="x" class="w-5 h-5"></i></button>
-                      </div>
-                      <div class="p-3 overflow-y-auto" style="max-height: 60vh;">
-                        ${contentOnly}
-                      </div>
-                    </div>
-                  </div>`;
-                container.insertAdjacentHTML('beforeend', inlineHTML);
-                const overlay = document.getElementById(overlayId);
-                const closeBtn = overlay.querySelector('.close-btn');
-                const close = () => overlay.remove();
-                closeBtn.addEventListener('click', close);
-                overlay.addEventListener('click', (e) => { if (e.target.id === overlayId) close(); });
-                lucide.createIcons();
+
+                // 優先開啟獨立頁面，使用絕對網址避免相對路徑解析問題
+                const url = (window.location && window.location.origin ? window.location.origin : '') + '/privacy.html';
+                const win = window.open(url, '_blank', 'width=800,height=900');
+                if (win) {
+                    try {
+                        win.document.open();
+                        win.document.write(policyHtml);
+                        win.document.close();
+                        return;
+                    } catch (e) {
+                        console.error('寫入隱私權政策視窗內容失敗:', e);
+                    }
+                }
+                if (!win) {
+                    // 後備方案：以站內彈窗呈現
+                    const modalId = `privacy-modal-${Date.now()}`;
+                    const contentOnly = policyHtml.replace(/^[\s\S]*<body[^>]*>/i, '').replace(/<\/body>[\s\S]*$/i, '');
+                    const modalHTML = `
+                        <div id="${modalId}" class="modal-backdrop" style="overflow:auto;">
+                          <div class="modal-content w-[95%] max-w-[900px] bg-white rounded-lg shadow-xl flex flex-col">
+                            <div class="flex justify-between items-center p-4 border-b">
+                              <h3 class="font-bold text-lg">隱私權政策 - 西北打卡</h3>
+                              <button class="close-btn text-gray-500 hover:text-gray-700">
+                                <i data-lucide="x" class="w-5 h-5"></i>
+                              </button>
+                            </div>
+                            <div class="p-4 overflow-y-auto" style="max-height: 80vh;">
+                              ${contentOnly}
+                            </div>
+                          </div>
+                        </div>`;
+                    document.body.insertAdjacentHTML('beforeend', modalHTML);
+                    const backdrop = document.getElementById(modalId);
+                    const closeBtn = backdrop.querySelector('.close-btn');
+                    const close = () => backdrop.remove();
+                    closeBtn.addEventListener('click', close);
+                    backdrop.addEventListener('click', (e) => { if (e.target.id === modalId) close(); });
+                    lucide.createIcons();
+                }
             }
 
             function renderLeaveInfo(userData) {
