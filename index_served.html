@@ -860,30 +860,40 @@
                     // e??a??a??a�M?e!��c?oc??a??c?�Le�?
                     const visibleUsersList = users.filter(user => visibleUsers[user.id] !== false);
                     
-                    // e|?a�M?c?�L��a�P: a�M?c?-/e??a?? > a??a?o/a?�ge??/e?�Fe?? > a�M?c?-/a�P2a�M?c?--a?aa??a?! > e?�La??e??a??/a?�Xa??a??
-                    const statusPriority = (s) => {
-                        switch (s) {
-                            case 'a�M?c?-':
-                            case 'e??a??':
-                                return 1;
-                            case 'a??a?o':
-                            case 'a?�ge??':
-                            case 'e?�Fe??':
-                                return 2;
-                            case 'a�M?c?-':
-                            case 'a�P2a�M?c?--a?aa??a?!':
-                                return 3;
-                            case 'e?�La??e??a??':
-                            case 'a?�Xa??a??':
-                                return 4;
-                            default:
-                                return 5;
+                    // 狀態優先級（自訂）：
+                    // 1) 上班中-辦公室 2) 返回-辦公室 3) 外出-項目-地點 4) 抵達-項目-地點
+                    // 5) 離開-項目-地點 6) 請假中 7) 已下班 其餘置後
+                    const statusPriority = (user) => {
+                        const locationText = user.clockInStatus === '外出' && user.outboundLocation ? user.outboundLocation : user.lastLocation;
+                        const display = getStatusDisplayText(user.clockInStatus || '未打卡', locationText, user.dutyType);
+                        let isLeave = (user.clockInStatus === '臨時請假') || (display.includes('請假'));
+                        if (!isLeave) {
+                            const leave = user.leaveStatus || '';
+                            if (leave === 'approved' || leave === 'pending') {
+                                const now = new Date();
+                                const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                                const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+                                if (user.leaveStartTime && user.leaveEndTime) {
+                                    const leaveStart = user.leaveStartTime.toDate ? user.leaveStartTime.toDate() : new Date(user.leaveStartTime);
+                                    const leaveEnd = user.leaveEndTime.toDate ? user.leaveEndTime.toDate() : new Date(user.leaveEndTime);
+                                    isLeave = leaveStart <= todayEnd && leaveEnd >= todayStart;
+                                }
+                            }
                         }
+
+                        if (display.includes('上班') && (display.includes('辦公室') || display.includes('在辦公室'))) return 1;
+                        if (display.includes('返回') && (display.includes('辦公室') || display.includes('在辦公室'))) return 2;
+                        if (display.startsWith('外出-')) return 3;
+                        if (display.startsWith('抵達-')) return 4;
+                        if (display.startsWith('離開-')) return 5;
+                        if (isLeave) return 6;
+                        if (display.includes('已下班')) return 7;
+                        return 8;
                     };
 
                     visibleUsersList.sort((a, b) => {
-                        const prA = statusPriority(a.clockInStatus || '');
-                        const prB = statusPriority(b.clockInStatus || '');
+                        const prA = statusPriority(a);
+                        const prB = statusPriority(b);
                         if (prA !== prB) return prA - prB;
                         const tA = a.lastUpdated ? (a.lastUpdated.toDate ? a.lastUpdated.toDate() : new Date(a.lastUpdated)) : new Date(0);
                         const tB = b.lastUpdated ? (b.lastUpdated.toDate ? b.lastUpdated.toDate() : new Date(b.lastUpdated)) : new Date(0);
@@ -895,16 +905,37 @@
                         const statusColor = getStatusColor(statusText);
                         if (user.id === state.currentUser.uid) {
                             myStatusFound = true;
-                            const clockInTime = user.lastClockInTime ? new Date(user.lastClockInTime.toDate()) : null;
-                            const workingTime = calculateWorkingTime(user.clockInStatus, user.clockInTime);
-                            document.getElementById('my-status').innerHTML = `
-                              <div class="flex items-center justify-between">
-                                <span class="font-semibold text-lg ${statusColor}">${statusText}</span>
-                                ${workingTime ? `<span class="text-sm text-gray-700">a�M?c?-a??e??: ${workingTime}</span>` : ''}
-                              </div>
-                              <div class="text-sm text-gray-500 mt-1">
-                                ${clockInTime ? 'a??a?! ' + clockInTime.toLocaleString('zh-TW', {year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit'}) : ''}
-                              </div>`;
+                            (async () => {
+                                try {
+                                    const recordsRef = collection(db, 'clockInRecords');
+                                    const q = query(recordsRef, where('userId', '==', state.currentUser.uid), orderBy('timestamp', 'desc'), limit(1));
+                                    const snap = await getDocs(q);
+                                    let innerHTML = '';
+                                    if (!snap.empty) {
+                                        const r = snap.docs[0].data();
+                                        const statusTextLast = getStatusDisplayText(r.type || '未知', r.locationName || null, r.dutyType || null);
+                                        const statusColorLast = getStatusColor(statusTextLast);
+                                        const ts = r.timestamp && r.timestamp.toDate ? r.timestamp.toDate() : (r.timestamp ? new Date(r.timestamp) : null);
+                                        innerHTML = `
+                                          <div class="flex items-center justify-between">
+                                            <span class="font-semibold text-lg ${statusColorLast}">${statusTextLast}</span>
+                                          </div>
+                                          <div class="text-sm text-gray-500 mt-1">
+                                            ${ts ? '打卡 ' + ts.toLocaleString('zh-TW', {year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit'}) : ''}
+                                          </div>`;
+                                    } else {
+                                        const statusTextLast = '尚未打卡';
+                                        const statusColorLast = getStatusColor(statusTextLast);
+                                        innerHTML = `
+                                          <div class="flex items-center justify-between">
+                                            <span class="font-semibold text-lg ${statusColorLast}">${statusTextLast}</span>
+                                          </div>`;
+                                    }
+                                    document.getElementById('my-status').innerHTML = innerHTML;
+                                } catch (err) {
+                                    console.error('讀取最新打卡紀錄失敗', err);
+                                }
+                            })();
                         }
                     });
 
@@ -989,30 +1020,38 @@
                     }
                     const visibleUsersList = users.filter(user => visibleUsers[user.id] !== false);
                     
-                    // 排序：狀態優先級 + 最近更新時間（新至舊） + 姓名
-                    const statusPriority = (s) => {
-                        switch (s) {
-                            case '上班':
-                            case '返回':
-                                return 1;
-                            case '外出':
-                            case '抵達':
-                            case '離開':
-                                return 2;
-                            case '下班':
-                            case '已下班-未打卡':
-                                return 3;
-                            case '臨時請假':
-                            case '特殊勤務':
-                                return 4;
-                            default:
-                                return 5;
+                    // 排序：自訂狀態優先級 + 最近更新時間（新至舊） + 姓名
+                    const statusPriority = (user) => {
+                        const locationText = user.clockInStatus === '外出' && user.outboundLocation ? user.outboundLocation : user.lastLocation;
+                        const display = getStatusDisplayText(user.clockInStatus || '未打卡', locationText, user.dutyType);
+                        let isLeave = (user.clockInStatus === '臨時請假') || (display.includes('請假'));
+                        if (!isLeave) {
+                            const leave = user.leaveStatus || '';
+                            if (leave === 'approved' || leave === 'pending') {
+                                const now = new Date();
+                                const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                                const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+                                if (user.leaveStartTime && user.leaveEndTime) {
+                                    const leaveStart = user.leaveStartTime.toDate ? user.leaveStartTime.toDate() : new Date(user.leaveStartTime);
+                                    const leaveEnd = user.leaveEndTime.toDate ? user.leaveEndTime.toDate() : new Date(user.leaveEndTime);
+                                    isLeave = leaveStart <= todayEnd && leaveEnd >= todayStart;
+                                }
+                            }
                         }
+
+                        if (display.includes('上班') && (display.includes('辦公室') || display.includes('在辦公室'))) return 1;
+                        if (display.includes('返回') && (display.includes('辦公室') || display.includes('在辦公室'))) return 2;
+                        if (display.startsWith('外出-')) return 3;
+                        if (display.startsWith('抵達-')) return 4;
+                        if (display.startsWith('離開-')) return 5;
+                        if (isLeave) return 6;
+                        if (display.includes('已下班')) return 7;
+                        return 8;
                     };
 
                     visibleUsersList.sort((a, b) => {
-                        const prA = statusPriority(a.clockInStatus || '');
-                        const prB = statusPriority(b.clockInStatus || '');
+                        const prA = statusPriority(a);
+                        const prB = statusPriority(b);
                         if (prA !== prB) return prA - prB;
                         const tA = a.lastUpdated ? (a.lastUpdated.toDate ? a.lastUpdated.toDate() : new Date(a.lastUpdated)) : new Date(0);
                         const tB = b.lastUpdated ? (b.lastUpdated.toDate ? b.lastUpdated.toDate() : new Date(b.lastUpdated)) : new Date(0);
@@ -1022,8 +1061,7 @@
                         const locationText = user.clockInStatus === 'a??a?o' && user.outboundLocation ? user.outboundLocation : user.lastLocation;
                         const statusText = getStatusDisplayText(user.clockInStatus || 'a?aa??a?!', locationText, user.dutyType);
                         const statusColor = getStatusColor(statusText);
-                        const clockInTime = user.lastClockInTime ? new Date(user.lastClockInTime.toDate()) : null;
-                        const timeFormatted = clockInTime ? clockInTime.toLocaleString('zh-TW', {year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'}) : 'N/A';
+                        const timeFormatted = '讀取中...';
                         listEl.innerHTML += `
                             <div class=\"flex items-center justify-between bg-white p-3 rounded-md shadow-sm border\">
                                 <div class=\"flex items-center\">
@@ -1032,7 +1070,7 @@
                                         <span class=\"font-medium text-gray-700\">${user.name || user.displayName || 'a?aa??a??'}</span>
                                         <div class=\"flex items-center mt-1\">
                                             <span class=\"text-sm font-semibold ${statusColor} mr-2\">${statusText}</span>
-                                            <span class=\"text-xs text-gray-500\">${timeFormatted}</span>
+                                            <span class=\"text-xs text-gray-500\" id=\"clock-time-${user.id}\">${timeFormatted}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -1042,6 +1080,28 @@
                                 </div>
                             </div>`;
                     });
+                    // 更新每位使用者的最新打卡時間
+                    try {
+                        Promise.all(visibleUsersList.map(async (u) => {
+                            try {
+                                const qLatest = query(collection(db, 'clockInRecords'), where('userId', '==', u.id), orderBy('timestamp', 'desc'), limit(1));
+                                const latestSnap = await getDocs(qLatest);
+                                let dt = null;
+                                if (!latestSnap.empty) {
+                                    const ts = latestSnap.docs[0].data().timestamp;
+                                    dt = ts?.toDate ? ts.toDate() : (ts ? new Date(ts) : null);
+                                }
+                                const el = document.querySelector(`#clock-time-${u.id}`);
+                                if (el) {
+                                    el.textContent = dt ? dt.toLocaleString('zh-TW', {year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'}) : 'N/A';
+                                }
+                            } catch (e) {
+                                console.warn('載入使用者最新打卡失敗:', e);
+                            }
+                        }));
+                    } catch (e) {
+                        console.warn('更新最新打卡時間時發生錯誤:', e);
+                    }
                     // c??aR?c?��c??e??a?�Xa??a??e??
                     document.querySelectorAll('#all-users-modal .view-photo-btn').forEach(btn => {
                         btn.addEventListener('click', (e) => {

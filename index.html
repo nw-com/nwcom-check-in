@@ -864,30 +864,41 @@ const statusText = getStatusDisplayText(r.type || '未知', r.locationName || nu
                     // 過濾掉不顯示的使用者
                     const visibleUsersList = users.filter(user => visibleUsers[user.id] !== false);
                     
-                    // 狀態優先級：上班/返回 > 外出/抵達/離開 > 下班/未打卡 > 請假/特殊勤務
-                    const statusPriority = (s) => {
-                        switch (s) {
-                            case '上班':
-                            case '返回':
-                                return 1;
-                            case '外出':
-                            case '抵達':
-                            case '離開':
-                                return 2;
-                            case '下班':
-                            case '已下班-未打卡':
-                                return 3;
-                            case '臨時請假':
-                            case '特殊勤務':
-                                return 4;
-                            default:
-                                return 5;
+                    // 狀態優先級（自訂）：
+                    // 1) 上班中-辦公室 2) 返回-辦公室 3) 外出-項目-地點 4) 抵達-項目-地點
+                    // 5) 離開-項目-地點 6) 請假中 7) 已下班 其餘置後
+                    const statusPriority = (user) => {
+                        const locationText = user.clockInStatus === '外出' && user.outboundLocation ? user.outboundLocation : user.lastLocation;
+                        const display = getStatusDisplayText(user.clockInStatus || '未打卡', locationText, user.dutyType);
+                        // 請假中：臨時請假或當天有效的請假申請
+                        let isLeave = (user.clockInStatus === '臨時請假') || (display.includes('請假'));
+                        if (!isLeave) {
+                            const leave = user.leaveStatus || '';
+                            if (leave === 'approved' || leave === 'pending') {
+                                const now = new Date();
+                                const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                                const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+                                if (user.leaveStartTime && user.leaveEndTime) {
+                                    const leaveStart = user.leaveStartTime.toDate ? user.leaveStartTime.toDate() : new Date(user.leaveStartTime);
+                                    const leaveEnd = user.leaveEndTime.toDate ? user.leaveEndTime.toDate() : new Date(user.leaveEndTime);
+                                    isLeave = leaveStart <= todayEnd && leaveEnd >= todayStart;
+                                }
+                            }
                         }
+
+                        if (display.includes('上班') && (display.includes('辦公室') || display.includes('在辦公室'))) return 1;
+                        if (display.includes('返回') && (display.includes('辦公室') || display.includes('在辦公室'))) return 2;
+                        if (display.startsWith('外出-')) return 3;
+                        if (display.startsWith('抵達-')) return 4;
+                        if (display.startsWith('離開-')) return 5;
+                        if (isLeave) return 6;
+                        if (display.includes('已下班')) return 7;
+                        return 8;
                     };
 
                     visibleUsersList.sort((a, b) => {
-                        const prA = statusPriority(a.clockInStatus || '');
-                        const prB = statusPriority(b.clockInStatus || '');
+                        const prA = statusPriority(a);
+                        const prB = statusPriority(b);
                         if (prA !== prB) return prA - prB;
                         // 同優先級用最近更新時間（lastUpdated）新到舊
                         const tA = a.lastUpdated ? (a.lastUpdated.toDate ? a.lastUpdated.toDate() : new Date(a.lastUpdated)) : new Date(0);
@@ -900,16 +911,37 @@ const statusText = getStatusDisplayText(r.type || '未知', r.locationName || nu
                         const statusColor = getStatusColor(statusText);
                         if (user.id === state.currentUser.uid) {
                             myStatusFound = true;
-                            const clockInTime = user.lastClockInTime ? new Date(user.lastClockInTime.toDate()) : null;
-                            const workingTime = calculateWorkingTime(user.clockInStatus, user.clockInTime);
-                            document.getElementById('my-status').innerHTML = `
-                              <div class="flex items-center justify-between">
-                                <span class="font-semibold text-lg ${statusColor}">${statusText}</span>
-                                ${workingTime ? `<span class="text-sm text-gray-700">上班時間: ${workingTime}</span>` : ''}
-                              </div>
-                              <div class="text-sm text-gray-500 mt-1">
-                                ${clockInTime ? '打卡 ' + clockInTime.toLocaleString('zh-TW', {year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit'}) : ''}
-                              </div>`;
+                            (async () => {
+                                try {
+                                    const recordsRef = collection(db, 'clockInRecords');
+                                    const q = query(recordsRef, where('userId', '==', state.currentUser.uid), orderBy('timestamp', 'desc'), limit(1));
+                                    const snap = await getDocs(q);
+                                    let innerHTML = '';
+                                    if (!snap.empty) {
+                                        const r = snap.docs[0].data();
+                                        const statusTextLast = getStatusDisplayText(r.type || '未知', r.locationName || null, r.dutyType || null);
+                                        const statusColorLast = getStatusColor(statusTextLast);
+                                        const ts = r.timestamp && r.timestamp.toDate ? r.timestamp.toDate() : (r.timestamp ? new Date(r.timestamp) : null);
+                                        innerHTML = `
+                                          <div class="flex items-center justify-between">
+                                            <span class="font-semibold text-lg ${statusColorLast}">${statusTextLast}</span>
+                                          </div>
+                                          <div class="text-sm text-gray-500 mt-1">
+                                            ${ts ? '打卡 ' + ts.toLocaleString('zh-TW', {year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit'}) : ''}
+                                          </div>`;
+                                    } else {
+                                        const statusTextLast = '尚未打卡';
+                                        const statusColorLast = getStatusColor(statusTextLast);
+                                        innerHTML = `
+                                          <div class="flex items-center justify-between">
+                                            <span class="font-semibold text-lg ${statusColorLast}">${statusTextLast}</span>
+                                          </div>`;
+                                    }
+                                    document.getElementById('my-status').innerHTML = innerHTML;
+                                } catch (err) {
+                                    console.error('讀取最新打卡紀錄失敗', err);
+                                }
+                            })();
                         }
                     });
 
@@ -994,59 +1026,112 @@ const statusText = getStatusDisplayText(r.type || '未知', r.locationName || nu
                     }
                     const visibleUsersList = users.filter(user => visibleUsers[user.id] !== false);
                     
-                    // 排序：狀態優先級 + 最近更新時間（新至舊） + 姓名
-                    const statusPriority = (s) => {
-                        switch (s) {
-                            case '上班':
-                            case '返回':
-                                return 1;
-                            case '外出':
-                            case '抵達':
-                            case '離開':
-                                return 2;
-                            case '下班':
-                            case '已下班-未打卡':
-                                return 3;
-                            case '臨時請假':
-                            case '特殊勤務':
-                                return 4;
-                            default:
-                                return 5;
+                    // 排序：自訂狀態優先級 + 最近更新時間（新至舊） + 姓名
+                    const statusPriority = (user) => {
+                        const locationText = user.clockInStatus === '外出' && user.outboundLocation ? user.outboundLocation : user.lastLocation;
+                        const display = getStatusDisplayText(user.clockInStatus || '未打卡', locationText, user.dutyType);
+                        let isLeave = (user.clockInStatus === '臨時請假') || (display.includes('請假'));
+                        if (!isLeave) {
+                            const leave = user.leaveStatus || '';
+                            if (leave === 'approved' || leave === 'pending') {
+                                const now = new Date();
+                                const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                                const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+                                if (user.leaveStartTime && user.leaveEndTime) {
+                                    const leaveStart = user.leaveStartTime.toDate ? user.leaveStartTime.toDate() : new Date(user.leaveStartTime);
+                                    const leaveEnd = user.leaveEndTime.toDate ? user.leaveEndTime.toDate() : new Date(user.leaveEndTime);
+                                    isLeave = leaveStart <= todayEnd && leaveEnd >= todayStart;
+                                }
+                            }
                         }
+
+                        if (display.includes('上班') && (display.includes('辦公室') || display.includes('在辦公室'))) return 1;
+                        if (display.includes('返回') && (display.includes('辦公室') || display.includes('在辦公室'))) return 2;
+                        if (display.startsWith('外出-')) return 3;
+                        if (display.startsWith('抵達-')) return 4;
+                        if (display.startsWith('離開-')) return 5;
+                        if (isLeave) return 6;
+                        if (display.includes('已下班')) return 7;
+                        return 8;
                     };
 
-                    visibleUsersList.sort((a, b) => {
-                        const prA = statusPriority(a.clockInStatus || '');
-                        const prB = statusPriority(b.clockInStatus || '');
-                        if (prA !== prB) return prA - prB;
-                        const tA = a.lastUpdated ? (a.lastUpdated.toDate ? a.lastUpdated.toDate() : new Date(a.lastUpdated)) : new Date(0);
-                        const tB = b.lastUpdated ? (b.lastUpdated.toDate ? b.lastUpdated.toDate() : new Date(b.lastUpdated)) : new Date(0);
-                        if (tA.getTime() !== tB.getTime()) return tB - tA;
-                        return a.name.localeCompare(b.name, 'zh-Hant');
-                    }).forEach(user => {
-                        const locationText = user.clockInStatus === '外出' && user.outboundLocation ? user.outboundLocation : user.lastLocation;
-                        const statusText = getStatusDisplayText(user.clockInStatus || '未打卡', locationText, user.dutyType);
-                        const statusColor = getStatusColor(statusText);
-                        const clockInTime = user.lastClockInTime ? new Date(user.lastClockInTime.toDate()) : null;
-                        const timeFormatted = clockInTime ? clockInTime.toLocaleString('zh-TW', {year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'}) : 'N/A';
-                        listEl.innerHTML += `
-                            <div class=\"flex items-center justify-between bg-white p-3 rounded-md shadow-sm border\">
-                                <div class=\"flex items-center\">
-                                    <img src=\"${user.avatarUrl || `https://placehold.co/32x32/EFEFEF/333333?text=${user.name?.charAt(0) || 'U'}`}\" class=\"w-8 h-8 rounded-full mr-3 object-cover\">
-                                    <div>
-                                        <span class=\"font-medium text-gray-700\">${user.name || user.displayName || '未命名'}</span>
-                                        <div class=\"flex items-center mt-1\">
-                                            <span class=\"text-sm font-semibold ${statusColor} mr-2\">${statusText}</span>
-                                            <span class=\"text-xs text-gray-500\">${timeFormatted}</span>
+                    (async () => {
+                        const latestMap = {};
+                        try {
+                            await Promise.all(visibleUsersList.map(async (u) => {
+                                try {
+                                    const qLatest = query(collection(db, 'clockInRecords'), where('userId', '==', u.id), orderBy('timestamp', 'desc'), limit(1));
+                                    const latestSnap = await getDocs(qLatest);
+                                    if (!latestSnap.empty) {
+                                        const ts = latestSnap.docs[0].data().timestamp;
+                                        latestMap[u.id] = ts?.toDate?.() ? ts.toDate() : (ts ? new Date(ts) : null);
+                                    } else {
+                                        latestMap[u.id] = null;
+                                    }
+                                } catch (e) {
+                                    console.warn('載入使用者最新打卡失敗:', e);
+                                    latestMap[u.id] = null;
+                                }
+                            }));
+                        } catch (e) {
+                            console.warn('建立最新打卡時間對應表失敗:', e);
+                        }
+
+                        visibleUsersList.sort((a, b) => {
+                            const prA = statusPriority(a);
+                            const prB = statusPriority(b);
+                            if (prA !== prB) return prA - prB;
+                            const tA = a.lastUpdated ? (a.lastUpdated.toDate ? a.lastUpdated.toDate() : new Date(a.lastUpdated)) : new Date(0);
+                            const tB = b.lastUpdated ? (b.lastUpdated.toDate ? b.lastUpdated.toDate() : new Date(b.lastUpdated)) : new Date(0);
+                            if (tA.getTime() !== tB.getTime()) return tB - tA;
+                            return a.name.localeCompare(b.name, 'zh-Hant');
+                        }).forEach(user => {
+                            const locationText = user.clockInStatus === '外出' && user.outboundLocation ? user.outboundLocation : user.lastLocation;
+                            const statusText = getStatusDisplayText(user.clockInStatus || '未打卡', locationText, user.dutyType);
+                            const statusColor = getStatusColor(statusText);
+                            const clockInTime = latestMap[user.id];
+                            const timeFormatted = clockInTime ? clockInTime.toLocaleString('zh-TW', {year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'}) : 'N/A';
+                            listEl.innerHTML += `
+                                <div class=\"flex items-center justify-between bg-white p-3 rounded-md shadow-sm border\">
+                                    <div class=\"flex items-center\">
+                                        <img src=\"${user.avatarUrl || `https://placehold.co/32x32/EFEFEF/333333?text=${user.name?.charAt(0) || 'U'}`}\" class=\"w-8 h-8 rounded-full mr-3 object-cover\">
+                                        <div>
+                                            <span class=\"font-medium text-gray-700\">${user.name || user.displayName || '未命名'}</span>
+                                            <div class=\"flex items-center mt-1\">
+                                                <span class=\"text-sm font-semibold ${statusColor} mr-2\">${statusText}</span>
+                                                <span class=\"text-xs text-gray-500\" id=\"clock-time-${user.id}\">${timeFormatted}</span>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                                <div class=\"flex space-x-2\">
-                                    ${user.lastPhotoUrl ? `<button class=\"view-photo-btn p-2 bg-blue-100 rounded-md\" data-photo=\"${user.lastPhotoUrl}\" data-desc=\"${user.lastLocation || ''}\"><i data-lucide=\"image\" class=\"w-6 h-6 text-blue-600\"></i></button>` : ''}
-                                    ${user.lastLocation ? `<button class=\"view-map-btn p-2 bg-green-100 rounded-md\" data-lat=\"${user.lastLocation?.latitude || 0}\" data-lng=\"${user.lastLocation?.longitude || 0}\"><i data-lucide=\"map-pin\" class=\"w-6 h-6 text-green-600\"></i></button>` : ''}
-                                </div>
-                            </div>`;
-                    });
+                                    <div class=\"flex space-x-2\">
+                                        ${user.lastPhotoUrl ? `<button class=\"view-photo-btn p-2 bg-blue-100 rounded-md\" data-photo=\"${user.lastPhotoUrl}\" data-desc=\"${user.lastLocation || ''}\"><i data-lucide=\"image\" class=\"w-6 h-6 text-blue-600\"></i></button>` : ''}
+                                        ${user.lastLocation ? `<button class=\"view-map-btn p-2 bg-green-100 rounded-md\" data-lat=\"${user.lastLocation?.latitude || 0}\" data-lng=\"${user.lastLocation?.longitude || 0}\"><i data-lucide=\"map-pin\" class=\"w-6 h-6 text-green-600\"></i></button>` : ''}
+                                    </div>
+                                </div>`;
+                        });
+                        // 重新以最新 clockInRecords 更新每位使用者的時間（避免快照時序不同步）
+                        try {
+                            Promise.all(visibleUsersList.map(async (u) => {
+                                try {
+                                    const qLatest = query(collection(db, 'clockInRecords'), where('userId', '==', u.id), orderBy('timestamp', 'desc'), limit(1));
+                                    const latestSnap = await getDocs(qLatest);
+                                    let dt = null;
+                                    if (!latestSnap.empty) {
+                                        const ts = latestSnap.docs[0].data().timestamp;
+                                        dt = ts?.toDate?.() ? ts.toDate() : (ts ? new Date(ts) : null);
+                                    }
+                                    const el = document.querySelector(`#clock-time-${u.id}`);
+                                    if (el) {
+                                        el.textContent = dt ? dt.toLocaleString('zh-TW', {year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'}) : 'N/A';
+                                    }
+                                } catch (e) {
+                                    console.warn('載入使用者最新打卡失敗:', e);
+                                }
+                            }));
+                        } catch (e) {
+                            console.warn('更新最新打卡時間時發生錯誤:', e);
+                        }
+                    })();
                     // 綁定照片與地圖按鈕
                     document.querySelectorAll('#all-users-modal .view-photo-btn').forEach(btn => {
                         btn.addEventListener('click', (e) => {
@@ -2220,7 +2305,7 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                 const { AdvancedMarkerElement } = await google.maps.importLibrary("marker");
                 const usersRef = collection(db, "users");
                 const q = query(usersRef, orderBy("name"));
-                const unsubscribe = onSnapshot(q, (querySnapshot) => {
+                const unsubscribe = onSnapshot(q, async (querySnapshot) => {
                     const listEl = document.getElementById('group-user-list');
                     if (!listEl) return;
                     listEl.innerHTML = '';
@@ -2234,19 +2319,63 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
 
                     const users = [];
                     querySnapshot.forEach(doc => { const data = { id: doc.id, ...doc.data() }; if (allowedUserIds.includes(data.id)) users.push(data); });
-                    users.forEach(user => {
+                    let visibleUsers = {};
+                    try {
+                        const savedSettings = localStorage.getItem('app_general_settings');
+                        if (savedSettings) {
+                            const settings = JSON.parse(savedSettings);
+                            visibleUsers = settings.visibleUsers || {};
+                        }
+                    } catch (e) {}
+                    const visibleUsersList = users.filter(user => visibleUsers[user.id] !== false);
+                    const latestMap = {};
+                    try {
+                        await Promise.all(visibleUsersList.map(async (u) => {
+                            const recQ = query(
+                                collection(db, 'clockInRecords'),
+                                where('userId', '==', u.id),
+                                orderBy('timestamp', 'desc'),
+                                limit(1)
+                            );
+                            const snap = await getDocs(recQ);
+                            if (!snap.empty) {
+                                latestMap[u.id] = snap.docs[0].data();
+                            }
+                        }));
+                    } catch (e) {}
+                    visibleUsersList.sort((a, b) => {
+                        const recA = latestMap[a.id];
+                        const recB = latestMap[b.id];
+                        const statusA = recA ? getStatusDisplayText(recA.type || '未知', recA.locationName || null, recA.dutyType || null) : getStatusDisplayText(a.clockInStatus || '未打卡', a.lastLocation?.address, a.dutyType);
+                        const statusB = recB ? getStatusDisplayText(recB.type || '未知', recB.locationName || null, recB.dutyType || null) : getStatusDisplayText(b.clockInStatus || '未打卡', b.lastLocation?.address, b.dutyType);
+                        if (statusA.includes('上班中') && !statusB.includes('上班中')) return -1;
+                        if (!statusA.includes('上班中') && statusB.includes('上班中')) return 1;
+                        if (statusA.includes('上班中') && statusB.includes('上班中')) {
+                            const timeA = (recA?.timestamp?.toDate?.() || (a.lastClockInTime?.toDate?.() || new Date(0)));
+                            const timeB = (recB?.timestamp?.toDate?.() || (b.lastClockInTime?.toDate?.() || new Date(0)));
+                            return timeA - timeB;
+                        }
+                        return a.name.localeCompare(b.name, 'zh-Hant');
+                    });
+                    visibleUsersList.forEach(user => {
                         const hasLocation = user.lastLocation && user.lastLocation.latitude;
                         const userElement = document.createElement('div');
                         userElement.className = `flex items-center justify-between p-2 rounded-md cursor-pointer hover:bg-gray-100 ${!hasLocation ? 'opacity-50' : ''}`;
+                        const latest = latestMap[user.id] || null;
+                        const locText = latest?.locationName || (user.clockInStatus === '外出' && user.outboundLocation ? user.outboundLocation : user.lastLocation?.address);
+                        const statusText = latest ? getStatusDisplayText(latest.type || '未知', latest.locationName || null, latest.dutyType || null)
+                                                  : (getStatusDisplayText(user.clockInStatus || '未打卡', locText, user.dutyType) || '未打卡');
+                        const latestTime = latest ? (latest.timestamp?.toDate?.() || (latest.timestamp ? new Date(latest.timestamp) : null))
+                                                  : (user.lastClockInTime?.toDate?.() || null);
                         userElement.innerHTML = `
                             <div class="flex items-center">
                                 <img src="${user.avatarUrl || `https://placehold.co/32x32/EFEFEF/333333?text=${user.name.charAt(0)}`}" class="w-8 h-8 rounded-full mr-3 object-cover">
                                 <div>
                                     <p class="font-medium text-sm text-gray-800">${user.name}</p>
-<p class="text-xs text-gray-500">${getStatusDisplayText(user.status, user.lastLocation?.address, user.dutyType) || '未打卡'}</p>
+                                    <p class="text-xs text-gray-500">${statusText}</p>
                                 </div>
                             </div>
-                            <span class="text-xs text-gray-400">${user.lastClockInTime ? '最近狀態時間：' + timeAgo(user.lastClockInTime.toDate()) : '無紀錄'}</span>
+                            <span class="text-xs text-gray-400">${latestTime ? '最近狀態時間：' + timeAgo(latestTime) : '無紀錄'}</span>
                         `;
                         listEl.appendChild(userElement);
                         if (hasLocation) {
@@ -2258,8 +2387,8 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                             const infoWindow = new google.maps.InfoWindow({ content: `
                                 <div class="p-1">
                                     <p class="font-bold">${user.name}</p>
-<p>狀態: ${getStatusDisplayText(user.status, user.lastLocation?.address, user.dutyType)}</p>
-                                    <p>最近狀態時間: ${user.lastClockInTime ? formatDateTime(user.lastClockInTime) : 'N/A'}</p>
+                                    <p>狀態: ${statusText}</p>
+                                    <p>最近狀態時間: ${latestTime ? formatDateTime(latestTime) : 'N/A'}</p>
                                 </div>` });
                             marker.addListener('click', () => infoWindow.open({ anchor: marker, map: state.groupMap }));
                             userElement.addEventListener('click', () => { state.groupMap.panTo(position); state.groupMap.setZoom(17); infoWindow.open({ anchor: marker, map: state.groupMap }); });
@@ -2969,64 +3098,165 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                     const users = [];
                     querySnapshot.forEach(doc => users.push({ id: doc.id, ...doc.data() }));
 
-                    if (users.length === 0) {
+                    // 依一般設定過濾可見人員
+                    let visibilityMap = {};
+                    try {
+                        const saved = localStorage.getItem('app_general_settings');
+                        if (saved) {
+                            const settings = JSON.parse(saved);
+                            visibilityMap = settings.visibleUsers || {};
+                        }
+                    } catch (e) {
+                        console.warn('載入可見人員設定失敗', e);
+                    }
+                    const filteredUsers = users.filter(u => visibilityMap[u.id] !== false);
+
+                    if (filteredUsers.length === 0) {
                         userListEl.innerHTML = `<p class="text-center text-gray-500 p-2">沒有使用者可追蹤</p>`;
                         return;
                     }
 
-                    users.forEach(user => {
-                        const hasLocation = user.lastLocation && user.lastLocation.latitude;
-                        
-                        const userElement = document.createElement('div');
-                        userElement.className = `flex items-center justify-between p-2 rounded-md cursor-pointer hover:bg-gray-100 ${!hasLocation ? 'opacity-50' : ''}`;
-                        userElement.innerHTML = `
-                            <div class="flex items-center">
-                                <img src="${user.avatarUrl || `https://placehold.co/32x32/EFEFEF/333333?text=${user.name.charAt(0)}`}" class="w-8 h-8 rounded-full mr-3 object-cover">
-                                <div>
-                                    <p class="font-medium text-sm text-gray-800">${user.name}</p>
-                                    <p class="text-xs text-gray-500">${getStatusDisplayText(user.status, user.lastLocation?.address) || '未打卡'}</p>
-                                </div>
-                            </div>
-                            <span class="text-xs text-gray-400">${user.lastClockInTime ? '最近狀態時間：' + timeAgo(user.lastClockInTime.toDate()) : '無紀錄'}</span>
-                        `;
-                        userListEl.appendChild(userElement);
+                    // 讀取每位使用者最新打卡紀錄，並以此顯示與排序
+                    const { collection: fsCollection, query: fsQuery, where, orderBy: fsOrderBy, limit, getDocs } = window.__fs || {};
+                    const dbRef = window.__db || null;
 
-                        if (hasLocation) {
-                            const position = { lat: user.lastLocation.latitude, lng: user.lastLocation.longitude };
-                            
-                            const markerIcon = document.createElement('img');
-                            markerIcon.src = user.avatarUrl || `https://placehold.co/40x40/EFEFEF/333333?text=${user.name.charAt(0)}`;
-                            markerIcon.className = "w-9 h-9 rounded-full border-2 border-white shadow-md object-cover";
-
-                            const marker = new AdvancedMarkerElement({
-                                position,
-                                map: state.trackingMap,
-                                title: user.name,
-                                content: markerIcon,
-                            });
-
-                            const infoWindow = new google.maps.InfoWindow({
-                                content: `
-                                    <div class="p-1">
-                                        <p class="font-bold">${user.name}</p>
-                                        <p>狀態: ${getStatusDisplayText(user.status, user.lastLocation?.address)}</p>
-                                        <p>最近狀態時間: ${user.lastClockInTime ? formatDateTime(user.lastClockInTime) : 'N/A'}</p>
-                                    </div>
-                                `
-                            });
-
-                            marker.addListener('click', () => {
-                                infoWindow.open({ anchor: marker, map: state.trackingMap });
-                            });
-                            
-                            userElement.addEventListener('click', () => {
-                                state.trackingMap.panTo(position);
-                                state.trackingMap.setZoom(17);
-                                infoWindow.open({ anchor: marker, map: state.trackingMap });
-                            });
-
-                            state.trackingMarkers.push(marker);
+                    const augmentedPromises = filteredUsers.map(async (user) => {
+                        let latestRecord = null;
+                        try {
+                            if (fsCollection && fsQuery && where && fsOrderBy && limit && getDocs && dbRef) {
+                                const recQ = fsQuery(
+                                    fsCollection(dbRef, 'clockInRecords'),
+                                    where('userId', '==', user.id),
+                                    fsOrderBy('timestamp', 'desc'),
+                                    limit(1)
+                                );
+                                const snap = await getDocs(recQ);
+                                if (!snap.empty) {
+                                    latestRecord = snap.docs[0].data();
+                                }
+                            }
+                        } catch (e) {
+                            console.warn('取得最新打卡紀錄失敗', e);
                         }
+
+                        // 狀態文字與時間：優先使用最新紀錄，否則回退 user 欄位
+                        const recordType = latestRecord?.type || user.clockInStatus || user.status || '未打卡';
+                        const recordLocationName = latestRecord?.locationName || user.lastLocation?.address || null;
+                        const dutyType = latestRecord?.dutyType || null;
+                        const statusText = getStatusDisplayText(recordType, recordLocationName, dutyType);
+                        const ts = latestRecord?.timestamp && latestRecord.timestamp.toDate ? latestRecord.timestamp.toDate() : (latestRecord?.timestamp ? new Date(latestRecord.timestamp) : (user.lastClockInTime?.toDate ? user.lastClockInTime.toDate() : null));
+
+                        return {
+                            ...user,
+                            __statusText: statusText,
+                            __lastStatusTime: ts,
+                            __latestRecord: latestRecord || null
+                        };
+                    });
+
+                    Promise.all(augmentedPromises).then((augmentedUsers) => {
+                        // 排序對齊「所有同仁狀態」：狀態優先級 -> 最近更新時間(新→舊) -> 姓名
+                        const statusPriority = (u) => {
+                            const display = u.__statusText || getStatusDisplayText(u.clockInStatus || '未打卡', (u.clockInStatus === '外出' && u.outboundLocation ? u.outboundLocation : u.lastLocation), u.dutyType);
+                            let isLeave = (u.clockInStatus === '臨時請假') || (display.includes('請假'));
+                            if (!isLeave) {
+                                const leave = u.leaveStatus || '';
+                                if (leave === 'approved' || leave === 'pending') {
+                                    const now = new Date();
+                                    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                                    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+                                    if (u.leaveStartTime && u.leaveEndTime) {
+                                        const leaveStart = u.leaveStartTime.toDate ? u.leaveStartTime.toDate() : new Date(u.leaveStartTime);
+                                        const leaveEnd = u.leaveEndTime.toDate ? u.leaveEndTime.toDate() : new Date(u.leaveEndTime);
+                                        isLeave = leaveStart <= todayEnd && leaveEnd >= todayStart;
+                                    }
+                                }
+                            }
+                            if (display.includes('上班') && (display.includes('辦公室') || display.includes('在辦公室'))) return 1;
+                            if (display.includes('返回') && (display.includes('辦公室') || display.includes('在辦公室'))) return 2;
+                            if (display.startsWith('外出-')) return 3;
+                            if (display.startsWith('抵達-')) return 4;
+                            if (display.startsWith('離開-')) return 5;
+                            if (isLeave) return 6;
+                            if (display.includes('已下班')) return 7;
+                            return 8;
+                        };
+
+                        augmentedUsers.sort((a, b) => {
+                            const prA = statusPriority(a);
+                            const prB = statusPriority(b);
+                            if (prA !== prB) return prA - prB;
+                            const tA = a.lastUpdated ? (a.lastUpdated.toDate ? a.lastUpdated.toDate() : new Date(a.lastUpdated)) : new Date(0);
+                            const tB = b.lastUpdated ? (b.lastUpdated.toDate ? b.lastUpdated.toDate() : new Date(b.lastUpdated)) : new Date(0);
+                            if (tA.getTime() !== tB.getTime()) return tB - tA;
+                            return (a.name || '').localeCompare(b.name || '', 'zh-Hant');
+                        });
+
+                        // 生成列表與地圖標記
+                        augmentedUsers.forEach(user => {
+                            const recLoc = user.__latestRecord?.location || null;
+                            const recLat = recLoc && typeof recLoc.latitude === 'number' ? recLoc.latitude : (user.__latestRecord?.locationLat ?? null);
+                            const recLng = recLoc && typeof recLoc.longitude === 'number' ? recLoc.longitude : (user.__latestRecord?.locationLng ?? null);
+                            const hasRecordLocation = typeof recLat === 'number' && typeof recLng === 'number';
+                            const hasLastLocation = user.lastLocation && typeof user.lastLocation.latitude === 'number' && typeof user.lastLocation.longitude === 'number';
+                            const hasLocation = hasRecordLocation || hasLastLocation;
+
+                            const userElement = document.createElement('div');
+                            userElement.className = `flex items-center justify-between p-2 rounded-md cursor-pointer hover:bg-gray-100 ${!hasLocation ? 'opacity-50' : ''}`;
+                            userElement.innerHTML = `
+                                <div class="flex items-center">
+                                    <img src="${user.avatarUrl || `https://placehold.co/32x32/EFEFEF/333333?text=${(user.name || 'U').charAt(0)}`}" class="w-8 h-8 rounded-full mr-3 object-cover">
+                                    <div>
+                                        <p class="font-medium text-sm text-gray-800">${user.name || '未知用戶'}</p>
+                                        <p class="text-xs text-gray-500">${user.__statusText || '未打卡'}</p>
+                                    </div>
+                                </div>
+                                <span class="text-xs text-gray-400">${user.__lastStatusTime ? '最近狀態時間：' + timeAgo(user.__lastStatusTime) : '無紀錄'}</span>
+                            `;
+                            userListEl.appendChild(userElement);
+
+                            if (hasLocation) {
+                                const position = hasRecordLocation
+                                    ? { lat: recLat, lng: recLng }
+                                    : { lat: user.lastLocation.latitude, lng: user.lastLocation.longitude };
+                                const markerIcon = document.createElement('img');
+                                markerIcon.src = user.avatarUrl || `https://placehold.co/40x40/EFEFEF/333333?text=${(user.name || 'U').charAt(0)}`;
+                                markerIcon.className = "w-9 h-9 rounded-full border-2 border-white shadow-md object-cover";
+
+                                const marker = new AdvancedMarkerElement({
+                                    position,
+                                    map: state.trackingMap,
+                                    title: user.name || '',
+                                    content: markerIcon,
+                                });
+
+                                const locationName = user.__latestRecord?.locationName
+                                    || (user.clockInStatus === '外出' ? (user.outboundLocation || '') : '')
+                                    || (user.lastLocation?.address || '');
+                                const infoWindow = new google.maps.InfoWindow({
+                                    content: `
+                                        <div class="p-1">
+                                            <p class="font-bold">${user.name || '未知用戶'}</p>
+                                            <p>狀態: ${user.__statusText || '未打卡'}</p>
+                                            <p>最近狀態時間: ${user.__lastStatusTime ? formatDateTime(user.__lastStatusTime) : 'N/A'}</p>
+                                            ${locationName ? `<p>打卡地點: ${locationName}</p>` : ''}
+                                        </div>
+                                    `
+                                });
+
+                                marker.addListener('click', () => {
+                                    infoWindow.open({ anchor: marker, map: state.trackingMap });
+                                });
+
+                                userElement.addEventListener('click', () => {
+                                    state.trackingMap.panTo(position);
+                                    state.trackingMap.setZoom(17);
+                                    infoWindow.open({ anchor: marker, map: state.trackingMap });
+                                });
+
+                                state.trackingMarkers.push(marker);
+                            }
+                        });
                     });
                 });
                 state.activeListeners.push(unsubscribe);

@@ -161,54 +161,45 @@ function updateStatusDisplay() {
 function updateDashboardStatus() {
     const dashboardStatusElement = document.getElementById('my-status');
     if (dashboardStatusElement) {
-        let statusText = '';
-        switch(state.clockInStatus) {
-            case '上班':
-                statusText = '上班中-辦公室';
-                break;
-            case '下班':
-                statusText = '已下班';
-                break;
-            case '已下班-未打卡':
-                statusText = '已下班-未打卡';
-                break;
-            case '外出':
-                statusText = '外出中';
-                if (state.outboundLocation) {
-                    statusText = `外出-${state.outboundLocation}`;
+        (async () => {
+            try {
+                const { collection, query, where, orderBy, limit, getDocs } = window.__fs;
+                const userId = window.__auth?.currentUser?.uid || state.currentUser?.uid;
+                if (!userId) {
+                    dashboardStatusElement.textContent = '尚未打卡';
+                    return;
                 }
-                break;
-            case '抵達':
-                statusText = '抵達';
-                if (state.outboundLocation) {
-                    statusText = `抵達-${state.outboundLocation}`;
+                const q = query(
+                    collection(window.__db, 'clockInRecords'),
+                    where('userId', '==', userId),
+                    orderBy('timestamp', 'desc'),
+                    limit(1)
+                );
+                const snap = await getDocs(q);
+                if (!snap.empty) {
+                    const r = snap.docs[0].data();
+                    const statusText = getStatusDisplayText(r.type || '未知', r.locationName || null, r.dutyType || null);
+                    const statusColor = getStatusColor(statusText);
+                    const ts = r.timestamp && r.timestamp.toDate ? r.timestamp.toDate() : (r.timestamp ? new Date(r.timestamp) : null);
+                    dashboardStatusElement.innerHTML = `
+                        <div class="flex items-center justify-between">
+                            <span class="font-semibold text-lg ${statusColor}">${statusText}</span>
+                        </div>
+                        <div class="text-sm text-gray-500 mt-1">
+                            ${ts ? '打卡 ' + ts.toLocaleString('zh-TW', {year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit'}) : ''}
+                        </div>`;
+                } else {
+                    const statusText = '尚未打卡';
+                    const statusColor = getStatusColor(statusText);
+                    dashboardStatusElement.innerHTML = `
+                        <div class="flex items-center justify-between">
+                            <span class="font-semibold text-lg ${statusColor}">${statusText}</span>
+                        </div>`;
                 }
-                break;
-            case '離開':
-                statusText = '離開';
-                if (state.outboundLocation) {
-                    statusText = `離開-${state.outboundLocation}`;
-                }
-                break;
-            case '返回':
-                statusText = '返回-辦公室';
-                break;
-        case '臨時請假':
-            statusText = (state.leaveStatus === 'approved') ? '已請假' : '請假申請';
-            if (state.leaveReason) {
-                statusText = `${statusText}-${state.leaveReason}`;
+            } catch (e) {
+                console.error('讀取最新打卡紀錄失敗:', e);
             }
-            break;
-            case '特殊勤務':
-                statusText = '出勤中';
-                if (state.dutyType) {
-                    statusText = `出勤-${state.dutyType}`;
-                }
-                break;
-            default:
-                statusText = '尚未打卡';
-        }
-        dashboardStatusElement.textContent = statusText;
+        })();
     }
 }
 
