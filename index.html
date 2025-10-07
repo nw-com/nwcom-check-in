@@ -22,7 +22,7 @@
     <style>
         body {
             font-family: 'Inter', 'Noto Sans TC', sans-serif;
-            background-color: #333333; /* 深灰色背景 */
+            background-color: ##1f2937; /* 深灰色背景 */
         }
         .main-container {
             width: 400px;
@@ -438,7 +438,7 @@
                 cleanupListeners();
                 if (user) {
                     bodyEl.classList.remove('bg-red-600');
-                    bodyEl.classList.add('bg-red-800');
+                    bodyEl.classList.add('bg-gray-100');
                     state.currentUser = user;
                     const userDocRef = doc(db, "users", user.uid);
                     const unsubscribe = onSnapshot(userDocRef, (docSnap) => {
@@ -5682,9 +5682,6 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
     </script>
 </body>
 </html>
-
-
-
 
 
 

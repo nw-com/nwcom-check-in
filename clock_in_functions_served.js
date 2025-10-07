@@ -358,13 +358,13 @@ function updateButtonStatus() {
             setOutboundCycleButton('抵達', '抵達打卡', 'bg-teal-700');
             break;
         case '抵達':
-            // 已抵達，循環按鈕切換至「離開」，同時可下班
+            // 已抵達，僅顯示「離開打卡」，暫不顯示「下班打卡」
             setOutboundCycleButton('離開', '離開打卡', 'bg-red-700');
-            setWorkToggleButton('下班', '下班打卡', 'bg-red-500');
             break;
         case '離開':
-            // 已離開，循環按鈕切換至「返回」
+            // 已離開，顯示「返回打卡」與「下班打卡」
             setOutboundCycleButton('返回', '返回打卡', 'bg-blue-500');
+            setWorkToggleButton('下班', '下班打卡', 'bg-red-500');
             break;
         case '返回':
             // 已返回，循環按鈕回到「外出」，同時可下班
