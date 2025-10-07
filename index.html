@@ -153,7 +153,7 @@
         <div class="text-center mb-8">
             <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mx-auto text-red-600"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"></path><path d="m9 12 2 2 4-4"></path></svg>
             <h1 class="text-2xl font-bold text-gray-800 mt-4">西北勤務打卡系統</h1>
-            <p class="text-gray-500">雲端測試版V2.2.8</p>
+            <p class="text-gray-500">雲端測試版V2.2.0</p>
         </div>
         <form id="login-form">
             <div class="mb-4">
@@ -1167,6 +1167,7 @@ const statusText = getStatusDisplayText(r.type || '未知', r.locationName || nu
                     <div class="h-[50px] flex items-center justify-around border-b border-gray-200 bg-white">
                         <button data-subtab="location" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'location' ? 'active' : ''}">定位打卡</button>
                         <button data-subtab="records" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'records' ? 'active' : ''}">打卡紀錄</button>
+                        <button data-subtab="workdays" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'workdays' ? 'active' : ''}">上班日期</button>
                         <button data-subtab="leaves" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'leaves' ? 'active' : ''}">請假紀錄</button>
                     </div>
                     <div id="sub-page-content" class="overflow-y-auto" style="height: calc(100% - 50px);"></div>`;
@@ -1176,6 +1177,8 @@ const statusText = getStatusDisplayText(r.type || '未知', r.locationName || nu
                     renderClockInLocation(subPageContent);
                 } else if (subPage === 'records') {
                     renderClockInRecords(subPageContent);
+                } else if (subPage === 'workdays') {
+                    renderWorkDatesMonthView(subPageContent);
                 } else if (subPage === 'leaves') {
                     renderMyLeaveRecords(subPageContent);
                 }
@@ -1428,6 +1431,114 @@ const statusText = getStatusDisplayText(r.type || '未知', r.locationName || nu
                 });
                 
                 // 已移除特殊勤務按鈕
+            }
+
+            // 上班日期子分頁：以月為單位，每日可編輯時段
+            function renderWorkDatesMonthView(container) {
+                let year, month; // 0-based month
+                const trgY = localStorage.getItem('__workdays_target_year');
+                const trgM = localStorage.getItem('__workdays_target_month');
+                if (trgY && trgM) {
+                    year = parseInt(trgY, 10);
+                    month = parseInt(trgM, 10);
+                    localStorage.removeItem('__workdays_target_year');
+                    localStorage.removeItem('__workdays_target_month');
+                } else {
+                    const now = new Date();
+                    year = now.getFullYear();
+                    month = now.getMonth();
+                }
+                const ymKey = `${year}-${String(month + 1).padStart(2, '0')}`;
+                const storageKey = `workdays-${ymKey}`;
+                const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
+
+                // 讀取假日設定以決定預設是否為工作日
+                const holidaySettings = window.__holidaySettingsCache || { weekendIsHoliday: false, holidays: [] };
+                const holidaysSet = new Set(holidaySettings.holidays || []);
+                const isHoliday = (date) => {
+                    const ymd = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+                    const weekend = date.getDay() === 0 || date.getDay() === 6;
+                    return holidaysSet.has(ymd) || (holidaySettings.weekendIsHoliday && weekend);
+                };
+
+                container.innerHTML = `
+                    <div class="p-4 space-y-4 h-full">
+                        <div class="bg-white rounded-lg shadow-sm border p-4">
+                            <div class="flex items-center justify-between mb-4">
+                                <h2 class="text-xl font-bold text-gray-800">上班日期（${year}年${month+1}月）</h2>
+                                <div class="space-x-2">
+                                    <button id="save-workdays" class="bg-green-600 text-white px-3 py-2 rounded-md hover:bg-green-700">儲存本月設定</button>
+                                    <button id="prev-workdays-month" class="px-3 py-2 rounded-md bg-gray-100 hover:bg-gray-200">上個月</button>
+                                    <button id="next-workdays-month" class="px-3 py-2 rounded-md bg-gray-100 hover:bg-gray-200">下個月</button>
+                                </div>
+                            </div>
+                            <div id="workdays-list" class="space-y-2 overflow-y-auto" style="max-height: calc(100vh - 220px);"></div>
+                        </div>
+                    </div>`;
+
+                const listEl = document.getElementById('workdays-list');
+                // 生成本月每日列
+                const firstDay = new Date(year, month, 1);
+                const lastDay = new Date(year, month + 1, 0);
+                for (let d = 1; d <= lastDay.getDate(); d++) {
+                    const date = new Date(year, month, d);
+                    const weekdayNames = ['日','一','二','三','四','五','六'];
+                    const weekday = weekdayNames[date.getDay()];
+                    const ymd = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                    const defaultIsWorkday = !isHoliday(date) && (date.getDay() >= 1 && date.getDay() <= 5);
+                    const existing = saved[ymd] || null;
+                    const startDefault = existing?.start || (defaultIsWorkday ? '09:00' : '');
+                    const endDefault = existing?.end || (defaultIsWorkday ? '17:30' : '');
+                    const isGray = holidaysSet.has(ymd) || (holidaySettings.weekendIsHoliday && (date.getDay()===0 || date.getDay()===6));
+
+                    const row = document.createElement('div');
+                    row.className = `flex items-center justify-between p-2 rounded border ${isGray ? 'bg-gray-100' : 'bg-white'}`;
+                    row.innerHTML = `
+                        <div class="w-40">
+                            <div class="font-medium">${ymd}</div>
+                            <div class="text-xs text-gray-500">星期${weekday}</div>
+                        </div>
+                        <div class="flex items-center space-x-2 flex-1 justify-end">
+                            <label class="text-sm text-gray-600">開始</label>
+                            <input type="time" class="border border-gray-300 rounded-md p-1" id="start-${ymd}" value="${startDefault}" placeholder="--:--">
+                            <label class="text-sm text-gray-600 ml-2">結束</label>
+                            <input type="time" class="border border-gray-300 rounded-md p-1" id="end-${ymd}" value="${endDefault}" placeholder="--:--">
+                            <button class="ml-2 px-2 py-1 border rounded-md text-sm" id="clear-${ymd}">清除</button>
+                        </div>
+                    `;
+                    listEl.appendChild(row);
+
+                    document.getElementById(`clear-${ymd}`).addEventListener('click', () => {
+                        document.getElementById(`start-${ymd}`).value = '';
+                        document.getElementById(`end-${ymd}`).value = '';
+                    });
+                }
+
+                document.getElementById('save-workdays').addEventListener('click', () => {
+                    const newData = {};
+                    for (let d = 1; d <= lastDay.getDate(); d++) {
+                        const ymd = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                        const s = document.getElementById(`start-${ymd}`).value;
+                        const e = document.getElementById(`end-${ymd}`).value;
+                        if (s && e) {
+                            newData[ymd] = { start: s, end: e };
+                        }
+                    }
+                    localStorage.setItem(storageKey, JSON.stringify(newData));
+                    showToast('本月上班時間已儲存');
+                });
+
+                // 月份切換：重導至 clock-in/workdays 導覽，帶目標月份
+                const navigateWorkdays = (offset) => {
+                    const base = new Date(year, month, 1);
+                    base.setMonth(base.getMonth() + offset);
+                    // 將目標年月暫存，renderWorkDatesMonthView 讀取
+                    localStorage.setItem('__workdays_target_year', String(base.getFullYear()));
+                    localStorage.setItem('__workdays_target_month', String(base.getMonth()));
+                    showPage('clock-in', 'workdays');
+                };
+                document.getElementById('prev-workdays-month').addEventListener('click', () => navigateWorkdays(-1));
+                document.getElementById('next-workdays-month').addEventListener('click', () => navigateWorkdays(1));
             }
 
             // 個人請假紀錄子頁籤
@@ -4666,6 +4777,9 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
 
                             <div class="p-4 border-t">
                                 <button id="logout-btn" class="w-full bg-gray-200 text-gray-700 py-2 rounded-md hover:bg-gray-300">登出</button>
+                                <p class="mt-2 text-center">
+                                    <a href="#" id="privacy-policy-link" class="text-blue-600 underline">隱私權政策</a>
+                                </p>
                             </div>
                         </div>
                     </div>
@@ -4678,6 +4792,7 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                 const changePasswordForm = document.getElementById('change-password-form');
                 const logoutBtn = document.getElementById('logout-btn');
                 const avatarUploadInput = document.getElementById('avatar-upload');
+                const privacyLink = document.getElementById('privacy-policy-link');
 
                 modal.querySelector('.close-btn').addEventListener('click', close);
                 
@@ -4694,6 +4809,14 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                         showLoading(false);
                     }
                 });
+
+                // 隱私權政策開窗
+                if (privacyLink) {
+                    privacyLink.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        openPrivacyPolicyWindow();
+                    });
+                }
 
                 async function processAndUploadAvatar(file) {
                     if (!file) return;
@@ -4815,6 +4938,77 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                         container.innerHTML = '<div class="text-sm text-red-600">載入請假申請失敗</div>';
                     }
                 })();
+            }
+
+            // 開新視窗顯示隱私權政策
+            function openPrivacyPolicyWindow() {
+                const appName = '西北勤務打卡系統';
+                const policyHtml = `<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>隱私權政策 - ${appName}</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans TC', 'Helvetica Neue', Arial, 'Microsoft JhengHei', sans-serif; margin: 0; padding: 24px; line-height: 1.7; color: #1f2937; }
+    .container { max-width: 800px; margin: 0 auto; }
+    h1 { font-size: 1.5rem; margin-bottom: 12px; }
+    h2 { font-size: 1.1rem; margin-top: 20px; margin-bottom: 8px; }
+    h3 { font-size: 1rem; margin-top: 14px; margin-bottom: 6px; }
+    p { margin: 8px 0; }
+    ul { margin: 8px 0 8px 20px; }
+    .muted { color: #6b7280; font-size: 0.9rem; }
+    .divider { height: 1px; background: #e5e7eb; margin: 16px 0; }
+  </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>隱私權政策</h1>
+      <p>${appName} (以下簡稱「本應用程式」) 尊重並保護所有使用服務用戶的個人隱私權。為了給您提供更準確、更有個性化的服務，本應用程式會按照本隱私權政策的規定使用和披露您的個人資訊。但本應用程式將以高度的勤勉、審慎義務對待這些資訊。除本隱私權政策另有規定外，在未徵得您事先許可的情況下，本應用程式不會將這些資訊對外披露或向第三方提供。本應用程式會不時更新本隱私權政策。 您在同意本應用程式服務使用協議之時，即視為您已經同意本隱私權政策全部內容。</p>
+      <p class="muted">生效日期： 2025年10月07日</p>
+
+      <h2>1. 資訊收集與使用</h2>
+      <p>為了讓本應用程式正常運作並提供您所需的功能，我們需要請求以下權限，並收集相關資訊：</p>
+
+      <h3>相機 (Camera) 權限：</h3>
+      <p>本應用程式需要存取您裝置的相機。此權限僅用於 [請在此處明確說明使用相機的目的，例如：掃描 QR Code、拍照上傳等]。我們不會在您不知情的情況下開啟相機，所拍攝的照片或影片僅會在您的操作下進行處理，我們不會儲存或分享這些內容，除非得到您的明確同意。</p>
+
+      <h3>精確位置 (Precise Location) 權限：</h3>
+      <p>本應用程式需要獲取您裝置的精確位置資訊 (GPS 和網路基礎)。此權限僅用於 [請在此處明確說明使用定位的目的，例如：地圖導航、紀錄打卡地點等]。您的位置資訊將用於提升您的使用者體驗，我們不會將您的位置資訊用於本功能以外的其他目的，也不會與任何第三方分享您的個人軌跡。</p>
+
+      <p>本應用程式不會收集與上述功能無關的任何其他個人可識別資訊。</p>
+
+      <h2>2. 資訊披露</h2>
+      <p>在如下情況下，本應用程式將依據您的個人意願或法律的規定全部或部分地披露您的個人資訊：</p>
+      <ul>
+        <li>a) 經您事先同意，向第三方披露；</li>
+        <li>b) 為提供您所要求的產品和服務，而必須和第三方分享您的個人資訊；</li>
+        <li>c) 根據法律的有關規定，或者行政或司法機構的要求，向第三方或者行政、司法機構披露；</li>
+      </ul>
+
+      <h2>3. 資訊安全</h2>
+      <p>我們致力於保護您的資訊安全。我們採取了適當的管理、技術和實體安全措施來保護您的資訊，防止未經授權的存取、使用、披露、修改或銷毀。</p>
+
+      <h2>4. 兒童隱私</h2>
+      <p>我們的服務不針對任何未滿 13 歲的兒童。我們不會故意收集 13 歲以下兒童的個人可識別資訊。</p>
+
+      <h2>5. 隱私權政策的變更</h2>
+      <p>我們可能會不時更新我們的隱私權政策。因此，我們建議您定期查看此頁面以了解任何變更。我們將通過在此頁面上發布新的隱私權政策來通知您任何變更。</p>
+
+      <h2>6. 聯絡我們</h2>
+      <p>如果您對我們的隱私權政策有任何疑問或建議，請隨時與我們聯絡。 電子郵件:nwcom.eason@gmail.com</p>
+    </div>
+  </body>
+</html>`;
+
+                const newWindow = window.open('', '_blank', 'noopener,noreferrer,width=800,height=900');
+                if (!newWindow) {
+                    showToast('未能開啟新視窗，請檢查瀏覽器彈窗設定', true);
+                    return;
+                }
+                newWindow.document.open();
+                newWindow.document.write(policyHtml);
+                newWindow.document.close();
             }
 
             function renderLeaveInfo(userData) {
@@ -5456,4 +5650,3 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
     </script>
 </body>
 </html>
-

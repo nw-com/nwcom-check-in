@@ -82,10 +82,15 @@ function renderCalendarOverview(container) {
                     <!-- 重要事項將在這裡顯示 -->
                 </div>
             </div>
-        </div>`;
+    </div>`;
     
-    generateCalendar(displayedDate.getFullYear(), displayedDate.getMonth());
-    loadMonthlyEvents(displayedDate.getFullYear(), displayedDate.getMonth());
+    // 載入假日設定後生成月曆，讓假日套用灰底
+    fetchHolidaySettingsOnce()
+        .catch(() => {})
+        .finally(() => {
+            generateCalendar(displayedDate.getFullYear(), displayedDate.getMonth());
+            loadMonthlyEvents(displayedDate.getFullYear(), displayedDate.getMonth());
+        });
     
     // 月份切換事件
     document.getElementById('prev-month').addEventListener('click', () => {
@@ -145,6 +150,22 @@ function generateCalendar(year, month) {
         
         if (isToday) {
             dayCell.classList.add('bg-red-100', 'border-red-300');
+        }
+        
+        // 依國定假日（及設定的週末假日）套用灰底，僅針對本月日期
+        try {
+            const settings = window.__holidaySettingsCache;
+            if (isCurrentMonth && settings) {
+                const iso = formatYMD(currentDate);
+                const holidaysSet = new Set(settings.holidays || []);
+                const isWeekend = currentDate.getDay() === 0 || currentDate.getDay() === 6;
+                const isHoliday = holidaysSet.has(iso) || (settings.weekendIsHoliday && isWeekend);
+                if (isHoliday && !isToday) {
+                    dayCell.classList.add('bg-gray-200');
+                }
+            }
+        } catch (e) {
+            // ignore
         }
         
         dayCell.innerHTML = `
@@ -435,4 +456,44 @@ function markAllNotificationsRead() {
         console.log('全部通知標記為已讀');
         loadNotifications(); // 重新載入通知列表
     }
+}
+
+// 假日設定載入與工具
+function formatYMD(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
+function fetchHolidaySettingsOnce() {
+    return new Promise(async (resolve, reject) => {
+        try {
+            if (window.__holidaySettingsCache) {
+                resolve(window.__holidaySettingsCache);
+                return;
+            }
+            const fs = window.__fs;
+            const db = window.__db;
+            if (!fs || !db || !fs.doc || !fs.getDoc) {
+                // 無法讀取 Firestore，使用空設定
+                window.__holidaySettingsCache = { weekendIsHoliday: false, holidays: [] };
+                resolve(window.__holidaySettingsCache);
+                return;
+            }
+            const { doc, getDoc } = fs;
+            const ref = doc(db, 'settings', 'holidays');
+            const snap = await getDoc(ref);
+            if (snap.exists()) {
+                const data = snap.data();
+                window.__holidaySettingsCache = { weekendIsHoliday: !!data.weekendIsHoliday, holidays: data.holidays || [] };
+            } else {
+                window.__holidaySettingsCache = { weekendIsHoliday: false, holidays: [] };
+            }
+            resolve(window.__holidaySettingsCache);
+        } catch (e) {
+            window.__holidaySettingsCache = { weekendIsHoliday: false, holidays: [] };
+            reject(e);
+        }
+    });
 }
