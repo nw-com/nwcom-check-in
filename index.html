@@ -29,7 +29,7 @@
             box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
             border-radius: 1.5rem;
             overflow: hidden;
-            margin: 10px 10px 50px 10px;
+            margin: 50px 10px 50px 10px;
         }
         .header {
             height: 70px;
@@ -4777,7 +4777,7 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
 
                             <div class="p-4 border-t">
                                 <button id="logout-btn" class="w-full bg-gray-200 text-gray-700 py-2 rounded-md hover:bg-gray-300">登出</button>
-                                <p class="mt-2 text-center">
+                                <p class="mt-6 text-center">
                                     <a href="#" id="privacy-policy-link" class="text-blue-600 underline">隱私權政策</a>
                                 </p>
                             </div>
@@ -4814,7 +4814,7 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                 if (privacyLink) {
                     privacyLink.addEventListener('click', (e) => {
                         e.preventDefault();
-                        openPrivacyPolicyWindow();
+                        openPrivacyPolicyWindow(privacyLink);
                     });
                 }
 
@@ -4940,8 +4940,8 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                 })();
             }
 
-            // 開新視窗顯示隱私權政策
-            function openPrivacyPolicyWindow() {
+            // 在個人資料視窗上開小視窗顯示隱私權政策（不新開視窗）
+            function openPrivacyPolicyWindow(triggerEl = null) {
                 const appName = '西北打卡';
                 const policyHtml = `<!doctype html>
  <html lang="zh-Hant">
@@ -5000,13 +5000,31 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
       </div>
     </body>
   </html>`;
-
-                // 使用 data URL 直接載入完整內容，避免空白頁問題
-                const dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(policyHtml);
-                const win = window.open(dataUrl, '_blank', 'width=800,height=900');
-                if (!win) {
-                    showToast('未能開啟新視窗，請允許瀏覽器彈出視窗', true);
-                }
+                // 直接以站內小視窗呈現（不新開視窗）
+                const overlayId = `privacy-inline-${Date.now()}`;
+                const contentOnly = policyHtml.replace(/^[\s\S]*<body[^>]*>/i, '').replace(/<\/body>[\s\S]*$/i, '');
+                const hostModal = triggerEl ? triggerEl.closest('.modal-content') : null;
+                const container = hostModal || document.body;
+                if (hostModal) { hostModal.classList.add('relative'); }
+                const inlineHTML = `
+                  <div id="${overlayId}" class="${hostModal ? 'absolute' : 'fixed'} inset-0 ${hostModal ? '' : 'z-[60]'} bg-black/20 backdrop-blur-sm flex items-center justify-center">
+                    <div class="w-[92%] max-w-[500px] bg-white rounded-lg shadow-xl flex flex-col">
+                      <div class="flex justify-between items-center p-3 border-b">
+                        <h3 class="font-bold text-base">隱私權政策 - 西北打卡</h3>
+                        <button class="close-btn text-gray-500 hover:text-gray-700"><i data-lucide="x" class="w-5 h-5"></i></button>
+                      </div>
+                      <div class="p-3 overflow-y-auto" style="max-height: 60vh;">
+                        ${contentOnly}
+                      </div>
+                    </div>
+                  </div>`;
+                container.insertAdjacentHTML('beforeend', inlineHTML);
+                const overlay = document.getElementById(overlayId);
+                const closeBtn = overlay.querySelector('.close-btn');
+                const close = () => overlay.remove();
+                closeBtn.addEventListener('click', close);
+                overlay.addEventListener('click', (e) => { if (e.target.id === overlayId) close(); });
+                lucide.createIcons();
             }
 
             function renderLeaveInfo(userData) {
