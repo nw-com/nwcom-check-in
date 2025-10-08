@@ -453,7 +453,7 @@
                 cleanupListeners();
                 if (user) {
                     bodyEl.classList.remove('bg-red-600');
-                    bodyEl.classList.add('bg-gray-100');
+                    bodyEl.classList.add('bg-gray-600');
                     state.currentUser = user;
                     const userDocRef = doc(db, "users", user.uid);
                     const unsubscribe = onSnapshot(userDocRef, (docSnap) => {
@@ -5916,6 +5916,7 @@ const statusText = getStatusDisplayText(r.type || '未知', r.locationName || nu
     </script>
 </body>
 </html>
+
 
 
 
