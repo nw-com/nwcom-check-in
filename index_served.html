@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>e�D?a??a??a??a??a?!c3?c�g��</title>
+    <title>西北勤務打卡系統</title>
     <link rel="icon" type="image/png" href="https://static.wixstatic.com/ficons/6148f9_bb3f0e3c08bd4a3e83840553497fd866~mv2.ico">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -133,13 +133,13 @@
     <!-- API Key Warning -->
     <div id="api-key-warning" class="hide fixed inset-0 bg-red-100 z-[9999] p-8 text-red-800 flex flex-col items-center justify-center text-center">
         <i data-lucide="alert-triangle" class="w-16 h-16 mb-4"></i>
-        <h2 class="text-2xl font-bold mb-2">e??aR?a??a?�a??c??e�L-aR?a-�Dec?</h2>
+        <h2 class="text-2xl font-bold mb-2">請完成最後的設定步驟</h2>
         <p class="max-w-md">
-            c3?c�g��a?�ga�M?a?�Xa?�La�X?a?ae�L-aR? Firebase a?? Google Maps c?? API e??e?�Xa�?
+            系統偵測到您尚未設定 Firebase 或 Google Maps 的 API 金鑰。
             <br><br>
-            <strong class="text-red-900">e�?a�M?a?��c�L?a??e?��ea?i??e�?a?��a??e|?c??e�L-aR?a�?</strong> a?oa??aR?a?�Le�?e??i??a??c?!a3?c?oa?�Lc?�Fc??e??e?�Xi??a?�La??e??e|ae?aaR?a??a-?e�L-aR?a�?
+            <strong class="text-red-900">這不是程式錯誤，而是必要的設定。</strong> 基於安全考量，我無法為您產生金鑰，您必須親自完成此設定。
             <br><br>
-            e??a??e?? <code>index.html</code> aa?a!?i??a??a?�Xa?�a�M?a?1c?? <code>&lt;script type="module"&gt;</code> a?�a!?i??a�M|a??c?��e�L?e���Ga??c?oa!?a?�Da?�Le?aa�P��c??e??e?�Xa�?ec3c���Xa-�Dec?e??a??e�? <code>README.md</code> aa?a!?a�?
+            請打開 <code>index.html</code> 檔案，找到最下方的 <code>&lt;script type="module"&gt;</code> 區塊，並依照註解指示填入您自己的金鑰。詳細步驟請參考 <code>README.md</code> 檔案。
         </p>
     </div>
 
@@ -152,22 +152,22 @@
     <div id="login-page" class="w-full max-w-sm p-8 bg-white rounded-2xl shadow-lg hide">
         <div class="text-center mb-8">
             <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mx-auto text-red-600"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"></path><path d="m9 12 2 2 4-4"></path></svg>
-            <h1 class="text-2xl font-bold text-gray-800 mt-4">e�D?a??a??a??a??a?!c3?c�g��</h1>
-            <p class="text-gray-500">e?2c?��a�M?ec|c??V2.2.0</p>
+            <h1 class="text-2xl font-bold text-gray-800 mt-4">西北勤務打卡系統</h1>
+            <p class="text-gray-500">雲端測試版V2.2.0</p>
         </div>
         <form id="login-form">
             <div class="mb-4">
                  <div class="flex justify-between items-center mb-1">
-                    <label for="email" class="block text-sm font-medium text-gray-700">e??a-?e?�ga??</label>
+                    <label for="email" class="block text-sm font-medium text-gray-700">電子郵件</label>
                     <div class="flex items-center">
                         <input id="remember-me" type="checkbox" class="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded">
-                        <label for="remember-me" class="ml-2 block text-sm text-gray-700">e�L?a??a??</label>
+                        <label for="remember-me" class="ml-2 block text-sm text-gray-700">記住我</label>
                     </div>
                 </div>
                 <input type="email" id="email" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500" required>
             </div>
             <div class="mb-6">
-                <label for="password" class="block text-sm font-medium text-gray-700 mb-1">a��?c�F?</label>
+                <label for="password" class="block text-sm font-medium text-gray-700 mb-1">密碼</label>
                 <div class="relative">
                     <input type="password" id="password" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500 pr-10" required>
                     <button type="button" id="toggle-password" class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-500">
@@ -176,7 +176,7 @@
                 </div>
             </div>
             <button type="submit" class="w-full bg-red-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition duration-150">
-                c??a?�D
+                登入
             </button>
             <p id="login-error" class="text-red-500 text-sm mt-4 text-center"></p>
         </form>
@@ -188,7 +188,7 @@
         <header class="h-[70px] flex items-center justify-between px-4 border-b border-gray-200 flex-shrink-0">
             <div class="flex items-center space-x-2">
                 <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-red-600"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"></path><path d="m9 12 2 2 4-4"></path></svg>
-                <span class="text-lg font-bold text-gray-800">e�D?a??a??a??a??a?!c3?c�g��</span>
+                <span class="text-lg font-bold text-gray-800">西北勤務打卡系統</span>
                 <span id="welcome-message" class="text-sm text-gray-600 ml-2"></span>
             </div>
             <button id="profile-avatar-btn">
@@ -205,31 +205,31 @@
         <footer class="h-[70px] border-t border-gray-200 flex-shrink-0 bg-white">
             <nav id="main-nav" class="flex justify-around h-full items-center">
                 <button data-tab="dashboard" class="tab-btn flex flex-col items-center text-gray-500 border-t-2 border-transparent pt-2 active">
-                    <i data-lucide="layout-dashboard"></i><span class="text-xs mt-1">a?�e!�La??</span>
+                    <i data-lucide="layout-dashboard"></i><span class="text-xs mt-1">儀表板</span>
                 </button>
                 <button data-tab="clock-in" class="tab-btn flex flex-col items-center text-gray-500 border-t-2 border-transparent pt-2">
-                    <i data-lucide="fingerprint"></i><span class="text-xs mt-1">a??a?!</span>
+                    <i data-lucide="fingerprint"></i><span class="text-xs mt-1">打卡</span>
                 </button>
                 <button id="nav-other" data-tab="other" class="tab-btn flex flex-col items-center text-gray-500 border-t-2 border-transparent pt-2 hide">
-                    <i data-lucide="ellipsis"></i><span class="text-xs mt-1">a??a??</span>
+                    <i data-lucide="ellipsis"></i><span class="text-xs mt-1">其他</span>
                 </button>
                 <button id="nav-tracking" data-tab="tracking" class="tab-btn flex flex-col items-center text-gray-500 border-t-2 border-transparent pt-2">
-                    <i data-lucide="map-pin"></i><span class="text-xs mt-1">e??e1?</span>
+                    <i data-lucide="map-pin"></i><span class="text-xs mt-1">追蹤</span>
                 </button>
                 <button id="nav-hr" data-tab="hr" class="tab-btn flex flex-col items-center text-gray-500 border-t-2 border-transparent pt-2 hide">
-                    <i data-lucide="users"></i><span class="text-xs mt-1">aooao?</span>
+                    <i data-lucide="users"></i><span class="text-xs mt-1">人事</span>
                 </button>
                 <button id="nav-features" data-tab="features" class="tab-btn flex flex-col items-center text-gray-500 border-t-2 border-transparent pt-2">
-                    <i data-lucide="layers"></i><span class="text-xs mt-1">a??e??</span>
+                    <i data-lucide="layers"></i><span class="text-xs mt-1">功能</span>
                 </button>
                 <button id="nav-calendar" data-tab="calendar" class="tab-btn flex flex-col items-center text-gray-500 border-t-2 border-transparent pt-2">
-                    <i data-lucide="calendar"></i><span class="text-xs mt-1">e!?ao?a??</span>
+                    <i data-lucide="calendar"></i><span class="text-xs mt-1">行事曆</span>
                 </button>
                 <button id="nav-settings" data-tab="settings" class="tab-btn flex flex-col items-center text-gray-500 border-t-2 border-transparent pt-2">
-                    <i data-lucide="settings"></i><span class="text-xs mt-1">e�L-aR?</span>
+                    <i data-lucide="settings"></i><span class="text-xs mt-1">設定</span>
                 </button>
                 <button id="nav-group" data-tab="group" class="tab-btn flex flex-col items-center text-gray-500 border-t-2 border-transparent pt-2 hide">
-                    <i data-lucide="git-branch"></i><span class="text-xs mt-1">c??c�g?</span>
+                    <i data-lucide="git-branch"></i><span class="text-xs mt-1">群組</span>
                 </button>
             </nav>
         </footer>
@@ -4147,6 +4147,48 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                 modal.querySelector('.close-btn').addEventListener('click', () => {
                     modal.remove();
                 });
+                const dlBtn = modal.querySelector('.download-btn');
+                if (dlBtn) {
+                    dlBtn.addEventListener('click', async () => {
+                        try {
+                            const slides = modal.querySelectorAll('.photo-slide');
+                            if (!slides || slides.length === 0) { showToast('無照片可下載', true); return; }
+                            let currentIndex = 0;
+                            if (slides.length > 1) {
+                                const idx = Array.from(slides).findIndex(s => s.style.display !== 'none');
+                                currentIndex = idx >= 0 ? idx : 0;
+                            }
+                            const imgEl = slides[currentIndex]?.querySelector('img');
+                            const src = imgEl?.src;
+                            if (!src) { showToast('無照片可下載', true); return; }
+                            const defaultName = `clock-in-photo-${Date.now()}`;
+                            const a = document.createElement('a');
+                            if (src.startsWith('data:')) {
+                                const mime = src.substring(5, src.indexOf(';'));
+                                let ext = 'jpg';
+                                if (mime.includes('png')) ext = 'png';
+                                else if (mime.includes('jpeg')) ext = 'jpg';
+                                else if (mime.includes('webp')) ext = 'webp';
+                                a.href = src;
+                                a.download = `${defaultName}.${ext}`;
+                                document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                            } else {
+                                const res = await fetch(src);
+                                if (!res.ok) throw new Error('下載失敗');
+                                const blob = await res.blob();
+                                const url = URL.createObjectURL(blob);
+                                const extGuess = (blob.type && blob.type.split('/')[1]) || 'jpg';
+                                a.href = url;
+                                a.download = `${defaultName}.${extGuess}`;
+                                document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                                setTimeout(() => URL.revokeObjectURL(url), 5000);
+                            }
+                        } catch (err) {
+                            console.error('下載照片失敗', err);
+                            showToast('下載照片失敗', true);
+                        }
+                    });
+                }
                 
                 if (window.google && window.google.maps) {
                     const mapDiv = document.getElementById('modal-map');
@@ -4184,18 +4226,23 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                     <div id="${modalId}" class="modal-backdrop">
                         <div class="modal-content w-[90%] max-w-[500px] bg-white rounded-lg shadow-xl flex flex-col">
                             <div class="flex justify-between items-center p-4 border-b">
-                                <h3 class="font-bold text-lg">c?��c??c�?e|?</h3>
-                                <button class="close-btn text-gray-500 hover:text-gray-700">
-                                    <i data-lucide="x" class="w-5 h-5"></i>
-                                </button>
+                                <h3 class="font-bold text-lg">照片瀏覽</h3>
+                                <div class="flex items-center gap-2">
+                                    <button class="download-btn text-gray-600 hover:text-gray-800" title="下載">
+                                        <i data-lucide="download" class="w-5 h-5"></i>
+                                    </button>
+                                    <button class="close-btn text-gray-500 hover:text-gray-700">
+                                        <i data-lucide="x" class="w-5 h-5"></i>
+                                    </button>
+                                </div>
                             </div>
                             <div class="p-4 photo-container">
                                 ${contentHTML}
                             </div>
                             ${(photos?.length || 0) > 1 ? `
                             <div class="flex justify-center p-2 gap-2">
-                                <button class="prev-btn bg-gray-200 hover:bg-gray-300 px-4 py-2 rounded">a�M?a�M�a?�g</button>
-                                <button class="next-btn bg-gray-200 hover:bg-gray-300 px-4 py-2 rounded">a�M?a�M�a?�g</button>
+                                <button class="prev-btn bg-gray-200 hover:bg-gray-300 px-4 py-2 rounded">上一張</button>
+                                <button class="next-btn bg-gray-200 hover:bg-gray-300 px-4 py-2 rounded">下一張</button>
                             </div>
                             ` : ''}
                         </div>
@@ -4684,21 +4731,20 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                     if (!file) return;
                     showLoading(true);
                     try {
-                        const compressedFile = await compressImage(file, 300);
-                        const timestamp = new Date().getTime();
-                        const fileName = `avatar_${timestamp}.jpg`;
-                        const storageRef = ref(storage, `avatars/${state.currentUser.uid}/${fileName}`);
-                        await uploadBytes(storageRef, compressedFile);
-                        const downloadURL = await getDownloadURL(storageRef);
-                        await updateDoc(doc(db, "users", state.currentUser.uid), { avatarUrl: downloadURL });
-                        state.currentUserData.avatarUrl = downloadURL;
-                        const cachedUrl = `${downloadURL}?t=${timestamp}`;
-                        document.getElementById('modal-avatar').src = cachedUrl;
-                        document.getElementById('header-avatar').src = cachedUrl;
-                        showToast("e?-a??a?��a?�Xa??a??");
+                        const base64 = await compressToBase64(file, 300);
+                        const maxSize = 900 * 1024; // 約 900KB 上限
+                        if (!base64 || base64.length > maxSize) {
+                            throw new Error('選擇的圖片過大（需小於約 900KB），請換較小的圖片');
+                        }
+                        await updateDoc(doc(db, 'users', state.currentUser.uid), { avatarUrl: base64 });
+                        state.currentUserData.avatarUrl = base64;
+                        document.getElementById('modal-avatar').src = base64;
+                        const header = document.getElementById('header-avatar');
+                        if (header) header.src = base64;
+                        showToast('頭像更新成功');
                     } catch (error) {
-                        console.error("Avatar upload error:", error);
-                        showToast("e?-a??a�M?a?3a?��a??: " + error.message, true);
+                        console.error('Avatar upload error:', error);
+                        showToast('頭像上傳失敗: ' + (error.message || error), true);
                     } finally {
                         showLoading(false);
                     }
@@ -4710,37 +4756,36 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                 });
 
                 
-                // a�G?c�MRa??c??a??a?�M
-                async function compressImage(file, maxWidth) {
-                    return new Promise((resolve) => {
+                // 壓縮並轉 Base64（Data URL）
+                async function compressToBase64(file, maxWidth) {
+                    return new Promise((resolve, reject) => {
                         const reader = new FileReader();
-                        reader.readAsDataURL(file);
+                        reader.onerror = () => reject(new Error('讀取圖片失敗'));
                         reader.onload = (event) => {
                             const img = new Image();
+                            img.onerror = () => reject(new Error('圖片載入失敗'));
                             img.src = event.target.result;
                             img.onload = () => {
                                 const canvas = document.createElement('canvas');
                                 let width = img.width;
                                 let height = img.height;
-                                
                                 if (width > maxWidth) {
                                     height = Math.round((height * maxWidth) / width);
                                     width = maxWidth;
                                 }
-                                
                                 canvas.width = width;
                                 canvas.height = height;
                                 const ctx = canvas.getContext('2d');
                                 ctx.drawImage(img, 0, 0, width, height);
-                                
-                                canvas.toBlob((blob) => {
-                                    resolve(new File([blob], file.name, {
-                                        type: 'image/jpeg',
-                                        lastModified: Date.now()
-                                    }));
-                                }, 'image/jpeg', 0.7);
+                                try {
+                                    const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+                                    resolve(dataUrl);
+                                } catch (e) {
+                                    reject(e);
+                                }
                             };
                         };
+                        reader.readAsDataURL(file);
                     });
                 }
 

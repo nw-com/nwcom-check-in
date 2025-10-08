@@ -282,6 +282,7 @@
             addDoc,
             getDoc,
             updateDoc,
+            deleteDoc,
             setDoc,
             query,
             where,
@@ -453,7 +454,7 @@
                 cleanupListeners();
                 if (user) {
                     bodyEl.classList.remove('bg-red-600');
-                    bodyEl.classList.add('bg-gray-600');
+                    bodyEl.classList.add('bg-gray-100');
                     state.currentUser = user;
                     const userDocRef = doc(db, "users", user.uid);
                     const unsubscribe = onSnapshot(userDocRef, (docSnap) => {
@@ -671,7 +672,8 @@
                             recs.forEach(r => {
                                 const rowClass = hasAnomalies ? 'bg-red-50' : '';
                                 const ts = r.timestamp?.toDate?.() || (r.timestamp ? new Date(r.timestamp) : new Date());
-const statusText = getStatusDisplayText(r.type || '未知', r.locationName || null, r.dutyType || null);
+                                const locName = typeof r.locationName === 'string' ? r.locationName : (r.location?.address || null);
+                                const statusText = getStatusDisplayText(r.type || '未知', locName, r.dutyType || null);
                                 const statusColorClass = getStatusColor(statusText);
                                 html += `
                                     <tr class="${rowClass}">
@@ -884,7 +886,7 @@ const statusText = getStatusDisplayText(r.type || '未知', r.locationName || nu
                     // 1) 上班中-辦公室 2) 返回-辦公室 3) 外出-項目-地點 4) 抵達-項目-地點
                     // 5) 離開-項目-地點 6) 請假中 7) 已下班 其餘置後
                     const statusPriority = (user) => {
-                        const locationText = user.clockInStatus === '外出' && user.outboundLocation ? user.outboundLocation : user.lastLocation;
+                        const locationText = user.clockInStatus === '外出' && user.outboundLocation ? user.outboundLocation : (user.lastLocation?.address || null);
                         const display = getStatusDisplayText(user.clockInStatus || '未打卡', locationText, user.dutyType);
                         // 請假中：臨時請假或當天有效的請假申請
                         let isLeave = (user.clockInStatus === '臨時請假') || (display.includes('請假'));
@@ -922,9 +924,9 @@ const statusText = getStatusDisplayText(r.type || '未知', r.locationName || nu
                         if (tA.getTime() !== tB.getTime()) return tB - tA;
                         return a.name.localeCompare(b.name, 'zh-Hant');
                     }).forEach(user => {
-                        const locationText = user.clockInStatus === '外出' && user.outboundLocation ? user.outboundLocation : user.lastLocation;
-                        const statusText = getStatusDisplayText(user.clockInStatus || '未打卡', locationText, user.dutyType);
-                        const statusColor = getStatusColor(statusText);
+                            const locationText = user.clockInStatus === '外出' && user.outboundLocation ? user.outboundLocation : (user.lastLocation?.address || null);
+                            const statusText = getStatusDisplayText(user.clockInStatus || '未打卡', locationText, user.dutyType);
+                            const statusColor = getStatusColor(statusText);
                         if (user.id === state.currentUser.uid) {
                             myStatusFound = true;
                             (async () => {
@@ -1044,7 +1046,7 @@ const statusText = getStatusDisplayText(r.type || '未知', r.locationName || nu
                     
                     // 排序：自訂狀態優先級 + 最近更新時間（新至舊） + 姓名
                     const statusPriority = (user) => {
-                        const locationText = user.clockInStatus === '外出' && user.outboundLocation ? user.outboundLocation : user.lastLocation;
+                        const locationText = user.clockInStatus === '外出' && user.outboundLocation ? user.outboundLocation : (user.lastLocation?.address || null);
                         const display = getStatusDisplayText(user.clockInStatus || '未打卡', locationText, user.dutyType);
                         let isLeave = (user.clockInStatus === '臨時請假') || (display.includes('請假'));
                         if (!isLeave) {
@@ -1102,7 +1104,7 @@ const statusText = getStatusDisplayText(r.type || '未知', r.locationName || nu
                             if (tA.getTime() !== tB.getTime()) return tB - tA;
                             return a.name.localeCompare(b.name, 'zh-Hant');
                         }).forEach(user => {
-                            const locationText = user.clockInStatus === '外出' && user.outboundLocation ? user.outboundLocation : user.lastLocation;
+                            const locationText = user.clockInStatus === '外出' && user.outboundLocation ? user.outboundLocation : (user.lastLocation?.address || null);
                             const statusText = getStatusDisplayText(user.clockInStatus || '未打卡', locationText, user.dutyType);
                             const statusColor = getStatusColor(statusText);
                             const clockInTime = latestMap[user.id];
@@ -2223,17 +2225,15 @@ const statusText = getStatusDisplayText(r.type || '未知', r.locationName || nu
                                         <p class="font-bold text-lg ${statusColor}">${statusText}</p>
                                         <p class="text-sm text-gray-600">${formatDate(record.timestamp)}</p>
                                     </div>
-                                    <div class="flex space-x-2">
-                                        <button class="map-btn bg-blue-500 text-white px-2 py-1 rounded text-sm" data-lat="${record.location?.latitude || 0}" data-lng="${record.location?.longitude || 0}">
-                                            <i data-lucide="map-pin"></i> 地圖
-                                        </button>
-                                    </div>
                                 </div>
                                 <div class="mt-2 flex space-x-2 overflow-x-auto">
                                     <button class="photo-btn bg-green-500 text-white px-2 py-1 rounded text-sm" 
                                         data-photos='${JSON.stringify(record.photoUrls || [])}' 
                                         data-descriptions='${JSON.stringify(record.descriptions || [])}'>
                                         <i data-lucide="image"></i> 照片 (${(record.photoUrls?.length || 0)})
+                                    </button>
+                                    <button class="map-btn bg-blue-500 text-white px-2 py-1 rounded text-sm" data-lat="${record.location?.latitude || 0}" data-lng="${record.location?.longitude || 0}">
+                                        <i data-lucide="map-pin"></i> 地圖
                                     </button>
                                 </div>
                             `;
@@ -2633,34 +2633,9 @@ const statusText = getStatusDisplayText(r.type || '未知', r.locationName || nu
                                     </div>
                                     <div class="mt-1 text-xs text-gray-500">裝置ID: ${record.deviceId || '未知'}</div>
                                 </div>
-                                <div class="flex space-x-2 items-start">
-                                    ${record.location ? `
-                                        <button class="map-btn bg-green-500 text-white px-2 py-1 rounded text-sm" 
-                                            data-lat="${record.location.latitude}" 
-                                            data-lng="${record.location.longitude}">
-                                            <i data-lucide="map-pin"></i> 地圖
-                                        </button>
-                                    ` : ''}
-                                    <!-- Admin controls: edit/delete -->
-                                    <span class="admin-controls hidden" data-record-id="${record.id}" data-record='${JSON.stringify({
-                                        id: record.id,
-                                        type: record.type,
-                                        timeISO: (record.timestamp?.toDate?.() || new Date()).toISOString(),
-                                        lat: record.location?.latitude ?? null,
-                                        lng: record.location?.longitude ?? null,
-                                        locationName: record.locationName || '',
-                                        dutyType: record.dutyType || ''
-                                    })}'>
-                                        <button class="edit-record-btn bg-yellow-500 text-white px-2 py-1 rounded text-sm">
-                                            <i data-lucide="pencil"></i> 編輯
-                                        </button>
-                                        <button class="delete-record-btn bg-red-600 text-white px-2 py-1 rounded text-sm">
-                                            <i data-lucide="trash-2"></i> 刪除
-                                        </button>
-                                    </span>
-                                </div>
+                                <div class="flex space-x-2 items-start"></div>
                             </div>
-                            <div class="mt-2 flex space-x-2 overflow-x-auto">
+                            <div class="mt-2 flex space-x-2 overflow-x-auto items-center">
                                 ${record.photoUrls && record.photoUrls.length > 0 ? `
                                     <button class="photo-btn bg-blue-500 text-white px-2 py-1 rounded text-sm" 
                                         data-photos='${JSON.stringify(record.photoUrls || [])}' 
@@ -2668,6 +2643,30 @@ const statusText = getStatusDisplayText(r.type || '未知', r.locationName || nu
                                         <i data-lucide="image"></i> 照片 (${record.photoUrls.length})
                                     </button>
                                 ` : ''}
+                                ${record.location ? `
+                                    <button class="map-btn bg-green-500 text-white px-2 py-1 rounded text-sm" 
+                                        data-lat="${record.location.latitude}" 
+                                        data-lng="${record.location.longitude}">
+                                        <i data-lucide="map-pin"></i> 地圖
+                                    </button>
+                                ` : ''}
+                                <!-- Admin controls: edit/delete -->
+                                <span class="admin-controls hidden" data-record-id="${record.id}" data-record='${JSON.stringify({
+                                    id: record.id,
+                                    type: record.type,
+                                    timeISO: (record.timestamp?.toDate?.() || new Date()).toISOString(),
+                                    lat: record.location?.latitude ?? null,
+                                    lng: record.location?.longitude ?? null,
+                                    locationName: record.locationName || '',
+                                    dutyType: record.dutyType || ''
+                                })}'>
+                                    <button class="edit-record-btn bg-yellow-500 text-white px-2 py-1 rounded text-sm">
+                                        <i data-lucide="pencil"></i> 編輯
+                                    </button>
+                                    <button class="delete-record-btn bg-red-600 text-white px-2 py-1 rounded text-sm">
+                                        <i data-lucide="trash-2"></i> 刪除
+                                    </button>
+                                </span>
                             </div>
                         `;
                         container.appendChild(card);
@@ -2928,34 +2927,9 @@ const statusText = getStatusDisplayText(r.type || '未知', r.locationName || nu
                                             </div>
                                             <div class="mt-1 text-xs text-gray-500">裝置ID: ${record.deviceId || '未知'}</div>
                                         </div>
-                                        <div class="flex space-x-2 items-start">
-                                            ${record.location ? `
-                                                <button class="map-btn bg-green-500 text-white px-2 py-1 rounded text-sm" 
-                                                    data-lat="${record.location.latitude}" 
-                                                    data-lng="${record.location.longitude}">
-                                                    <i data-lucide="map-pin"></i> 地圖
-                                                </button>
-                                            ` : ''}
-                                            <!-- Admin controls: edit/delete -->
-                                            <span class="admin-controls hidden" data-record-id="${record.id}" data-record='${JSON.stringify({
-                                                id: record.id,
-                                                type: record.type,
-                                                timeISO: (record.timestamp?.toDate?.() || new Date()).toISOString(),
-                                                lat: record.location?.latitude ?? null,
-                                                lng: record.location?.longitude ?? null,
-                                                locationName: record.locationName || '',
-                                                dutyType: record.dutyType || ''
-                                            })}'>
-                                                <button class="edit-record-btn bg-yellow-500 text-white px-2 py-1 rounded text-sm">
-                                                    <i data-lucide="pencil"></i> 編輯
-                                                </button>
-                                                <button class="delete-record-btn bg-red-600 text-white px-2 py-1 rounded text-sm">
-                                                    <i data-lucide="trash-2"></i> 刪除
-                                                </button>
-                                            </span>
-                                        </div>
+                                        <div class="flex space-x-2 items-start"></div>
                                     </div>
-                                    <div class="mt-2 flex space-x-2 overflow-x-auto">
+                                    <div class="mt-2 flex space-x-2 overflow-x-auto items-center">
                                         ${record.photoUrls && record.photoUrls.length > 0 ? `
                                             <button class="photo-btn bg-blue-500 text-white px-2 py-1 rounded text-sm" 
                                                 data-photos='${JSON.stringify(record.photoUrls || [])}' 
@@ -2963,6 +2937,30 @@ const statusText = getStatusDisplayText(r.type || '未知', r.locationName || nu
                                                 <i data-lucide="image"></i> 照片 (${record.photoUrls.length})
                                             </button>
                                         ` : ''}
+                                        ${record.location ? `
+                                            <button class="map-btn bg-green-500 text-white px-2 py-1 rounded text-sm" 
+                                                data-lat="${record.location.latitude}" 
+                                                data-lng="${record.location.longitude}">
+                                                <i data-lucide="map-pin"></i> 地圖
+                                            </button>
+                                        ` : ''}
+                                        <!-- Admin controls: edit/delete -->
+                                        <span class="admin-controls hidden" data-record-id="${record.id}" data-record='${JSON.stringify({
+                                            id: record.id,
+                                            type: record.type,
+                                            timeISO: (record.timestamp?.toDate?.() || new Date()).toISOString(),
+                                            lat: record.location?.latitude ?? null,
+                                            lng: record.location?.longitude ?? null,
+                                            locationName: record.locationName || '',
+                                            dutyType: record.dutyType || ''
+                                        })}'>
+                                            <button class="edit-record-btn bg-yellow-500 text-white px-2 py-1 rounded text-sm">
+                                                <i data-lucide="pencil"></i> 編輯
+                                            </button>
+                                            <button class="delete-record-btn bg-red-600 text-white px-2 py-1 rounded text-sm">
+                                                <i data-lucide="trash-2"></i> 刪除
+                                            </button>
+                                        </span>
                                     </div>
                                 `;
                                 recordsList.appendChild(card);
@@ -3416,7 +3414,7 @@ const statusText = getStatusDisplayText(r.type || '未知', r.locationName || nu
                     Promise.all(augmentedPromises).then((augmentedUsers) => {
                         // 排序對齊「所有同仁狀態」：狀態優先級 -> 最近更新時間(新→舊) -> 姓名
                         const statusPriority = (u) => {
-                            const display = u.__statusText || getStatusDisplayText(u.clockInStatus || '未打卡', (u.clockInStatus === '外出' && u.outboundLocation ? u.outboundLocation : u.lastLocation), u.dutyType);
+                        const display = u.__statusText || getStatusDisplayText(u.clockInStatus || '未打卡', (u.clockInStatus === '外出' && u.outboundLocation ? u.outboundLocation : (u.lastLocation?.address || null)), u.dutyType);
                             let isLeave = (u.clockInStatus === '臨時請假') || (display.includes('請假'));
                             if (!isLeave) {
                                 const leave = u.leaveStatus || '';
@@ -3462,12 +3460,13 @@ const statusText = getStatusDisplayText(r.type || '未知', r.locationName || nu
 
                             const userElement = document.createElement('div');
                             userElement.className = `flex items-center justify-between p-2 rounded-md cursor-pointer hover:bg-gray-100 ${!hasLocation ? 'opacity-50' : ''}`;
+                            const statusColorClass = getStatusColor(user.__statusText || '未打卡');
                             userElement.innerHTML = `
                                 <div class="flex items-center">
                                     <img src="${user.avatarUrl || `https://placehold.co/32x32/EFEFEF/333333?text=${(user.name || 'U').charAt(0)}`}" class="w-8 h-8 rounded-full mr-3 object-cover">
                                     <div>
                                         <p class="font-medium text-sm text-gray-800">${user.name || '未知用戶'}</p>
-                                        <p class="text-xs text-gray-500">${user.__statusText || '未打卡'}</p>
+                                        <p class="text-xs font-semibold ${statusColorClass}">${user.__statusText || '未打卡'}</p>
                                     </div>
                                 </div>
                                 <span class="text-xs text-gray-400">${user.__lastStatusTime ? '最近狀態時間：' + timeAgo(user.__lastStatusTime) : '無紀錄'}</span>
@@ -4536,9 +4535,14 @@ const statusText = getStatusDisplayText(r.type || '未知', r.locationName || nu
                         <div class="modal-content w-[90%] max-w-[500px] bg-white rounded-lg shadow-xl flex flex-col">
                             <div class="flex justify-between items-center p-4 border-b">
                                 <h3 class="font-bold text-lg">照片瀏覽</h3>
-                                <button class="close-btn text-gray-500 hover:text-gray-700">
-                                    <i data-lucide="x" class="w-5 h-5"></i>
-                                </button>
+                                <div class="flex items-center gap-2">
+                                    <button class="download-btn text-gray-600 hover:text-gray-800" title="下載">
+                                        <i data-lucide="download" class="w-5 h-5"></i>
+                                    </button>
+                                    <button class="close-btn text-gray-500 hover:text-gray-700">
+                                        <i data-lucide="x" class="w-5 h-5"></i>
+                                    </button>
+                                </div>
                             </div>
                             <div class="p-4 photo-container">
                                 ${contentHTML}
@@ -4560,6 +4564,47 @@ const statusText = getStatusDisplayText(r.type || '未知', r.locationName || nu
                 modal.querySelector('.close-btn').addEventListener('click', () => {
                     modal.remove();
                 });
+                const dlBtn = modal.querySelector('.download-btn');
+                if (dlBtn) {
+                    dlBtn.addEventListener('click', async () => {
+                        try {
+                            const slides = modal.querySelectorAll('.photo-slide');
+                            if (!slides || slides.length === 0) { showToast('無照片可下載', true); return; }
+                            let currentIndex = 0;
+                            if (slides.length > 1) {
+                                const idx = Array.from(slides).findIndex(s => s.style.display !== 'none');
+                                currentIndex = idx >= 0 ? idx : 0;
+                            }
+                            const imgEl = slides[currentIndex]?.querySelector('img');
+                            const src = imgEl?.src;
+                            if (!src) { showToast('無照片可下載', true); return; }
+                            const defaultName = `clock-in-photo-${Date.now()}`;
+                            const a = document.createElement('a');
+                            if (src.startsWith('data:')) {
+                                const mime = src.substring(5, src.indexOf(';'));
+                                let ext = 'jpg';
+                                if (mime.includes('png')) ext = 'png';
+                                else if (mime.includes('jpeg')) ext = 'jpg';
+                                else if (mime.includes('webp')) ext = 'webp';
+                                a.href = src;
+                                a.download = `${defaultName}.${ext}`;
+                                document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                            } else {
+                                const res = await fetch(src);
+                                const blob = await res.blob();
+                                const url = URL.createObjectURL(blob);
+                                const extGuess = (blob.type && blob.type.split('/')[1]) || 'jpg';
+                                a.href = url;
+                                a.download = `${defaultName}.${extGuess}`;
+                                document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                                setTimeout(() => URL.revokeObjectURL(url), 5000);
+                            }
+                        } catch (err) {
+                            console.error('下載照片失敗', err);
+                            showToast('下載照片失敗', true);
+                        }
+                    });
+                }
                 
                 if ((photos?.length || 0) > 1) {
                     const slides = modal.querySelectorAll('.photo-slide');
@@ -4667,6 +4712,20 @@ const statusText = getStatusDisplayText(r.type || '未知', r.locationName || nu
                         if (dutyType) updateData.dutyType = dutyType.slice(0, 100);
                         await updateDoc(doc(db, 'clockInRecords', record.id), updateData);
                         showToast('更新成功');
+                        // 依當前頁面觸發刷新：追蹤或人事列表
+                        try {
+                            if (typeof loadAttendanceRecords === 'function') {
+                                // 追蹤頁面
+                                loadAttendanceRecords();
+                            } else if (typeof renderAttendanceRecordsList === 'function') {
+                                // 人事列表頁面
+                                const selectedUserId = document.getElementById('user-select')?.value || 'all';
+                                const selectedDateStr = document.getElementById('record-date')?.value || new Date().toISOString().split('T')[0];
+                                await renderAttendanceRecordsList('attendance-records-list', selectedUserId, selectedDateStr);
+                            }
+                        } catch (err) {
+                            console.warn('刷新列表時發生問題：', err);
+                        }
                         close();
                     } catch (e) {
                         console.error('update clockInRecord error', e);
@@ -4680,6 +4739,7 @@ const statusText = getStatusDisplayText(r.type || '未知', r.locationName || nu
                 const isEditing = user !== null;
                 const title = isEditing ? '編輯帳號' : '新增帳號';
                 let newUserAvatarFile = null;
+                let newUserAvatarBase64 = null;
                 const close = () => document.getElementById(modalId)?.remove();
 
                 const defaultAvatar = 'https://placehold.co/80x80/EFEFEF/333333?text=頭像';
@@ -4759,6 +4819,37 @@ const statusText = getStatusDisplayText(r.type || '未知', r.locationName || nu
                 const avatarPreview = document.getElementById('user-avatar-preview');
                 const avatarUploadInput = document.getElementById('user-avatar-upload');
 
+                // 壓縮圖片為 Base64，限制大小與尺寸
+                const compressToBase64 = async (file, maxW = 320, maxH = 320, quality = 0.8) => {
+                    return await new Promise((resolve, reject) => {
+                        const img = new Image();
+                        const url = URL.createObjectURL(file);
+                        img.onload = () => {
+                            try {
+                                const ratio = Math.min(maxW / img.width, maxH / img.height, 1);
+                                const w = Math.max(1, Math.floor(img.width * ratio));
+                                const h = Math.max(1, Math.floor(img.height * ratio));
+                                const canvas = document.createElement('canvas');
+                                canvas.width = w;
+                                canvas.height = h;
+                                const ctx = canvas.getContext('2d');
+                                ctx.drawImage(img, 0, 0, w, h);
+                                const dataUrl = canvas.toDataURL('image/jpeg', quality);
+                                URL.revokeObjectURL(url);
+                                resolve(dataUrl);
+                            } catch (err) {
+                                URL.revokeObjectURL(url);
+                                reject(err);
+                            }
+                        };
+                        img.onerror = (e) => {
+                            URL.revokeObjectURL(url);
+                            reject(e);
+                        };
+                        img.src = url;
+                    });
+                };
+
                 // --- Avatar Logic ---
                 // 允許所有用戶（包括編輯現有用戶）上傳頭像
                 const uploadBtn = document.getElementById('user-upload-avatar-btn');
@@ -4766,11 +4857,26 @@ const statusText = getStatusDisplayText(r.type || '未知', r.locationName || nu
                     uploadBtn.addEventListener('click', () => avatarUploadInput.click());
                 }
                 
-                avatarUploadInput.addEventListener('change', (e) => {
+                avatarUploadInput.addEventListener('change', async (e) => {
                     const file = e.target.files[0];
                     if (file) {
                         newUserAvatarFile = file;
-                        avatarPreview.src = URL.createObjectURL(file);
+                        try {
+                            const base64 = await compressToBase64(file, 320, 320, 0.8);
+                            // 檢查大小（約略換算 Base64 至位元組）
+                            const approxBytes = Math.floor(base64.length * 3 / 4);
+                            if (approxBytes > 900 * 1024) {
+                                showToast('照片過大，請選擇較小檔案或降低品質', true);
+                                newUserAvatarBase64 = null;
+                                return;
+                            }
+                            newUserAvatarBase64 = base64;
+                            avatarPreview.src = base64;
+                        } catch (err) {
+                            console.warn('壓縮頭像失敗，使用原檔預覽：', err);
+                            avatarPreview.src = URL.createObjectURL(file);
+                            newUserAvatarBase64 = null;
+                        }
                     }
                 });
                 
@@ -4834,23 +4940,27 @@ const statusText = getStatusDisplayText(r.type || '未知', r.locationName || nu
                         // --- Avatar Upload (if new avatar is set) ---
                         if (newUserAvatarFile) {
                             try {
-                                // 使用 Base64 編碼替代 Firebase Storage 上傳
-                                const reader = new FileReader();
-                                const base64Promise = new Promise((resolve, reject) => {
-                                    reader.onload = () => resolve(reader.result);
-                                    reader.onerror = () => reject(new Error("讀取檔案失敗"));
-                                    reader.readAsDataURL(newUserAvatarFile);
-                                });
-                                
-                                // 等待 Base64 轉換完成
-                                const base64String = await base64Promise;
-                                
-                                // 直接將 Base64 字串儲存到 Firestore
-                                newAvatarUrl = base64String;
-                                console.log("頭像已轉換為 Base64 格式");
+                                if (newUserAvatarBase64) {
+                                    newAvatarUrl = newUserAvatarBase64;
+                                } else {
+                                    // 後備：直接轉 Base64（可能較大）
+                                    const reader = new FileReader();
+                                    const base64Promise = new Promise((resolve, reject) => {
+                                        reader.onload = () => resolve(reader.result);
+                                        reader.onerror = () => reject(new Error('讀取檔案失敗'));
+                                        reader.readAsDataURL(newUserAvatarFile);
+                                    });
+                                    const rawBase64 = await base64Promise;
+                                    const approxBytes = Math.floor(rawBase64.length * 3 / 4);
+                                    if (approxBytes > 900 * 1024) {
+                                        throw new Error('照片過大，請選擇較小檔案或降低品質');
+                                    }
+                                    newAvatarUrl = rawBase64;
+                                }
+                                console.log('頭像已處理為 Base64 格式');
                             } catch (avatarError) {
-                                console.error("頭像處理錯誤:", avatarError);
-                                showToast("頭像處理失敗，但會繼續儲存其他資料", true);
+                                console.error('頭像處理錯誤:', avatarError);
+                                showToast(avatarError.message || '頭像處理失敗，但會繼續儲存其他資料', true);
                             }
                         }
                         updateData.avatarUrl = newAvatarUrl;
@@ -5047,21 +5157,20 @@ const statusText = getStatusDisplayText(r.type || '未知', r.locationName || nu
                     if (!file) return;
                     showLoading(true);
                     try {
-                        const compressedFile = await compressImage(file, 300);
-                        const timestamp = new Date().getTime();
-                        const fileName = `avatar_${timestamp}.jpg`;
-                        const storageRef = ref(storage, `avatars/${state.currentUser.uid}/${fileName}`);
-                        await uploadBytes(storageRef, compressedFile);
-                        const downloadURL = await getDownloadURL(storageRef);
-                        await updateDoc(doc(db, "users", state.currentUser.uid), { avatarUrl: downloadURL });
-                        state.currentUserData.avatarUrl = downloadURL;
-                        const cachedUrl = `${downloadURL}?t=${timestamp}`;
-                        document.getElementById('modal-avatar').src = cachedUrl;
-                        document.getElementById('header-avatar').src = cachedUrl;
-                        showToast("頭像更新成功");
+                        const base64 = await compressToBase64(file, 300);
+                        const maxSize = 900 * 1024; // 900KB 上限，留安全餘裕
+                        if (!base64 || base64.length > maxSize /* 以字元長度近似 */) {
+                            throw new Error('選擇的圖片過大（需小於約 900KB），請換較小的圖片');
+                        }
+                        await updateDoc(doc(db, 'users', state.currentUser.uid), { avatarUrl: base64 });
+                        state.currentUserData.avatarUrl = base64;
+                        document.getElementById('modal-avatar').src = base64;
+                        const header = document.getElementById('header-avatar');
+                        if (header) header.src = base64;
+                        showToast('頭像更新成功');
                     } catch (error) {
-                        console.error("Avatar upload error:", error);
-                        showToast("頭像上傳失敗: " + error.message, true);
+                        console.error('Avatar upload error:', error);
+                        showToast('頭像上傳失敗: ' + (error.message || error), true);
                     } finally {
                         showLoading(false);
                     }
@@ -5073,37 +5182,36 @@ const statusText = getStatusDisplayText(r.type || '未知', r.locationName || nu
                 });
 
                 
-                // 壓縮圖片函數
-                async function compressImage(file, maxWidth) {
-                    return new Promise((resolve) => {
+                // 壓縮並轉 Base64（Data URL）
+                async function compressToBase64(file, maxWidth) {
+                    return new Promise((resolve, reject) => {
                         const reader = new FileReader();
-                        reader.readAsDataURL(file);
+                        reader.onerror = () => reject(new Error('讀取圖片失敗'));
                         reader.onload = (event) => {
                             const img = new Image();
+                            img.onerror = () => reject(new Error('圖片載入失敗'));
                             img.src = event.target.result;
                             img.onload = () => {
                                 const canvas = document.createElement('canvas');
                                 let width = img.width;
                                 let height = img.height;
-                                
                                 if (width > maxWidth) {
                                     height = Math.round((height * maxWidth) / width);
                                     width = maxWidth;
                                 }
-                                
                                 canvas.width = width;
                                 canvas.height = height;
                                 const ctx = canvas.getContext('2d');
                                 ctx.drawImage(img, 0, 0, width, height);
-                                
-                                canvas.toBlob((blob) => {
-                                    resolve(new File([blob], file.name, {
-                                        type: 'image/jpeg',
-                                        lastModified: Date.now()
-                                    }));
-                                }, 'image/jpeg', 0.7);
+                                try {
+                                    const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+                                    resolve(dataUrl);
+                                } catch (e) {
+                                    reject(e);
+                                }
                             };
                         };
+                        reader.readAsDataURL(file);
                     });
                 }
 
@@ -5916,7 +6024,6 @@ const statusText = getStatusDisplayText(r.type || '未知', r.locationName || nu
     </script>
 </body>
 </html>
-
 
 
 
