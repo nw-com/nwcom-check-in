@@ -4161,27 +4161,44 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                             const imgEl = slides[currentIndex]?.querySelector('img');
                             const src = imgEl?.src;
                             if (!src) { showToast('無照片可下載', true); return; }
+
                             const defaultName = `clock-in-photo-${Date.now()}`;
-                            const a = document.createElement('a');
+                            const canDownloadAttr = 'download' in HTMLAnchorElement.prototype;
+                            const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+
                             if (src.startsWith('data:')) {
                                 const mime = src.substring(5, src.indexOf(';'));
                                 let ext = 'jpg';
                                 if (mime.includes('png')) ext = 'png';
                                 else if (mime.includes('jpeg')) ext = 'jpg';
                                 else if (mime.includes('webp')) ext = 'webp';
-                                a.href = src;
-                                a.download = `${defaultName}.${ext}`;
-                                document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                                if (canDownloadAttr && !isIOS) {
+                                    const a = document.createElement('a');
+                                    a.href = src;
+                                    a.download = `${defaultName}.${ext}`;
+                                    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                                } else {
+                                    window.open(src, '_blank');
+                                }
                             } else {
-                                const res = await fetch(src);
-                                if (!res.ok) throw new Error('下載失敗');
-                                const blob = await res.blob();
-                                const url = URL.createObjectURL(blob);
-                                const extGuess = (blob.type && blob.type.split('/')[1]) || 'jpg';
-                                a.href = url;
-                                a.download = `${defaultName}.${extGuess}`;
-                                document.body.appendChild(a); a.click(); document.body.removeChild(a);
-                                setTimeout(() => URL.revokeObjectURL(url), 5000);
+                                try {
+                                    const res = await fetch(src, { mode: 'cors' });
+                                    if (!res.ok) throw new Error('下載失敗');
+                                    const blob = await res.blob();
+                                    const url = URL.createObjectURL(blob);
+                                    const extGuess = (blob.type && blob.type.split('/')[1]) || 'jpg';
+                                    if (canDownloadAttr && !isIOS) {
+                                        const a = document.createElement('a');
+                                        a.href = url;
+                                        a.download = `${defaultName}.${extGuess}`;
+                                        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                                    } else {
+                                        window.open(url, '_blank');
+                                    }
+                                    setTimeout(() => URL.revokeObjectURL(url), 5000);
+                                } catch (fetchErr) {
+                                    window.open(src, '_blank');
+                                }
                             }
                         } catch (err) {
                             console.error('下載照片失敗', err);
@@ -4823,11 +4840,17 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                                     ctx.drawImage(img, 0, 0, width, height);
                                     if (canvas.toBlob) {
                                         canvas.toBlob((b) => {
-                                            if (b) resolve(b); else reject(new Error('圖片壓縮失敗'));
+                                            if (b) {
+                                                resolve(b);
+                                            } else {
+                                                reject(new Error('圖片壓縮失敗'));
+                                            }
                                         }, mime, quality);
                                     } else {
                                         const dataUrl = canvas.toDataURL(mime, quality);
-                                        fetch(dataUrl).then(r => r.blob()).then(resolve).catch(reject);
+                                        // 優先使用 ObjectURL，避免一次性持有大型字串
+                                        const objectUrl = URL.createObjectURL(dataURLtoBlob(dataUrl));
+                                        fetch(objectUrl).then(r => r.blob()).then((b) => { URL.revokeObjectURL(objectUrl); resolve(b); }).catch((e) => { URL.revokeObjectURL(objectUrl); reject(e); });
                                     }
                                 } catch (err) {
                                     reject(err);
@@ -4836,6 +4859,16 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                         };
                         reader.readAsDataURL(file);
                     });
+                }
+
+                // DataURL 轉 Blob 的輔助函式（避免直接傳遞大型字串）
+                function dataURLtoBlob(dataurl) {
+                    const arr = dataurl.split(','), mime = arr[0].match(/:(.*?);/)[1];
+                    const bstr = atob(arr[1]);
+                    let n = bstr.length;
+                    const u8arr = new Uint8Array(n);
+                    while (n--) { u8arr[n] = bstr.charCodeAt(n); }
+                    return new Blob([u8arr], { type: mime });
                 }
 
                 logoutBtn.addEventListener('click', async () => {
