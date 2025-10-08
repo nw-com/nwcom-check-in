@@ -1218,9 +1218,14 @@
                             <span id="status-text">尚未打卡</span>
                         </div>
                         <div id="clock-in-buttons" class="grid grid-cols-2 gap-2 pt-4">
+                            <!-- 第一列：上班/下班切換 與 外出循環 -->
                             <button id="work-toggle-btn" data-type="上班" class="clock-in-btn bg-green-500 text-white font-semibold py-3 px-4 rounded-md hover:bg-green-600">上班打卡</button>
                             <button id="outbound-cycle-btn" data-type="外出" class="clock-in-btn bg-blue-500 text-white font-semibold py-3 px-4 rounded-md hover:bg-blue-600">外出打卡</button>
-                            <button data-type="臨時請假" id="temp-leave-btn" class="clock-in-btn bg-orange-500 text-white font-semibold py-3 px-4 rounded-md hover:bg-orange-600 col-span-2">請假申請</button>
+                            <!-- 第二列：返回打卡 與 請假申請（寬度與外出一致，靠右） -->
+                            <button id="return-btn" data-type="返回" class="clock-in-btn bg-gray-500 text-white font-semibold py-3 px-4 rounded-md hover:bg-gray-600">返回打卡</button>
+                            <div class="flex">
+                                <button data-type="臨時請假" id="temp-leave-btn" class="clock-in-btn w-full bg-orange-500 text-white font-semibold py-3 px-4 rounded-md hover:bg-orange-600">請假申請</button>
+                            </div>
                         </div>
                     </div>`;
                 lucide.createIcons();
@@ -2228,8 +2233,8 @@
                                 </div>
                                 <div class="mt-2 flex space-x-2 overflow-x-auto">
                                     <button class="photo-btn bg-green-500 text-white px-2 py-1 rounded text-sm" 
-                                        data-photos='${JSON.stringify(record.photoUrls || [])}' 
-                                        data-descriptions='${JSON.stringify(record.descriptions || [])}'>
+                                        data-photos='${encodeURIComponent(JSON.stringify(record.photoUrls || []))}' 
+                                        data-descriptions='${encodeURIComponent(JSON.stringify(record.descriptions || []))}'>
                                         <i data-lucide="image"></i> 照片 (${(record.photoUrls?.length || 0)})
                                     </button>
                                     <button class="map-btn bg-blue-500 text-white px-2 py-1 rounded text-sm" data-lat="${record.location?.latitude || 0}" data-lng="${record.location?.longitude || 0}">
@@ -2253,8 +2258,8 @@
                         
                         document.querySelectorAll('.photo-btn').forEach(btn => {
                             btn.addEventListener('click', (e) => {
-                                const photos = JSON.parse(e.currentTarget.dataset.photos);
-                                const descriptions = JSON.parse(e.currentTarget.dataset.descriptions);
+                                const photos = JSON.parse(decodeURIComponent(e.currentTarget.dataset.photos || '%5B%5D'));
+                                const descriptions = JSON.parse(decodeURIComponent(e.currentTarget.dataset.descriptions || '%5B%5D'));
                                 openPhotoModal(photos, descriptions);
                             });
                         });
@@ -2638,8 +2643,8 @@
                             <div class="mt-2 flex space-x-2 overflow-x-auto items-center">
                                 ${record.photoUrls && record.photoUrls.length > 0 ? `
                                     <button class="photo-btn bg-blue-500 text-white px-2 py-1 rounded text-sm" 
-                                        data-photos='${JSON.stringify(record.photoUrls || [])}' 
-                                        data-descriptions='${JSON.stringify(record.descriptions || [])}'>
+                                        data-photos='${encodeURIComponent(JSON.stringify(record.photoUrls || []))}' 
+                                        data-descriptions='${encodeURIComponent(JSON.stringify(record.descriptions || []))}'>
                                         <i data-lucide="image"></i> 照片 (${record.photoUrls.length})
                                     </button>
                                 ` : ''}
@@ -2651,7 +2656,7 @@
                                     </button>
                                 ` : ''}
                                 <!-- Admin controls: edit/delete -->
-                                <span class="admin-controls hidden" data-record-id="${record.id}" data-record='${JSON.stringify({
+                                <span class="admin-controls hidden" data-record-id="${record.id}" data-record='${encodeURIComponent(JSON.stringify({
                                     id: record.id,
                                     type: record.type,
                                     timeISO: (record.timestamp?.toDate?.() || new Date()).toISOString(),
@@ -2659,7 +2664,7 @@
                                     lng: record.location?.longitude ?? null,
                                     locationName: record.locationName || '',
                                     dutyType: record.dutyType || ''
-                                })}'>
+                                }))}'>
                                     <button class="edit-record-btn bg-yellow-500 text-white px-2 py-1 rounded text-sm">
                                         <i data-lucide="pencil"></i> 編輯
                                     </button>
@@ -2682,8 +2687,8 @@
                 });
                 container.querySelectorAll('.photo-btn').forEach(btn => {
                     btn.addEventListener('click', (e) => {
-                        const photos = JSON.parse(e.currentTarget.dataset.photos);
-                        const descriptions = JSON.parse(e.currentTarget.dataset.descriptions);
+                        const photos = JSON.parse(decodeURIComponent(e.currentTarget.dataset.photos || '%5B%5D'));
+                        const descriptions = JSON.parse(decodeURIComponent(e.currentTarget.dataset.descriptions || '%5B%5D'));
                         openPhotoGalleryModal(photos, descriptions);
                     });
                 });
@@ -2696,7 +2701,7 @@
                         btn.addEventListener('click', (e) => {
                             try {
                                 const parent = e.currentTarget.closest('.admin-controls');
-                                const recordData = JSON.parse(parent.dataset.record);
+                                const recordData = JSON.parse(decodeURIComponent(parent.dataset.record || '%7B%7D'));
                                 openEditRecordModal(recordData);
                             } catch (err) {
                                 console.error('openEditRecordModal parse error', err);
@@ -2932,8 +2937,8 @@
                                     <div class="mt-2 flex space-x-2 overflow-x-auto items-center">
                                         ${record.photoUrls && record.photoUrls.length > 0 ? `
                                             <button class="photo-btn bg-blue-500 text-white px-2 py-1 rounded text-sm" 
-                                                data-photos='${JSON.stringify(record.photoUrls || [])}' 
-                                                data-descriptions='${JSON.stringify(record.descriptions || [])}'>
+                                                data-photos='${encodeURIComponent(JSON.stringify(record.photoUrls || []))}' 
+                                                data-descriptions='${encodeURIComponent(JSON.stringify(record.descriptions || []))}'>
                                                 <i data-lucide="image"></i> 照片 (${record.photoUrls.length})
                                             </button>
                                         ` : ''}
@@ -2945,7 +2950,7 @@
                                             </button>
                                         ` : ''}
                                         <!-- Admin controls: edit/delete -->
-                                        <span class="admin-controls hidden" data-record-id="${record.id}" data-record='${JSON.stringify({
+                                        <span class="admin-controls hidden" data-record-id="${record.id}" data-record='${encodeURIComponent(JSON.stringify({
                                             id: record.id,
                                             type: record.type,
                                             timeISO: (record.timestamp?.toDate?.() || new Date()).toISOString(),
@@ -2953,7 +2958,7 @@
                                             lng: record.location?.longitude ?? null,
                                             locationName: record.locationName || '',
                                             dutyType: record.dutyType || ''
-                                        })}'>
+                                        }))}'>
                                             <button class="edit-record-btn bg-yellow-500 text-white px-2 py-1 rounded text-sm">
                                                 <i data-lucide="pencil"></i> 編輯
                                             </button>
@@ -2980,8 +2985,8 @@
                             
                             document.querySelectorAll('.photo-btn').forEach(btn => {
                                 btn.addEventListener('click', (e) => {
-                                    const photos = JSON.parse(e.currentTarget.dataset.photos);
-                                    const descriptions = JSON.parse(e.currentTarget.dataset.descriptions);
+                                    const photos = JSON.parse(decodeURIComponent(e.currentTarget.dataset.photos || '%5B%5D'));
+                                    const descriptions = JSON.parse(decodeURIComponent(e.currentTarget.dataset.descriptions || '%5B%5D'));
                                     openPhotoModal(photos, descriptions);
                                 });
                             });
@@ -2994,7 +2999,7 @@
                                     btn.addEventListener('click', (e) => {
                                         try {
                                             const parent = e.currentTarget.closest('.admin-controls');
-                                            const recordData = JSON.parse(parent.dataset.record);
+                                            const recordData = JSON.parse(decodeURIComponent(parent.dataset.record || '%7B%7D'));
                                             openEditRecordModal(recordData);
                                         } catch (err) {
                                             console.error('openEditRecordModal parse error', err);

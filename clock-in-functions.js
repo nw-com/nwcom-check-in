@@ -294,9 +294,19 @@ function updateButtonStatus() {
         button.classList.add('bg-gray-300', 'cursor-not-allowed', 'disabled');
     });
     
-    // 臨時請假和特殊勤務按鈕始終保持可按
+    // 臨時請假和特殊勤務按鈕始終保持可按，請假申請靠右在 HTML 已處理
     enableSpecialButton('臨時請假', 'bg-orange-500');
     enableSpecialButton('特殊勤務', 'bg-purple-500');
+
+    // 返回按鈕預設顯示且不可用（灰色）
+    const returnBtn = document.getElementById('return-btn');
+    if (returnBtn) {
+        returnBtn.disabled = true;
+        returnBtn.classList.remove('bg-gray-500', 'hover:bg-gray-600', 'bg-green-700', 'hover:bg-green-800');
+        returnBtn.classList.add('bg-gray-300', 'cursor-not-allowed', 'disabled');
+        returnBtn.dataset.type = '返回';
+        returnBtn.textContent = '返回打卡';
+    }
 
     // 複合循環按鈕（外出/抵達/離開/返回）動態設定器
     const setOutboundCycleButton = (nextType, label, bgClass) => {
@@ -341,35 +351,64 @@ function updateButtonStatus() {
             setWorkToggleButton('上班', '上班打卡', 'bg-green-500');
             break;
         case '上班':
-            // 已上班，切換按鈕設為下班；循環按鈕（下一步：外出）
+            // 已上班：下班可動作（紅），外出可動作（藍），返回不可動作（灰）
             setWorkToggleButton('下班', '下班打卡', 'bg-red-500');
             setOutboundCycleButton('外出', '外出打卡', 'bg-blue-500');
+            // 返回維持不可用
             break;
         case '下班':
-            // 已下班，切換按鈕回到上班
+            // 已下班：上班可動作（綠），外出可動作（藍），返回不可動作（灰）
             setWorkToggleButton('上班', '上班打卡', 'bg-green-500');
+            setOutboundCycleButton('外出', '外出打卡', 'bg-blue-500');
             break;
         case '已下班-未打卡':
             // 已下班但未打卡，預設提供下班（亦可在頁面重新載入後選擇上班）
             setWorkToggleButton('下班', '下班打卡', 'bg-red-500');
             break;
         case '外出':
-            // 外出中，循環按鈕切換至「抵達」
-            setOutboundCycleButton('抵達', '抵達打卡', 'bg-teal-700');
+            // 外出中：抵達可動作（藍系），下班不可動作（灰），返回不可動作（灰）
+            setOutboundCycleButton('抵達', '抵達打卡', 'bg-blue-500');
+            // 禁用下班按鈕：設為灰色不可動作
+            const toggleBtn1 = document.getElementById('work-toggle-btn');
+            if (toggleBtn1) {
+                toggleBtn1.dataset.type = '下班';
+                toggleBtn1.textContent = '下班打卡';
+                toggleBtn1.disabled = true;
+                toggleBtn1.classList.remove('bg-red-500', 'hover:bg-red-600', 'bg-green-500', 'hover:bg-green-600');
+                toggleBtn1.classList.add('bg-gray-300', 'cursor-not-allowed', 'disabled');
+            }
             break;
         case '抵達':
-            // 已抵達，僅顯示「離開打卡」，暫不顯示「下班打卡」
-            setOutboundCycleButton('離開', '離開打卡', 'bg-red-700');
+            // 抵達中：離開可動作（藍系），下班不可動作（灰），返回不可動作（灰）
+            setOutboundCycleButton('離開', '離開打卡', 'bg-blue-500');
+            const toggleBtn2 = document.getElementById('work-toggle-btn');
+            if (toggleBtn2) {
+                toggleBtn2.dataset.type = '下班';
+                toggleBtn2.textContent = '下班打卡';
+                toggleBtn2.disabled = true;
+                toggleBtn2.classList.remove('bg-red-500', 'hover:bg-red-600', 'bg-green-500', 'hover:bg-green-600');
+                toggleBtn2.classList.add('bg-gray-300', 'cursor-not-allowed', 'disabled');
+            }
             break;
         case '離開':
-            // 已離開，顯示「返回打卡」與「下班打卡」
+            // 離開後：外出循環顯示返回（藍），下班可動作（紅），返回可動作（深綠）
             setOutboundCycleButton('返回', '返回打卡', 'bg-blue-500');
             setWorkToggleButton('下班', '下班打卡', 'bg-red-500');
+            if (returnBtn) {
+                returnBtn.disabled = false;
+                returnBtn.classList.remove('bg-gray-300', 'cursor-not-allowed', 'disabled');
+                returnBtn.classList.add('bg-green-700');
+            }
             break;
         case '返回':
-            // 已返回，循環按鈕回到「外出」，同時可下班
+            // 已返回：外出可動作（藍），下班可動作（紅），返回回到不可動作（灰）
             setWorkToggleButton('下班', '下班打卡', 'bg-red-500');
             setOutboundCycleButton('外出', '外出打卡', 'bg-blue-500');
+            if (returnBtn) {
+                returnBtn.disabled = true;
+                returnBtn.classList.remove('bg-green-700');
+                returnBtn.classList.add('bg-gray-300', 'cursor-not-allowed', 'disabled');
+            }
             break;
         case '臨時請假':
             // 臨時請假中，不啟用其他按鈕

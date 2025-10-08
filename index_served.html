@@ -1167,9 +1167,14 @@
                             <span id="status-text">a�X?a?aa??a?!</span>
                         </div>
                         <div id="clock-in-buttons" class="grid grid-cols-2 gap-2 pt-4">
-                            <button id="work-toggle-btn" data-type="a�M?c?-" class="clock-in-btn bg-green-500 text-white font-semibold py-3 px-4 rounded-md hover:bg-green-600">a�M?c?-a??a?!</button>
-                            <button id="outbound-cycle-btn" data-type="a??a?o" class="clock-in-btn bg-blue-500 text-white font-semibold py-3 px-4 rounded-md hover:bg-blue-600">a??a?oa??a?!</button>
-                            <button data-type="e?�La??e??a??" id="temp-leave-btn" class="clock-in-btn bg-orange-500 text-white font-semibold py-3 px-4 rounded-md hover:bg-orange-600 col-span-2">e??a??c?3e??</button>
+                            <!-- 第一列：上班/下班切換 與 外出循環 -->
+                            <button id="work-toggle-btn" data-type="上班" class="clock-in-btn bg-green-500 text-white font-semibold py-3 px-4 rounded-md hover:bg-green-600">上班打卡</button>
+                            <button id="outbound-cycle-btn" data-type="外出" class="clock-in-btn bg-blue-500 text-white font-semibold py-3 px-4 rounded-md hover:bg-blue-600">外出打卡</button>
+                            <!-- 第二列：返回打卡 與 請假申請（寬度與外出一致，靠右） -->
+                            <button id="return-btn" data-type="返回" class="clock-in-btn bg-gray-500 text-white font-semibold py-3 px-4 rounded-md hover:bg-gray-600">返回打卡</button>
+                            <div class="flex">
+                                <button data-type="臨時請假" id="temp-leave-btn" class="clock-in-btn w-full bg-orange-500 text-white font-semibold py-3 px-4 rounded-md hover:bg-orange-600">請假申請</button>
+                            </div>
                         </div>
                     </div>`;
                 lucide.createIcons();
@@ -2064,8 +2069,8 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                                 </div>
                                 <div class="mt-2 flex space-x-2 overflow-x-auto">
                                     <button class="photo-btn bg-green-500 text-white px-2 py-1 rounded text-sm" 
-                                        data-photos='${JSON.stringify(record.photoUrls || [])}' 
-                                        data-descriptions='${JSON.stringify(record.descriptions || [])}'>
+                                        data-photos='${encodeURIComponent(JSON.stringify(record.photoUrls || []))}' 
+                                        data-descriptions='${encodeURIComponent(JSON.stringify(record.descriptions || []))}'>
                                         <i data-lucide="image"></i> c?��c?? (${(record.photoUrls?.length || 0)})
                                     </button>
                                 </div>
@@ -2086,8 +2091,8 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                         
                         document.querySelectorAll('.photo-btn').forEach(btn => {
                             btn.addEventListener('click', (e) => {
-                                const photos = JSON.parse(e.currentTarget.dataset.photos);
-                                const descriptions = JSON.parse(e.currentTarget.dataset.descriptions);
+                                const photos = JSON.parse(decodeURIComponent(e.currentTarget.dataset.photos || '%5B%5D'));
+                                const descriptions = JSON.parse(decodeURIComponent(e.currentTarget.dataset.descriptions || '%5B%5D'));
                                 openPhotoModal(photos, descriptions);
                             });
                         });
@@ -2452,9 +2457,9 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                             </div>
                             <div class="mt-2 flex space-x-2 overflow-x-auto">
                                 ${record.photoUrls && record.photoUrls.length > 0 ? `
-                                    <button class="photo-btn bg-blue-500 text-white px-2 py-1 rounded text-sm" 
-                                        data-photos='${JSON.stringify(record.photoUrls || [])}' 
-                                        data-descriptions='${JSON.stringify(record.descriptions || [])}'>
+                                            <button class="photo-btn bg-blue-500 text-white px-2 py-1 rounded text-sm" 
+                                        data-photos='${encodeURIComponent(JSON.stringify(record.photoUrls || []))}' 
+                                        data-descriptions='${encodeURIComponent(JSON.stringify(record.descriptions || []))}'>
                                         <i data-lucide="image"></i> c?��c?? (${record.photoUrls.length})
                                     </button>
                                 ` : ''}
@@ -2476,8 +2481,8 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                 });
                 container.querySelectorAll('.photo-btn').forEach(btn => {
                     btn.addEventListener('click', (e) => {
-                        const photos = JSON.parse(e.currentTarget.dataset.photos);
-                        const descriptions = JSON.parse(e.currentTarget.dataset.descriptions);
+                        const photos = JSON.parse(decodeURIComponent(e.currentTarget.dataset.photos || '%5B%5D'));
+                        const descriptions = JSON.parse(decodeURIComponent(e.currentTarget.dataset.descriptions || '%5B%5D'));
                         openPhotoGalleryModal(photos, descriptions);
                     });
                 });
@@ -2726,8 +2731,8 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                                     <div class="mt-2 flex space-x-2 overflow-x-auto">
                                         ${record.photoUrls && record.photoUrls.length > 0 ? `
                                             <button class="photo-btn bg-blue-500 text-white px-2 py-1 rounded text-sm" 
-                                                data-photos='${JSON.stringify(record.photoUrls || [])}' 
-                                                data-descriptions='${JSON.stringify(record.descriptions || [])}'>
+                                                data-photos='${encodeURIComponent(JSON.stringify(record.photoUrls || []))}' 
+                                                data-descriptions='${encodeURIComponent(JSON.stringify(record.descriptions || []))}'>
                                                 <i data-lucide="image"></i> c?��c?? (${record.photoUrls.length})
                                             </button>
                                         ` : ''}
@@ -2750,8 +2755,8 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                             
                             document.querySelectorAll('.photo-btn').forEach(btn => {
                                 btn.addEventListener('click', (e) => {
-                                    const photos = JSON.parse(e.currentTarget.dataset.photos);
-                                    const descriptions = JSON.parse(e.currentTarget.dataset.descriptions);
+                                    const photos = JSON.parse(decodeURIComponent(e.currentTarget.dataset.photos || '%5B%5D'));
+                                    const descriptions = JSON.parse(decodeURIComponent(e.currentTarget.dataset.descriptions || '%5B%5D'));
                                     openPhotoModal(photos, descriptions);
                                 });
                             });
