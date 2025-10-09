@@ -1130,10 +1130,7 @@
                                     <div class=\"flex space-x-2\">
                                         ${user.lastPhotoUrl ? `<button class=\"view-photo-btn p-2 bg-blue-100 rounded-md\" data-photo=\"${user.lastPhotoUrl}\" data-desc=\"${user.lastLocation || ''}\"><i data-lucide=\"image\" class=\"w-6 h-6 text-blue-600\"></i></button>` : ''}
                                     </div>
-                                    <div class=\"mt-2 grid grid-cols-2 gap-2\">
-                                        ${user.lastLocation ? `<button class=\"view-map-btn py-1 rounded-md bg-green-500 text-white flex items-center justify-center text-xs\" data-lat=\"${user.lastLocation?.latitude || ''}\" data-lng=\"${user.lastLocation?.longitude || ''}\"><i data-lucide=\"map-pin\" class=\"w-4 h-4 mr-2\"></i>地圖</button>` : `<button class=\"py-1 rounded-md bg-gray-200 text-gray-500 cursor-not-allowed text-xs\" disabled><i data-lucide=\"map-pin\" class=\"w-4 h-4 mr-2\"></i>地圖</button>`}
-                                        <button class=\"call-btn py-1 rounded-md bg-purple-500 text-white flex items-center justify-center text-xs\" data-userid=\"${user.id}\"><i data-lucide=\"mic\" class=\"w-4 h-4 mr-2\"></i>語音通話</button>
-                                    </div>
+                                    
                                 </div>`;
                         });
                         // 重新以最新 clockInRecords 更新每位使用者的時間（避免快照時序不同步）
@@ -1169,25 +1166,7 @@
                             else showToast('無照片可顯示', true);
                         });
                     });
-                    document.querySelectorAll('#all-users-modal .view-map-btn').forEach(btn => {
-                        btn.addEventListener('click', (e) => {
-                            const lat = parseFloat(e.currentTarget.dataset.lat);
-                            const lng = parseFloat(e.currentTarget.dataset.lng);
-                            if(Number.isFinite(lat) && Number.isFinite(lng)) openMapModal(lat, lng);
-                            else showToast('無位置資訊可顯示', true);
-                        });
-                    });
-                    // 綁定語音通話按鈕（自製語音通話）
-                    document.querySelectorAll('#all-users-modal .call-btn').forEach(btn => {
-                        btn.addEventListener('click', (e) => {
-                            const targetUserId = e.currentTarget.dataset.userid;
-                            if (targetUserId) {
-                                startVoiceCall(targetUserId);
-                            } else {
-                                showToast('無對象資訊', true);
-                            }
-                        });
-                    });
+                    
                 });
                 
                 function closeModal() {
