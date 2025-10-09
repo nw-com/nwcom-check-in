@@ -255,6 +255,12 @@
           measurementId: "G-61Q1QNNRD2"
         };
         const GOOGLE_MAPS_API_KEY = "AIzaSyAzhLdWtycJgfz8UsXWlji63DkXpA4kmyY";
+        // Icon library fallback: prevent ReferenceError if lucide not loaded
+        if (!window.lucide || typeof window.lucide.createIcons !== 'function') {
+            window.lucide = window.lucide || {};
+            window.lucide.createIcons = function() {};
+            try { console.warn('Lucide 未載入，已使用後備空函式避免錯誤'); } catch (e) {}
+        }
         // --- 🚨 設定結束 🚨 ---
 
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
@@ -2324,6 +2330,15 @@
                 mapLoader.classList.remove('hide');
                 state.currentLocation = null;
                 
+                // Geolocation requires secure context in modern browsers
+                if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+                    console.warn('非安全來源，可能導致 geolocation 或地圖無法使用');
+                    const tip = document.createElement('div');
+                    tip.className = 'p-2 text-yellow-700 text-xs';
+                    tip.textContent = '提示：請以 https 或 localhost 開啟以使用定位功能';
+                    mapDiv.parentElement?.insertBefore(tip, mapDiv);
+                }
+
                 if (!window.google || !window.google.maps) {
                     setTimeout(initClockInMap, 100);
                     return;
@@ -4596,6 +4611,11 @@
                     modal.remove();
                 });
                 
+                // Chrome requires secure context (https:// or localhost) for geolocation; inform user if not secure
+                if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+                    console.warn('非安全來源，可能導致定位或地圖無法使用');
+                    showToast('提示：請以 https 或 localhost 開啟以使用地圖定位', true);
+                }
                 if (window.google && window.google.maps) {
                     const mapDiv = document.getElementById('modal-map');
                     const map = new google.maps.Map(mapDiv, {
@@ -6124,13 +6144,27 @@
             }
 
             async function startVoiceCall(targetUserId) {
+                // Secure context check for microphone APIs
+                if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+                    console.warn('非安全來源，麥克風可能無法啟用');
+                    showToast('提示：請以 https 或 localhost 開啟以使用語音通話', true);
+                }
                 try {
+                    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                        showToast('瀏覽器不支援語音通話 API', true);
+                        return;
+                    }
                     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                     openVoiceCallModal(targetUserId, stream);
                     showToast('語音通話初始化完成（尚未建立連線）');
                 } catch (e) {
                     console.error('啟動語音通話失敗:', e);
-                    showToast('無法啟用麥克風，請檢查權限', true);
+                    const msg = (e && e.name === 'NotAllowedError')
+                        ? '已拒絕麥克風權限，請在瀏覽器設定中允許'
+                        : (e && e.name === 'NotFoundError')
+                            ? '找不到可用的音訊裝置'
+                            : '無法啟用麥克風，請檢查權限與來源';
+                    showToast(msg, true);
                 }
             }
             window.startVoiceCall = startVoiceCall;
