@@ -1123,8 +1123,10 @@
                                     </div>
                                     <div class=\"flex space-x-2\">
                                         ${user.lastPhotoUrl ? `<button class=\"view-photo-btn p-2 bg-blue-100 rounded-md\" data-photo=\"${user.lastPhotoUrl}\" data-desc=\"${user.lastLocation || ''}\"><i data-lucide=\"image\" class=\"w-6 h-6 text-blue-600\"></i></button>` : ''}
-                                        ${user.lastLocation ? `<button class=\"view-map-btn p-2 bg-green-100 rounded-md\" data-lat=\"${user.lastLocation?.latitude || 0}\" data-lng=\"${user.lastLocation?.longitude || 0}\"><i data-lucide=\"map-pin\" class=\"w-6 h-6 text-green-600\"></i></button>` : ''}
-                                        ${user.phone ? `<button class=\"call-btn p-2 bg-purple-100 rounded-md\" data-phone=\"${user.phone}\"><i data-lucide=\"phone\" class=\"w-6 h-6 text-purple-600\"></i></button>` : ''}
+                                    </div>
+                                    <div class=\"mt-2 grid grid-cols-2 gap-2\">
+                                        ${user.lastLocation ? `<button class=\"view-map-btn py-3 rounded-md bg-green-500 text-white flex items-center justify-center text-base\" data-lat=\"${user.lastLocation?.latitude || ''}\" data-lng=\"${user.lastLocation?.longitude || ''}\"><i data-lucide=\"map-pin\" class=\"w-5 h-5 mr-2\"></i>地圖</button>` : `<button class=\"py-3 rounded-md bg-gray-200 text-gray-500 cursor-not-allowed\" disabled><i data-lucide=\"map-pin\" class=\"w-5 h-5 mr-2\"></i>地圖</button>`}
+                                        ${user.phone ? `<button class=\"call-btn py-3 rounded-md bg-purple-500 text-white flex items-center justify-center text-base\" data-phone=\"${user.phone}\"><i data-lucide=\"phone\" class=\"w-5 h-5 mr-2\"></i>撥打電話</button>` : `<button class=\"py-3 rounded-md bg-gray-200 text-gray-500 cursor-not-allowed\" disabled><i data-lucide=\"phone\" class=\"w-5 h-5 mr-2\"></i>撥打電話</button>`}
                                     </div>
                                 </div>`;
                         });
@@ -1151,6 +1153,7 @@
                             console.warn('更新最新打卡時間時發生錯誤:', e);
                         }
                     })();
+                    try { lucide.createIcons(); } catch (e) {}
                     // 綁定照片與地圖按鈕
                     document.querySelectorAll('#all-users-modal .view-photo-btn').forEach(btn => {
                         btn.addEventListener('click', (e) => {
@@ -1164,7 +1167,7 @@
                         btn.addEventListener('click', (e) => {
                             const lat = parseFloat(e.currentTarget.dataset.lat);
                             const lng = parseFloat(e.currentTarget.dataset.lng);
-                            if(lat && lng) openMapModal(lat, lng);
+                            if(Number.isFinite(lat) && Number.isFinite(lng)) openMapModal(lat, lng);
                             else showToast('無位置資訊可顯示', true);
                         });
                     });
@@ -1174,7 +1177,7 @@
                             const phone = e.currentTarget.dataset.phone;
                             if (phone) {
                                 try {
-                                    window.open(`tel:${phone}`);
+                                    location.href = `tel:${phone}`;
                                 } catch (err) {
                                     showToast('無法啟動撥號', true);
                                 }
