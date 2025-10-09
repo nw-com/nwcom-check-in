@@ -665,7 +665,41 @@ function openTempLeaveModal() {
         }
     });
     
-    // 創建日期時間區間
+    // 請假類型（整日/按小時）
+    const typeLabel = document.createElement('label');
+    typeLabel.className = 'block text-sm font-medium text-gray-700 mb-1';
+    typeLabel.textContent = '請假類型';
+
+    const typeContainer = document.createElement('div');
+    typeContainer.className = 'flex items-center space-x-6 mb-2';
+
+    const hourlyLabel = document.createElement('label');
+    hourlyLabel.className = 'flex items-center space-x-2';
+    const hourlyInput = document.createElement('input');
+    hourlyInput.type = 'radio';
+    hourlyInput.name = 'leave-type';
+    hourlyInput.value = 'hourly';
+    hourlyInput.checked = true;
+    const hourlyText = document.createElement('span');
+    hourlyText.textContent = '按小時';
+    hourlyLabel.appendChild(hourlyInput);
+    hourlyLabel.appendChild(hourlyText);
+
+    const fullDayLabel = document.createElement('label');
+    fullDayLabel.className = 'flex items-center space-x-2';
+    const fullDayInput = document.createElement('input');
+    fullDayInput.type = 'radio';
+    fullDayInput.name = 'leave-type';
+    fullDayInput.value = 'full_day';
+    const fullDayText = document.createElement('span');
+    fullDayText.textContent = '整日';
+    fullDayLabel.appendChild(fullDayInput);
+    fullDayLabel.appendChild(fullDayText);
+
+    typeContainer.appendChild(hourlyLabel);
+    typeContainer.appendChild(fullDayLabel);
+
+    // 創建日期時間區間（按小時）
     const startDateLabel = document.createElement('label');
     startDateLabel.className = 'block text-sm font-medium text-gray-700 mb-1';
     startDateLabel.textContent = '開始時間';
@@ -704,6 +738,49 @@ function openTempLeaveModal() {
     const endHours = String(endTime.getHours()).padStart(2, '0');
     endDateInput.value = `${endYear}-${endMonth}-${endDay}T${endHours}:00`;
     
+    // 整日日期區間（整日）
+    const startDayLabel = document.createElement('label');
+    startDayLabel.className = 'block text-sm font-medium text-gray-700 mb-1 hidden';
+    startDayLabel.textContent = '開始日期';
+
+    const startDayInput = document.createElement('input');
+    startDayInput.id = 'leave-start-day';
+    startDayInput.type = 'date';
+    startDayInput.className = 'w-full border border-gray-300 rounded-md p-2 mb-4 hidden';
+
+    const endDayLabel = document.createElement('label');
+    endDayLabel.className = 'block text-sm font-medium text-gray-700 mb-1 hidden';
+    endDayLabel.textContent = '結束日期';
+
+    const endDayInput = document.createElement('input');
+    endDayInput.id = 'leave-end-day';
+    endDayInput.type = 'date';
+    endDayInput.className = 'w-full border border-gray-300 rounded-md p-2 mb-4 hidden';
+
+    const nowDayYear = now.getFullYear();
+    const nowDayMonth = String(now.getMonth() + 1).padStart(2, '0');
+    const nowDayDate = String(now.getDate()).padStart(2, '0');
+    const todayStr = `${nowDayYear}-${nowDayMonth}-${nowDayDate}`;
+    startDayInput.value = todayStr;
+    endDayInput.value = todayStr;
+
+    // 切換顯示邏輯
+    function updateLeaveTypeVisibility() {
+      const isFullDay = fullDayInput.checked;
+      startDateLabel.classList.toggle('hidden', isFullDay);
+      startDateInput.classList.toggle('hidden', isFullDay);
+      endDateLabel.classList.toggle('hidden', isFullDay);
+      endDateInput.classList.toggle('hidden', isFullDay);
+
+      startDayLabel.classList.toggle('hidden', !isFullDay);
+      startDayInput.classList.toggle('hidden', !isFullDay);
+      endDayLabel.classList.toggle('hidden', !isFullDay);
+      endDayInput.classList.toggle('hidden', !isFullDay);
+    }
+    hourlyInput.addEventListener('change', updateLeaveTypeVisibility);
+    fullDayInput.addEventListener('change', updateLeaveTypeVisibility);
+    updateLeaveTypeVisibility();
+
     // 按鈕容器
     const buttonContainer = document.createElement('div');
     buttonContainer.className = 'flex justify-end space-x-2';
@@ -729,9 +806,25 @@ function openTempLeaveModal() {
             }
         }
         
+        // 請假類型
+        const selectedType = document.querySelector('input[name="leave-type"]:checked')?.value || 'hourly';
+
         // 獲取時間區間
-        const startTime = new Date(startDateInput.value);
-        const endTime = new Date(endDateInput.value);
+        let startTime;
+        let endTime;
+        if (selectedType === 'full_day') {
+            const startDayVal = startDayInput.value;
+            const endDayVal = endDayInput.value;
+            if (!startDayVal || !endDayVal) {
+                showToast('請選擇開始與結束日期', true);
+                return;
+            }
+            startTime = new Date(`${startDayVal}T00:00:00`);
+            endTime = new Date(`${endDayVal}T23:59:59`);
+        } else {
+            startTime = new Date(startDateInput.value);
+            endTime = new Date(endDateInput.value);
+        }
         
         // 驗證時間
         if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
@@ -763,6 +856,7 @@ function openTempLeaveModal() {
                 reason: reason,
                 startTime: Timestamp.fromDate(startTime),
                 endTime: Timestamp.fromDate(endTime),
+                leaveType: selectedType,
                 status: 'pending', // 待審核
                 createdAt: serverTimestamp()
             };
@@ -804,10 +898,16 @@ function openTempLeaveModal() {
     modal.appendChild(reasonLabel);
     modal.appendChild(reasonSelect);
     modal.appendChild(otherReasonInput);
+    modal.appendChild(typeLabel);
+    modal.appendChild(typeContainer);
     modal.appendChild(startDateLabel);
     modal.appendChild(startDateInput);
     modal.appendChild(endDateLabel);
     modal.appendChild(endDateInput);
+    modal.appendChild(startDayLabel);
+    modal.appendChild(startDayInput);
+    modal.appendChild(endDayLabel);
+    modal.appendChild(endDayInput);
     modal.appendChild(buttonContainer);
     
     // 添加到頁面
