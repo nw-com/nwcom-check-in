@@ -1125,8 +1125,8 @@
                                         ${user.lastPhotoUrl ? `<button class=\"view-photo-btn p-2 bg-blue-100 rounded-md\" data-photo=\"${user.lastPhotoUrl}\" data-desc=\"${user.lastLocation || ''}\"><i data-lucide=\"image\" class=\"w-6 h-6 text-blue-600\"></i></button>` : ''}
                                     </div>
                                     <div class=\"mt-2 grid grid-cols-2 gap-2\">
-                                        ${user.lastLocation ? `<button class=\"view-map-btn py-3 rounded-md bg-green-500 text-white flex items-center justify-center text-base\" data-lat=\"${user.lastLocation?.latitude || ''}\" data-lng=\"${user.lastLocation?.longitude || ''}\"><i data-lucide=\"map-pin\" class=\"w-5 h-5 mr-2\"></i>地圖</button>` : `<button class=\"py-3 rounded-md bg-gray-200 text-gray-500 cursor-not-allowed\" disabled><i data-lucide=\"map-pin\" class=\"w-5 h-5 mr-2\"></i>地圖</button>`}
-                                        ${user.phone ? `<button class=\"call-btn py-3 rounded-md bg-purple-500 text-white flex items-center justify-center text-base\" data-phone=\"${user.phone}\"><i data-lucide=\"phone\" class=\"w-5 h-5 mr-2\"></i>撥打電話</button>` : `<button class=\"py-3 rounded-md bg-gray-200 text-gray-500 cursor-not-allowed\" disabled><i data-lucide=\"phone\" class=\"w-5 h-5 mr-2\"></i>撥打電話</button>`}
+                                        ${user.lastLocation ? `<button class=\"view-map-btn py-1 rounded-md bg-green-500 text-white flex items-center justify-center text-xs\" data-lat=\"${user.lastLocation?.latitude || ''}\" data-lng=\"${user.lastLocation?.longitude || ''}\"><i data-lucide=\"map-pin\" class=\"w-4 h-4 mr-2\"></i>地圖</button>` : `<button class=\"py-1 rounded-md bg-gray-200 text-gray-500 cursor-not-allowed text-xs\" disabled><i data-lucide=\"map-pin\" class=\"w-4 h-4 mr-2\"></i>地圖</button>`}
+                                        <button class=\"call-btn py-1 rounded-md bg-purple-500 text-white flex items-center justify-center text-xs\" data-userid=\"${user.id}\"><i data-lucide=\"mic\" class=\"w-4 h-4 mr-2\"></i>語音通話</button>
                                     </div>
                                 </div>`;
                         });
@@ -1171,18 +1171,14 @@
                             else showToast('無位置資訊可顯示', true);
                         });
                     });
-                    // 綁定通話按鈕
+                    // 綁定語音通話按鈕（自製語音通話）
                     document.querySelectorAll('#all-users-modal .call-btn').forEach(btn => {
                         btn.addEventListener('click', (e) => {
-                            const phone = e.currentTarget.dataset.phone;
-                            if (phone) {
-                                try {
-                                    location.href = `tel:${phone}`;
-                                } catch (err) {
-                                    showToast('無法啟動撥號', true);
-                                }
+                            const targetUserId = e.currentTarget.dataset.userid;
+                            if (targetUserId) {
+                                startVoiceCall(targetUserId);
                             } else {
-                                showToast('無電話資訊', true);
+                                showToast('無對象資訊', true);
                             }
                         });
                     });
@@ -6051,6 +6047,93 @@
             }
             // 使全域可用，以供其他腳本呼叫
             window.showToast = showToast;
+            function openVoiceCallModal(targetUserId, stream) {
+                const backdrop = document.createElement('div');
+                backdrop.id = 'voice-call-backdrop';
+                backdrop.className = 'fixed inset-0 bg-black bg-opacity-50 z-40';
+
+                const modal = document.createElement('div');
+                modal.id = 'voice-call-modal';
+                modal.className = 'fixed inset-0 flex items-center justify-center z-50';
+
+                const card = document.createElement('div');
+                card.className = 'bg-white rounded-lg shadow-lg w-96 p-4';
+
+                const title = document.createElement('h3');
+                title.className = 'text-lg font-semibold mb-2';
+                const target = (window.state?.users || []).find(u => u.id === targetUserId);
+                title.textContent = `語音通話：${target?.name || target?.email || targetUserId}`;
+
+                const statusEl = document.createElement('div');
+                statusEl.className = 'text-sm text-gray-600 mb-3';
+                statusEl.textContent = '初始化麥克風…';
+
+                const audio = document.createElement('audio');
+                audio.autoplay = true;
+                audio.className = 'w-full mb-3';
+
+                const controls = document.createElement('div');
+                controls.className = 'grid grid-cols-2 gap-2';
+
+                const muteBtn = document.createElement('button');
+                muteBtn.className = 'px-3 py-2 rounded-md bg-gray-200 text-gray-700';
+                muteBtn.textContent = '靜音';
+
+                const endBtn = document.createElement('button');
+                endBtn.className = 'px-3 py-2 rounded-md bg-red-500 text-white';
+                endBtn.textContent = '結束通話';
+
+                controls.appendChild(muteBtn);
+                controls.appendChild(endBtn);
+
+                card.appendChild(title);
+                card.appendChild(statusEl);
+                card.appendChild(audio);
+                card.appendChild(controls);
+                modal.appendChild(card);
+                document.body.appendChild(backdrop);
+                document.body.appendChild(modal);
+
+                function close() {
+                    try {
+                        if (audio.srcObject) {
+                            audio.srcObject.getTracks().forEach(t => t.stop());
+                            audio.srcObject = null;
+                        }
+                    } catch (e) {}
+                    backdrop.remove();
+                    modal.remove();
+                }
+                backdrop.addEventListener('click', close);
+                endBtn.addEventListener('click', close);
+
+                let muted = false;
+                muteBtn.addEventListener('click', () => {
+                    muted = !muted;
+                    muteBtn.textContent = muted ? '取消靜音' : '靜音';
+                    const track = audio.srcObject && audio.srcObject.getAudioTracks()[0];
+                    if (track) track.enabled = !muted;
+                });
+
+                if (stream) {
+                    audio.srcObject = stream;
+                    statusEl.textContent = '麥克風已啟動（僅本機播放，尚未連線）';
+                } else {
+                    statusEl.textContent = '無法取得麥克風串流';
+                }
+            }
+
+            async function startVoiceCall(targetUserId) {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    openVoiceCallModal(targetUserId, stream);
+                    showToast('語音通話初始化完成（尚未建立連線）');
+                } catch (e) {
+                    console.error('啟動語音通話失敗:', e);
+                    showToast('無法啟用麥克風，請檢查權限', true);
+                }
+            }
+            window.startVoiceCall = startVoiceCall;
 
             function timeAgo(date) {
                 const seconds = Math.floor((new Date() - date) / 1000);
@@ -6154,11 +6237,11 @@
                 popup.style.maxHeight = `${Math.max(80, availableHeight)}px`;
                 popup.style.overflow = 'auto';
                 
-                // 添加按鈕 (只保留撥打電話按鈕)
+                // 添加按鈕（語音通話）
                 popup.innerHTML = `
                     <div class="flex justify-center">
-                        <button class="call-btn bg-blue-500 text-white py-2 px-3 rounded-md flex items-center justify-center" ${userPhone ? '' : 'disabled'} data-phone="${userPhone}">
-                            <i data-lucide="phone" class="w-4 h-4 mr-1"></i>撥打電話
+                        <button class="call-btn bg-purple-500 text-white py-1 px-2 rounded-md flex items-center justify-center" data-userid="${userId}">
+                            <i data-lucide="mic" class="w-4 h-4 mr-1"></i>語音通話
                         </button>
                     </div>
                 `;
@@ -6167,13 +6250,13 @@
                 document.body.appendChild(popup);
                 lucide.createIcons();
                 
-                // 添加按鈕事件
+                // 添加按鈕事件（語音通話）
                 popup.querySelector('.call-btn').addEventListener('click', function() {
-                    const phone = this.dataset.phone;
-                    if (phone) {
-                        window.open(`tel:${phone}`);
+                    const targetUserId = this.dataset.userid;
+                    if (targetUserId) {
+                        startVoiceCall(targetUserId);
                     } else {
-                        showToast('此用戶沒有設置電話號碼', true);
+                        showToast('無對象資訊', true);
                     }
                 });
                 
