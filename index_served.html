@@ -2133,8 +2133,9 @@
                 container.innerHTML = `
                     <div class="p-4 space-y-4">
                         <div class="flex items-center space-x-2">
-                            <label for="record-date" class="text-sm font-medium">c��ce?�Ma?�Da??:</label>
-                            <input type="date" id="record-date" value="${today}" class="border border-gray-300 rounded-md px-2 py-1">
+                <label for="record-date" class="text-sm font-medium">篩選日期:</label>
+                <input type="date" id="record-date" value="${today}" class="border border-gray-300 rounded-md px-2 py-1">
+                <button id="open-month-report" class="ml-2 px-3 py-1.5 bg-indigo-600 text-white rounded hover:bg-indigo-700 text-sm">月報表</button>
                         </div>
                         <div id="records-list" class="space-y-3">
                             <div class="text-center p-4 text-gray-500">a-�Ga?�LeR�a??c���e??...</div>
@@ -2237,6 +2238,271 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
 
                 dateInput.addEventListener('change', loadRecords);
                 loadRecords();
+
+                // 月報表：選擇月份彈窗
+                const monthBtn = document.getElementById('open-month-report');
+                monthBtn?.addEventListener('click', () => openMonthReportModal());
+
+                function openMonthReportModal() {
+                    const now = new Date();
+                    const ym = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+                    const modal = document.createElement('div');
+                    modal.className = 'fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50';
+                    modal.innerHTML = `
+                        <div class="bg-white rounded-lg shadow-xl w-11/12 max-w-md overflow-hidden">
+                            <div class="px-4 py-3 bg-indigo-600 text-white flex items-center justify-between">
+                                <h3 class="font-semibold">選擇月份</h3>
+                                <button class="close-month-modal">
+                                    <i data-lucide="x" class="w-5 h-5"></i>
+                                </button>
+                            </div>
+                            <div class="p-4 space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">月份</label>
+                                    <input type="month" id="month-input" value="${ym}" class="w-full border border-gray-300 rounded-md px-3 py-2">
+                                </div>
+                                <div class="flex justify-end space-x-2">
+                                    <button class="close-month-modal px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300">取消</button>
+                                    <button id="gen-month-report" class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">生成月報表</button>
+                                </div>
+                            </div>
+                        </div>`;
+                    document.body.appendChild(modal);
+                    try { lucide.createIcons(); } catch(e) {}
+                    modal.querySelectorAll('.close-month-modal').forEach(btn => btn.addEventListener('click', () => document.body.removeChild(modal)));
+                    document.getElementById('gen-month-report').addEventListener('click', async () => {
+                        const mi = document.getElementById('month-input').value;
+                        if (!mi) { showToast('請選擇月份', true); return; }
+                        document.body.removeChild(modal);
+                        await generateMonthlyReport(mi);
+                    });
+                }
+
+                async function generateMonthlyReport(ymStr) {
+                    // ymStr: YYYY-MM
+                    const [yearStr, monthStr] = ymStr.split('-');
+                    const year = parseInt(yearStr, 10); const monthIndex = parseInt(monthStr, 10) - 1; // 0-based
+                    const start = new Date(year, monthIndex, 1, 0, 0, 0, 0);
+                    const end = new Date(year, monthIndex + 1, 0, 23, 59, 59, 999);
+
+                    // 讀取該月打卡紀錄（本人）
+                    const { collection, where, query, getDocs, Timestamp } = window.__fs; const db = window.__db;
+                    const startTS = Timestamp?.fromDate ? Timestamp.fromDate(new Date(year, monthIndex, 1)) : start;
+                    const endTS = Timestamp?.fromDate ? Timestamp.fromDate(new Date(year, monthIndex + 1, 0, 23, 59, 59, 999)) : end;
+                    const q = query(
+                        collection(db, 'clockInRecords'),
+                        where('userId', '==', state.currentUser.uid),
+                        where('timestamp', '>=', startTS),
+                        where('timestamp', '<=', endTS)
+                    );
+                    const snap = await getDocs(q);
+                    const allRecords = [];
+                    snap.forEach(d => allRecords.push({ id: d.id, ...d.data() }));
+
+                    // 請假資料（覆蓋該月任何一天）
+                    let leaves = [];
+                    try {
+                        const lq = query(collection(db, 'leaves'), where('userId','==', state.currentUser.uid));
+                        const ls = await getDocs(lq);
+                        ls.forEach(doc => leaves.push({ id: doc.id, ...doc.data() }));
+                    } catch(e) { console.warn('讀取請假失敗', e); }
+
+                    // 特殊勤務（值班）資料
+                    let duties = [];
+                    try {
+                        const dq = query(collection(db, 'specialDuties'), where('userId','==', state.currentUser.uid));
+                        const ds = await getDocs(dq);
+                        ds.forEach(doc => duties.push({ id: doc.id, ...doc.data() }));
+                    } catch(e) { console.warn('讀取特殊勤務失敗', e); }
+
+                    // 準備列印容器
+                    const old = document.getElementById('monthly-report-container');
+                    if (old) old.remove();
+                    const container = document.createElement('div');
+                    container.id = 'monthly-report-container';
+                    container.className = 'fixed inset-0 z-50 bg-white';
+                    const name = state.currentUserData?.name || state.currentUser.displayName || state.currentUser.email || '';
+                    const ymTag = `${year}-${String(monthIndex+1).padStart(2,'0')}`;
+                    const titleText = `${ymTag}出勤紀錄-${name}`;
+                    container.innerHTML = `
+                        <div class="bg-white w-full h-full flex flex-col">
+                            <div class="px-4 py-3 bg-indigo-600 text-white flex items-center justify-between shrink-0">
+                                <h3 class="font-semibold">${titleText}</h3>
+                                <div class="space-x-2">
+                                    <button id="print-month-report" class="px-3 py-1.5 bg-white text-indigo-700 rounded hover:bg-gray-100">列印</button>
+                                    <button id="export-month-report" class="px-3 py-1.5 bg-white text-indigo-700 rounded hover:bg-gray-100">匯出PDF</button>
+                                    <button id="close-month-report" class="px-3 py-1.5 bg-white text-indigo-700 rounded hover:bg-gray-100">關閉</button>
+                                </div>
+                            </div>
+                            <div class="p-4 flex-1 overflow-auto">
+                                <div id="month-report-content" class="mx-auto" style="width:190mm">
+                                    <div id="month-report-inner" style="transform-origin: top left;">
+                                        <h2 class="text-xl font-bold mb-2 text-center">${titleText}</h2>
+                                        <table class="w-full border border-gray-300 text-sm">
+                                            <thead>
+                                                <tr class="bg-gray-100">
+                                                    <th class="border px-2 py-1">日期</th>
+                                                    <th class="border px-2 py-1">星期幾</th>
+                                                    <th class="border px-2 py-1">當日上班狀態+打卡時間</th>
+                                                    <th class="border px-2 py-1">當日下班狀態+打卡時間</th>
+                                                    <th class="border px-2 py-1">總時數</th>
+                                                    <th class="border px-2 py-1">外出次數</th>
+                                                    <th class="border px-2 py-1">假日/請假日/值班</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="month-report-body"></tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>`;
+                    document.body.appendChild(container);
+
+                    // 填充表格
+                    const weekdayZh = ['日','一','二','三','四','五','六'];
+                    const bodyEl = container.querySelector('#month-report-body');
+                    const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+                    for (let d = 1; d <= daysInMonth; d++) {
+                        const dayStart = new Date(year, monthIndex, d, 0, 0, 0, 0);
+                        const dayEnd = new Date(year, monthIndex, d, 23, 59, 59, 999);
+                        const w = dayStart.getDay();
+                        const dateLabel = `${year}-${String(monthIndex+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+
+                        const records = allRecords.filter(r => {
+                            const ts = r.timestamp?.toDate?.() || (r.timestamp ? new Date(r.timestamp) : null);
+                            if (!ts) return false;
+                            return ts >= dayStart && ts <= dayEnd;
+                        }).sort((a,b) => {
+                            const ta = a.timestamp?.toDate?.() || (a.timestamp ? new Date(a.timestamp) : new Date(0));
+                            const tb = b.timestamp?.toDate?.() || (b.timestamp ? new Date(b.timestamp) : new Date(0));
+                            return ta - tb;
+                        });
+
+                        const startRec = records[0];
+                        const endRec = records.length ? records[records.length - 1] : null;
+                        const startText = startRec ? `${startRec.type || ''} ${formatDate(startRec.timestamp)}` : '';
+                        const endText = endRec ? `${endRec.type || ''} ${formatDate(endRec.timestamp)}` : '';
+                        let totalHours = '';
+                        if (startRec && endRec) {
+                            const st = startRec.timestamp?.toDate?.() || new Date(startRec.timestamp);
+                            const et = endRec.timestamp?.toDate?.() || new Date(endRec.timestamp);
+                            const diff = (et - st) / 3600000; // hours
+                            totalHours = diff > 0 ? diff.toFixed(2) : '';
+                        }
+
+                        const outboundCount = records.filter(r => r.type === '外出').length;
+
+                        const indicators = [];
+                        const isWeekend = (w === 0 || w === 6);
+                        if (isWeekend) indicators.push('假日');
+                        const isLeave = leaves.some(l => {
+                            const s = l.startTime?.toDate?.() || (l.startTime ? new Date(l.startTime) : null);
+                            const e = l.endTime?.toDate?.() || (l.endTime ? new Date(l.endTime) : null);
+                            if (!s || !e) return false;
+                            return s <= dayEnd && e >= dayStart; // overlap
+                        });
+                        if (isLeave) indicators.push('請假日');
+                        const isDuty = duties.some(di => {
+                            const s = di.startTime?.toDate?.() || (di.startTime ? new Date(di.startTime) : null);
+                            const e = di.endTime?.toDate?.() || (di.endTime ? new Date(di.endTime) : null);
+                            if (!s || !e) return false;
+                            return s < new Date(year, monthIndex, d+1, 0, 0, 0, 0) && e > dayStart; // overlap
+                        });
+                        if (isDuty) indicators.push('值班');
+
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `
+                            <td class="border px-2 py-1">${dateLabel}</td>
+                            <td class="border px-2 py-1">${weekdayZh[w]}</td>
+                            <td class="border px-2 py-1">${startText}</td>
+                            <td class="border px-2 py-1">${endText}</td>
+                            <td class="border px-2 py-1">${totalHours}</td>
+                            <td class="border px-2 py-1 text-center">${outboundCount}</td>
+                            <td class="border px-2 py-1">${indicators.join('、')}</td>`;
+                        bodyEl.appendChild(tr);
+                    }
+
+                    // 列印樣式注入
+                    if (!document.getElementById('monthly-report-print-style')) {
+                        const style = document.createElement('style');
+                        style.id = 'monthly-report-print-style';
+                        style.textContent = `
+                        @page { size: A4; margin: 10mm; }
+                        @media print {
+                            body { -webkit-print-color-adjust: exact; }
+                            body * { visibility: hidden !important; }
+                            #month-report-content, #month-report-content * { visibility: visible !important; }
+                            #month-report-content { width: 190mm !important; margin: 0 auto; }
+                            table { border-collapse: collapse; }
+                            th, td { font-size: 11px; line-height: 1.2; padding: 2px 4px; }
+                        }
+                        `;
+                        document.head.appendChild(style);
+                    }
+
+                    // 關閉、列印、匯出事件
+                    container.querySelector('#close-month-report').addEventListener('click', () => container.remove());
+                    container.querySelector('#print-month-report').addEventListener('click', () => {
+                        window.print();
+                    });
+                    container.querySelector('#export-month-report').addEventListener('click', async () => {
+                        const ensureHtml2pdf = () => new Promise((resolve, reject) => {
+                            if (window.html2pdf) return resolve();
+                            const s = document.createElement('script');
+                            s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+                            s.onload = () => resolve();
+                            s.onerror = (e) => reject(e);
+                            document.head.appendChild(s);
+                        });
+                        try {
+                            await ensureHtml2pdf();
+                            const wrapper = document.getElementById('month-report-content');
+                            const inner = document.getElementById('month-report-inner');
+                            const fileName = `${ymTag}-出勤紀錄-${name}.pdf`;
+                            const opt = {
+                                margin: [10, 10, 10, 10], // mm
+                                filename: fileName,
+                                image: { type: 'jpeg', quality: 0.95 },
+                                html2canvas: { scale: 2 },
+                                pagebreak: { mode: ['avoid-all','css','legacy'] },
+                                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                            };
+                            // 動態縮放以單頁輸出
+                            const pxPerMm = (() => {
+                                const test = document.createElement('div');
+                                test.style.width = '1mm';
+                                test.style.height = '1mm';
+                                test.style.position = 'absolute';
+                                test.style.visibility = 'hidden';
+                                document.body.appendChild(test);
+                                const px = test.offsetHeight || 3.78;
+                                document.body.removeChild(test);
+                                return px;
+                            })();
+                            const pageContentMm = 297 - (opt.margin[0] + opt.margin[2]);
+                            const limitPx = pageContentMm * pxPerMm;
+                            const contentHeightPx = inner.scrollHeight;
+                            const scale = Math.min(1, limitPx / contentHeightPx);
+                            const prevTransform = inner.style.transform;
+                            const prevOrigin = inner.style.transformOrigin;
+                            const prevHeight = wrapper.style.height;
+                            const prevOverflow = wrapper.style.overflow;
+                            inner.style.transformOrigin = 'top left';
+                            inner.style.transform = `scale(${scale})`;
+                            wrapper.style.height = `${pageContentMm}mm`;
+                            wrapper.style.overflow = 'hidden';
+                            window.html2pdf().set(opt).from(wrapper).save().then(() => {
+                                inner.style.transform = prevTransform;
+                                inner.style.transformOrigin = prevOrigin;
+                                wrapper.style.height = prevHeight;
+                                wrapper.style.overflow = prevOverflow;
+                            });
+                        } catch (e) {
+                            console.error('PDF 下載失敗，改用列印備援', e);
+                            window.print();
+                        }
+                    });
+                }
             }
 
             async function initClockInMap() {

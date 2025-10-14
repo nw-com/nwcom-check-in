@@ -2409,27 +2409,30 @@
                             <div class="px-4 py-3 bg-indigo-600 text-white flex items-center justify-between shrink-0">
                                 <h3 class="font-semibold">${titleText}</h3>
                                 <div class="space-x-2">
+                                    <button id="print-month-report" class="px-3 py-1.5 bg-white text-indigo-700 rounded hover:bg-gray-100">列印</button>
                                     <button id="export-month-report" class="px-3 py-1.5 bg-white text-indigo-700 rounded hover:bg-gray-100">匯出PDF</button>
                                     <button id="close-month-report" class="px-3 py-1.5 bg-white text-indigo-700 rounded hover:bg-gray-100">關閉</button>
                                 </div>
                             </div>
                             <div class="p-4 flex-1 overflow-auto">
                                 <div id="month-report-content" class="mx-auto" style="width:190mm">
-                                    <h2 class="text-xl font-bold mb-2 text-center">${titleText}</h2>
-                                    <table class="w-full border border-gray-300 text-sm">
-                                        <thead>
-                                            <tr class="bg-gray-100">
-                                                <th class="border px-2 py-1">日期</th>
-                                                <th class="border px-2 py-1">星期幾</th>
-                                                <th class="border px-2 py-1">當日上班狀態+打卡時間</th>
-                                                <th class="border px-2 py-1">當日下班狀態+打卡時間</th>
-                                                <th class="border px-2 py-1">總時數</th>
-                                                <th class="border px-2 py-1">外出次數</th>
-                                                <th class="border px-2 py-1">假日/請假日/值班</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="month-report-body"></tbody>
-                                    </table>
+                                    <div id="month-report-inner" style="transform-origin: top left;">
+                                        <h2 class="text-xl font-bold mb-2 text-center">${titleText}</h2>
+                                        <table class="w-full border border-gray-300 text-sm">
+                                            <thead>
+                                                <tr class="bg-gray-100">
+                                                    <th class="border px-2 py-1">日期</th>
+                                                    <th class="border px-2 py-1">星期幾</th>
+                                                    <th class="border px-2 py-1">當日上班狀態+打卡時間</th>
+                                                    <th class="border px-2 py-1">當日下班狀態+打卡時間</th>
+                                                    <th class="border px-2 py-1">總時數</th>
+                                                    <th class="border px-2 py-1">外出次數</th>
+                                                    <th class="border px-2 py-1">假日/請假日/值班</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="month-report-body"></tbody>
+                                        </table>
+                                    </div>
                                 </div>
                             </div>
                         </div>`;
@@ -2507,9 +2510,28 @@
                         bodyEl.appendChild(tr);
                     }
 
-                    // 已取消列印功能，不注入列印樣式
+                    // 注入列印樣式（A4、隱藏背景、只顯示報表內容）
+                    if (!document.getElementById('monthly-report-print-style')) {
+                        const style = document.createElement('style');
+                        style.id = 'monthly-report-print-style';
+                        style.textContent = `
+                        @page { size: A4; margin: 10mm; }
+                        @media print {
+                            body { -webkit-print-color-adjust: exact; }
+                            body * { visibility: hidden !important; }
+                            #month-report-content, #month-report-content * { visibility: visible !important; }
+                            #month-report-content { width: 190mm !important; margin: 0 auto; }
+                            table { border-collapse: collapse; }
+                            th, td { font-size: 11px; line-height: 1.2; padding: 2px 4px; }
+                        }
+                        `;
+                        document.head.appendChild(style);
+                    }
 
                     container.querySelector('#close-month-report').addEventListener('click', () => container.remove());
+                    container.querySelector('#print-month-report').addEventListener('click', () => {
+                        window.print();
+                    });
                     container.querySelector('#export-month-report').addEventListener('click', async () => {
                         const ensureHtml2pdf = () => new Promise((resolve, reject) => {
                             if (window.html2pdf) return resolve();
@@ -2521,7 +2543,8 @@
                         });
                         try {
                             await ensureHtml2pdf();
-                            const element = document.getElementById('month-report-content');
+                            const wrapper = document.getElementById('month-report-content');
+                            const inner = document.getElementById('month-report-inner');
                             const fileName = `${ymTag}-出勤紀錄-${name}.pdf`;
                             const opt = {
                                 margin: [10, 10, 10, 10], // mm
@@ -2531,7 +2554,7 @@
                                 pagebreak: { mode: ['avoid-all','css','legacy'] },
                                 jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
                             };
-                            // 動態縮放以強制單頁：計算A4可用高度（扣除上下邊距），再縮放內容
+                            // 動態縮放以強制單頁：計算A4可用高度（扣除上下邊距），再縮放內層內容並限制外層高度
                             const pxPerMm = (() => {
                                 const test = document.createElement('div');
                                 test.style.width = '1mm';
@@ -2545,15 +2568,21 @@
                             })();
                             const pageContentMm = 297 - (opt.margin[0] + opt.margin[2]);
                             const limitPx = pageContentMm * pxPerMm;
-                            const contentHeightPx = element.scrollHeight;
+                            const contentHeightPx = inner.scrollHeight;
                             const scale = Math.min(1, limitPx / contentHeightPx);
-                            const prevTransform = element.style.transform;
-                            const prevOrigin = element.style.transformOrigin;
-                            element.style.transformOrigin = 'top left';
-                            element.style.transform = `scale(${scale})`;
-                            window.html2pdf().set(opt).from(element).save().then(() => {
-                                element.style.transform = prevTransform;
-                                element.style.transformOrigin = prevOrigin;
+                            const prevTransform = inner.style.transform;
+                            const prevOrigin = inner.style.transformOrigin;
+                            const prevHeight = wrapper.style.height;
+                            const prevOverflow = wrapper.style.overflow;
+                            inner.style.transformOrigin = 'top left';
+                            inner.style.transform = `scale(${scale})`;
+                            wrapper.style.height = `${pageContentMm}mm`;
+                            wrapper.style.overflow = 'hidden';
+                            window.html2pdf().set(opt).from(wrapper).save().then(() => {
+                                inner.style.transform = prevTransform;
+                                inner.style.transformOrigin = prevOrigin;
+                                wrapper.style.height = prevHeight;
+                                wrapper.style.overflow = prevOverflow;
                             });
                         } catch (e) {
                             console.error('PDF 下載失敗，改用列印備援', e);
