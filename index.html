@@ -317,6 +317,23 @@
             }
         };
 
+        // 全域審核權限檢查：管理員、人事、高階主管皆可
+        window.checkReviewerStatus = async function() {
+            try {
+                const user = window.__auth?.currentUser;
+                if (!user) return false;
+                const db = window.__db; const { doc, getDoc } = window.__fs || {};
+                if (!db || !doc || !getDoc) return false;
+                const userDoc = await getDoc(doc(db, 'users', user.uid));
+                if (!userDoc.exists()) return false;
+                const role = userDoc.data().role;
+                return ['admin','hr','manager'].includes(role);
+            } catch (error) {
+                console.warn('checkReviewerStatus 失敗:', error);
+                return false;
+            }
+        };
+
         // Global State
         const state = {
             currentUser: null,
@@ -2525,9 +2542,9 @@
                         </div>`;
                     listEl.appendChild(item);
                 });
-                const isAdmin = await (window.checkAdminStatus ? window.checkAdminStatus() : Promise.resolve(false));
+                const canReview = await (window.checkReviewerStatus ? window.checkReviewerStatus() : (window.checkAdminStatus ? window.checkAdminStatus() : Promise.resolve(false)));
                 const handleApprove = async (id) => {
-                    if (!isAdmin) { showToast('僅管理員可審核', true); return; }
+                    if (!canReview) { showToast('僅管理員/人事/高階主管可審核', true); return; }
                     try {
                         const reqDoc = await window.__fs.getDoc(window.__fs.doc(db, 'retroClockRequests', id));
                         if (!reqDoc.exists()) { showToast('申請不存在', true); return; }
@@ -2558,7 +2575,7 @@
                     }
                 };
                 const handleReject = async (id) => {
-                    if (!isAdmin) { showToast('僅管理員可審核', true); return; }
+                    if (!canReview) { showToast('僅管理員/人事/高階主管可審核', true); return; }
                     try {
                         await updateDoc(doc(db, 'retroClockRequests', id), {
                             status: 'rejected',

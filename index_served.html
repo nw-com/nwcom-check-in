@@ -2389,12 +2389,62 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                         container.querySelector('#retro-type').value = 'clock_in';
                         container.querySelector('#retro-reason').value = '';
                         container.querySelector('#retro-location').value = '';
+                        try { await renderMyRetroRequests(); } catch(e) {}
                     } catch (e) {
                         console.error(e);
                         msg.textContent = '提交失敗，請稍後再試。';
                         msg.className = 'text-sm mt-2 text-red-600';
                     }
                 });
+
+                // 我的申請列表（本人）
+                const myListWrapper = document.createElement('div');
+                myListWrapper.className = 'p-4';
+                myListWrapper.innerHTML = `
+                    <div class="bg-white rounded-lg shadow-sm border p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="font-bold">我的申請列表</h3>
+                            <span class="text-sm text-gray-500">顯示本人已提交補打卡</span>
+                        </div>
+                        <div id="my-retro-list" class="space-y-3"></div>
+                    </div>`;
+                container.appendChild(myListWrapper);
+
+                async function renderMyRetroRequests() {
+                    const listEl = container.querySelector('#my-retro-list');
+                    if (!listEl) return;
+                    listEl.innerHTML = '<div class="text-center text-gray-500"><i data-lucide="loader" class="w-5 h-5 mr-2 inline-block animate-spin"></i>載入中...</div>';
+                    try {
+                        const q = query(collection(db,'retroClockRequests'), where('userId','==', user.uid));
+                        const snap = await getDocs(q);
+                        if (snap.empty) { listEl.innerHTML = '<p class="text-sm text-gray-500">尚無申請</p>'; return; }
+                        const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                        items.sort((a,b) => {
+                            const ta = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
+                            const tb = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
+                            return tb - ta;
+                        });
+                        listEl.innerHTML = '';
+                        items.forEach(r => {
+                            const when = r.timestamp?.toDate ? r.timestamp.toDate() : (r.timestamp ? new Date(r.timestamp) : null);
+                            const row = document.createElement('div');
+                            row.className = 'p-3 border rounded-md bg-white flex items-center justify-between';
+                            row.innerHTML = `
+                                <div>
+                                    <p class="font-medium text-gray-800">${r.type === 'clock_in' ? '上班' : (r.type === 'clock_out' ? '下班' : r.type)}</p>
+                                    <p class="text-sm text-gray-600">${when ? when.toLocaleString('zh-TW') : ''}</p>
+                                    ${r.location ? `<p class=\"text-xs text-gray-500\">地點：${r.location}</p>` : ''}
+                                    ${r.reason ? `<p class=\"text-xs text-gray-500\">事由：${r.reason}</p>` : ''}
+                                </div>
+                                <span class="text-sm ${r.status==='approved' ? 'text-green-600' : (r.status==='rejected' ? 'text-red-600' : 'text-gray-500')}">${r.status || 'pending'}</span>`;
+                            listEl.appendChild(row);
+                        });
+                    } catch (e) {
+                        console.error('載入申請列表失敗', e);
+                        listEl.innerHTML = '<p class="text-sm text-red-600">載入失敗</p>';
+                    }
+                }
+                try { await renderMyRetroRequests(); } catch(e) {}
             }
 
             async function renderRetroApprovals(container) {
@@ -2404,49 +2454,99 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                     return;
                 }
 
-                // 僅管理員可見，若已有角色系統可在此擴充
-                const token = await user.getIdTokenResult();
-                const isAdmin = token.claims.admin || token.claims.manager || false;
-                if (!isAdmin) {
-                    container.innerHTML = `<div class="p-4 text-gray-600">您沒有審核權限。</div>`;
+                // 管理員、人事、高階主管可審核（依據 users 文件中的 role）
+                const db = window.__db; const { doc, getDoc } = window.__fs || {};
+                let canReview = false;
+                try {
+                    const uDoc = await getDoc(doc(db, 'users', user.uid));
+                    const role = uDoc.exists() ? uDoc.data().role : null;
+                    canReview = ['admin','hr','manager'].includes(role);
+                } catch (e) { canReview = false; }
+                if (!canReview) {
+                    container.innerHTML = `<div class="p-4 text-gray-600">僅管理員/人事/高階主管可審核。</div>`;
                     return;
                 }
 
                 container.innerHTML = `<div class="p-4">
-                    <div class="text-gray-700 mb-4">待審核補打卡申請</div>
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="text-gray-700">待審核補打卡申請</div>
+                        <button id="manual-add-record" class="px-3 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">新增人員打卡紀錄</button>
+                    </div>
+                    <div class="mb-3 flex items-center gap-2">
+                        <input type="date" id="retro-filter-date" class="border border-gray-300 rounded-md p-2">
+                        <select id="retro-filter-user" class="border border-gray-300 rounded-md p-2 min-w-[180px]">
+                            <option value="">全部人員</option>
+                        </select>
+                    </div>
                     <div id="retro-list" class="space-y-3"></div>
                 </div>`;
 
-                const q = query(collection(db, 'retroClockRequests'), where('status', '==', 'pending'));
-                const snap = await getDocs(q);
                 const list = container.querySelector('#retro-list');
-                if (snap.empty) {
-                    list.innerHTML = `<div class="text-sm text-gray-500">目前沒有待審核申請。</div>`;
-                    return;
+                const filterDateEl = container.querySelector('#retro-filter-date');
+                const filterUserEl = container.querySelector('#retro-filter-user');
+
+                // 載入人員選單
+                try {
+                    const usSnap = await getDocs(collection(db, 'users'));
+                    usSnap.forEach(d => {
+                        const opt = document.createElement('option');
+                        opt.value = d.id; opt.textContent = d.data().name || d.id;
+                        filterUserEl.appendChild(opt);
+                    });
+                } catch(e) {}
+
+                async function renderList() {
+                    list.innerHTML = `<div class=\"p-4 text-center text-gray-500\"><div class=\"flex items-center justify-center\"><i data-lucide=\"loader\" class=\"w-5 h-5 mr-2 animate-spin\"></i>載入申請...</div></div>`;
+                    try {
+                        const q = query(collection(db, 'retroClockRequests'), where('status', '==', 'pending'));
+                        const snap = await getDocs(q);
+                        const selectedUser = filterUserEl.value || '';
+                        const selectedDate = filterDateEl.value || '';
+                        const items = [];
+                        snap.forEach(docSnap => {
+                            const d = docSnap.data();
+                            const ts = d.timestamp?.toDate ? d.timestamp.toDate() : new Date(d.timestamp);
+                            const dateStr = ts ? ts.toISOString().split('T')[0] : '';
+                            if (selectedUser && d.userId !== selectedUser) return;
+                            if (selectedDate && dateStr !== selectedDate) return;
+                            items.push({ id: docSnap.id, ...d, ts });
+                        });
+                        if (items.length === 0) { list.innerHTML = `<div class=\"text-sm text-gray-500\">無符合條件的申請。</div>`; return; }
+                        items.sort((a,b) => {
+                            const ta = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
+                            const tb = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
+                            return tb - ta;
+                        });
+                        list.innerHTML = '';
+                        items.forEach(data => {
+                            const id = data.id;
+                            const row = document.createElement('div');
+                            row.className = 'border rounded p-3 flex items-center justify-between';
+                            row.innerHTML = `
+                                <div>
+                                    <div class=\"text-sm text-gray-700\">使用者：${data.userName || data.userId}</div>
+                                    <div class=\"text-sm text-gray-700\">類型：${data.type === 'clock_in' ? '上班' : (data.type === 'clock_out' ? '下班' : data.type)}</div>
+                                    <div class=\"text-sm text-gray-700\">時間：${data.ts ? data.ts.toLocaleString('zh-TW') : ''}</div>
+                                    <div class=\"text-sm text-gray-700\">地點：${data.location || ''}</div>
+                                    <div class=\"text-sm text-gray-700\">理由：${data.reason || ''}</div>
+                                </div>
+                                <div class=\"flex gap-2\">
+                                    <button class=\"approve px-3 py-1 bg-green-600 text-white rounded\" data-id=\"${id}\">核准</button>
+                                    <button class=\"reject px-3 py-1 bg-red-600 text-white rounded\" data-id=\"${id}\">駁回</button>
+                                </div>
+                            `;
+                            list.appendChild(row);
+                        });
+                    } catch (e) {
+                        console.error('讀取補打申請失敗', e);
+                        list.innerHTML = `<div class=\"text-sm text-red-600\">讀取失敗</div>`;
+                    }
                 }
 
-                snap.forEach(docSnap => {
-                    const data = docSnap.data();
-                    const ts = data.timestamp?.toDate ? data.timestamp.toDate() : new Date(data.timestamp);
-                    const id = docSnap.id;
-                    const row = document.createElement('div');
-                    row.className = 'border rounded p-3 flex items-center justify-between';
-                    row.innerHTML = `
-                        <div>
-                            <div class="text-sm text-gray-700">使用者：${data.userName || data.userId}</div>
-                            <div class="text-sm text-gray-700">類型：${data.type === 'clock_in' ? '上班' : '下班'}</div>
-                            <div class="text-sm text-gray-700">時間：${ts.toLocaleString()}</div>
-                            <div class="text-sm text-gray-700">地點：${data.location || ''}</div>
-                            <div class="text-sm text-gray-700">理由：${data.reason || ''}</div>
-                        </div>
-                        <div class="flex gap-2">
-                            <button class="approve px-3 py-1 bg-green-600 text-white rounded" data-id="${id}">核准</button>
-                            <button class="reject px-3 py-1 bg-red-600 text-white rounded" data-id="${id}">駁回</button>
-                        </div>
-                    `;
-                    list.appendChild(row);
-                });
+                filterDateEl.addEventListener('change', renderList);
+                filterUserEl.addEventListener('change', renderList);
 
+                // 核准/駁回
                 list.addEventListener('click', async (e) => {
                     const target = e.target;
                     if (!(target instanceof HTMLElement)) return;
@@ -2473,7 +2573,7 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                             };
                             await addDoc(collection(db, 'clockInRecords'), record);
                             await updateDoc(ref, { status: 'approved', approvedAt: serverTimestamp(), approvedBy: user.uid });
-                            target.closest('div.border')?.remove();
+                            renderList();
                         } catch (err) {
                             console.error(err);
                             alert('核准失敗，請稍後再試');
@@ -2482,13 +2582,115 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                         try {
                             const ref = doc(db, 'retroClockRequests', id);
                             await updateDoc(ref, { status: 'rejected', rejectedAt: serverTimestamp(), approvedBy: user.uid });
-                            target.closest('div.border')?.remove();
+                            renderList();
                         } catch (err) {
                             console.error(err);
                             alert('駁回失敗，請稍後再試');
                         }
                     }
                 });
+
+                // 手動新增人員打卡紀錄（彈窗）
+                container.querySelector('#manual-add-record').addEventListener('click', () => {
+                    const backdrop = document.createElement('div');
+                    backdrop.className = 'fixed inset-0 bg-black bg-opacity-40 z-40';
+                    const modal = document.createElement('div');
+                    modal.className = 'fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg p-4 z-50 w-[90%] max-w-[520px]';
+                    modal.innerHTML = `
+                        <h3 class=\"text-lg font-bold mb-3\">新增人員打卡紀錄</h3>
+                        <div class=\"space-y-3\">
+                            <div>
+                                <label class=\"text-sm font-medium\">人員</label>
+                                <select id=\"manual-user\" class=\"w-full border border-gray-300 rounded-md p-2\"></select>
+                            </div>
+                            <div class=\"grid grid-cols-2 gap-3\">
+                                <div>
+                                    <label class=\"text-sm font-medium\">日期</label>
+                                    <input type=\"date\" id=\"manual-date\" class=\"w-full border border-gray-300 rounded-md p-2\" />
+                                </div>
+                                <div>
+                                    <label class=\"text-sm font-medium\">時間</label>
+                                    <input type=\"time\" id=\"manual-time\" class=\"w-full border border-gray-300 rounded-md p-2\" />
+                                </div>
+                            </div>
+                            <div>
+                                <label class=\"text-sm font-medium\">項目</label>
+                                <select id=\"manual-type\" class=\"w-full border border-gray-300 rounded-md p-2\">
+                                    <option value=\"上班\">上班</option>
+                                    <option value=\"下班\">下班</option>
+                                    <option value=\"外出\">外出</option>
+                                    <option value=\"抵達\">抵達</option>
+                                    <option value=\"離開\">離開</option>
+                                    <option value=\"返回\">返回</option>
+                                </select>
+                            </div>
+                            <div id=\"manual-extra\" class=\"grid grid-cols-2 gap-3\">
+                                <div>
+                                    <label class=\"text-sm font-medium\">事由</label>
+                                    <input type=\"text\" id=\"manual-reason\" class=\"w-full border border-gray-300 rounded-md p-2\" placeholder=\"請輸入事由\" />
+                                </div>
+                                <div>
+                                    <label class=\"text-sm font-medium\">地點</label>
+                                    <input type=\"text\" id=\"manual-location\" class=\"w-full border border-gray-300 rounded-md p-2\" placeholder=\"請輸入地點\" />
+                                </div>
+                            </div>
+                        </div>
+                        <div class=\"flex justify-end gap-2 mt-4\">
+                            <button id=\"manual-cancel\" class=\"px-3 py-2 border rounded-md\">取消</button>
+                            <button id=\"manual-submit\" class=\"px-3 py-2 bg-indigo-600 text-white rounded-md\">新增</button>
+                        </div>
+                    `;
+                    document.body.appendChild(backdrop);
+                    document.body.appendChild(modal);
+                    // 填入人員
+                    filterUserEl.querySelectorAll('option').forEach(opt => {
+                        if (!opt.value) return;
+                        const o = document.createElement('option'); o.value = opt.value; o.textContent = opt.textContent;
+                        modal.querySelector('#manual-user').appendChild(o);
+                    });
+                    const typeSelect = modal.querySelector('#manual-type');
+                    const reasonInput = modal.querySelector('#manual-reason');
+                    const locInput = modal.querySelector('#manual-location');
+                    const toggle = () => {
+                        const need = ['外出','抵達','離開'].includes(typeSelect.value);
+                        modal.querySelector('#manual-extra').style.display = need ? 'grid' : 'none';
+                    };
+                    typeSelect.addEventListener('change', toggle); toggle();
+                    modal.querySelector('#manual-cancel').addEventListener('click', () => { backdrop.remove(); modal.remove(); });
+                    backdrop.addEventListener('click', () => { backdrop.remove(); modal.remove(); });
+                    modal.querySelector('#manual-submit').addEventListener('click', async () => {
+                        try {
+                            const userId = modal.querySelector('#manual-user').value;
+                            const dateStr = modal.querySelector('#manual-date').value;
+                            const timeStr = modal.querySelector('#manual-time').value;
+                            const type = typeSelect.value;
+                            const reason = (reasonInput.value || '').trim();
+                            const locationName = (locInput.value || '').trim();
+                            if (!userId || !dateStr || !timeStr) { showToast('請完整填寫人員與日期時間', true); return; }
+                            if (['外出','抵達','離開'].includes(type) && (!reason || !locationName)) { showToast('外出/抵達/離開需填寫事由與地點', true); return; }
+                            const ts = new Date(`${dateStr}T${timeStr}:00`);
+                            const record = {
+                                userId,
+                                userName: '',
+                                type,
+                                timestamp: ts,
+                                location: ['外出','抵達','離開'].includes(type) ? `${locationName}${reason ? '｜'+reason : ''}` : (locationName || ''),
+                                isAutomatic: false,
+                                deviceId: 'manual-admin',
+                                createdAt: serverTimestamp()
+                            };
+                            await addDoc(collection(db, 'clockInRecords'), record);
+                            showToast('已新增打卡紀錄');
+                            backdrop.remove(); modal.remove();
+                        } catch (err) {
+                            console.error('新增打卡失敗', err);
+                            showToast('新增失敗', true);
+                        }
+                    });
+                });
+
+                // 初次渲染
+                await renderList();
             }
 
             // aooao?a??e??i??a?oa??a??e!�La�?e??a??a??e!�L
