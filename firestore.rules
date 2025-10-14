@@ -112,6 +112,42 @@ service cloud.firestore {
       allow update: if get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
       allow delete: if false;
     }
+
+    // 補打卡申請：使用者提交，管理員審核
+    match /retroClockRequests/{requestId} {
+      // 本人可提交申請；限制欄位與型別
+      allow create: if request.auth != null &&
+        request.auth.uid == request.resource.data.userId &&
+        request.resource.data.keys().hasOnly([
+          'userId','type','reason','locationName','requestedAt','targetTime','status'
+        ]) &&
+        request.resource.data.type in ['上班','下班','外出','抵達','離開'] &&
+        (request.resource.data.reason == null || request.resource.data.reason is string) &&
+        (request.resource.data.locationName == null || request.resource.data.locationName is string) &&
+        request.resource.data.requestedAt is timestamp &&
+        request.resource.data.targetTime is timestamp &&
+        request.resource.data.status == 'pending';
+
+      // 任何登入者可讀（供管理員審核、一般使用者查看自己的申請狀態）
+      allow read: if request.auth != null;
+
+      // 僅管理員可審核並更新狀態；限制可更新欄位與型別
+      allow update: if isAdmin() &&
+        request.resource.data.keys().hasOnly([
+          'userId','type','reason','locationName','requestedAt','targetTime','status','reviewerId','reviewedAt'
+        ]) &&
+        request.resource.data.type in ['上班','下班','外出','抵達','離開'] &&
+        (request.resource.data.reason == null || request.resource.data.reason is string) &&
+        (request.resource.data.locationName == null || request.resource.data.locationName is string) &&
+        request.resource.data.requestedAt is timestamp &&
+        request.resource.data.targetTime is timestamp &&
+        request.resource.data.status in ['approved','rejected','pending'] &&
+        (request.resource.data.reviewerId == null || request.resource.data.reviewerId is string) &&
+        (request.resource.data.reviewedAt == null || request.resource.data.reviewedAt is timestamp);
+
+      // 禁止刪除
+      allow delete: if false;
+    }
     
     // 允許讀取所有人員狀態資訊（用於人員地圖和追蹤功能）
     match /userStatus/{userId} {

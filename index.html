@@ -1186,7 +1186,7 @@
                     <div class="h-[50px] flex items-center justify-around border-b border-gray-200 bg-white">
                         <button data-subtab="location" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'location' ? 'active' : ''}">定位打卡</button>
                         <button data-subtab="records" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'records' ? 'active' : ''}">打卡紀錄</button>
-                        <button data-subtab="workdays" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'workdays' ? 'active' : ''}">上班日期</button>
+                        <button data-subtab="retro" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'retro' ? 'active' : ''}">補打卡</button>
                         <button data-subtab="leaves" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'leaves' ? 'active' : ''}">請假紀錄</button>
                     </div>
                     <div id="sub-page-content" class="overflow-y-auto" style="height: calc(100% - 50px);"></div>`;
@@ -1196,8 +1196,8 @@
                     renderClockInLocation(subPageContent);
                 } else if (subPage === 'records') {
                     renderClockInRecords(subPageContent);
-                } else if (subPage === 'workdays') {
-                    renderWorkDatesMonthView(subPageContent);
+                } else if (subPage === 'retro') {
+                    renderRetroClockRequestForm(subPageContent);
                 } else if (subPage === 'leaves') {
                     renderMyLeaveRecords(subPageContent);
                 }
@@ -2367,7 +2367,7 @@
                         <button data-subtab="map" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'map' || !subPage ? 'active' : ''}">人員地圖</button>
                         <button data-subtab="attendance" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'attendance' ? 'active' : ''}">出勤紀錄</button>
                         <button data-subtab="leave" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'leave' ? 'active' : ''}">假單審核</button>
-                        <button data-subtab="devices" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'devices' ? 'active' : ''}">打卡裝置</button>
+                        <button data-subtab="retro" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'retro' ? 'active' : ''}">補打申請</button>
                     </div>
                     <div id="sub-page-content" class="overflow-y-auto" style="height: calc(100% - 50px);"></div>`;
                 
@@ -2376,13 +2376,204 @@
                     renderTrackingAttendance(subPageContent);
                 } else if (subPage === 'leave') {
                     renderTrackingLeave(subPageContent);
-                } else if (subPage === 'devices') {
-                    renderTrackingDevices(subPageContent);
+                } else if (subPage === 'retro') {
+                    renderRetroApprovals(subPageContent);
                 } else {
                     renderTrackingMap(subPageContent);
                 }
                 
                 mainContent.querySelectorAll('.sub-tab-btn').forEach(btn => btn.addEventListener('click', () => showPage('tracking', btn.dataset.subtab)));
+            }
+
+            // 補打卡申請表單
+            function renderRetroClockRequestForm(container) {
+                const todayStr = new Date().toISOString().split('T')[0];
+                container.innerHTML = `
+                    <div class="p-4 h-full">
+                        <div class="bg-white rounded-lg shadow-sm border p-4 space-y-4">
+                            <h2 class="text-lg font-bold">補打卡申請</h2>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">日期</label>
+                                    <input type="date" id="retro-date" value="${todayStr}" class="w-full border border-gray-300 rounded-md p-2" />
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">時間</label>
+                                    <input type="time" id="retro-time" class="w-full border border-gray-300 rounded-md p-2" />
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">項目</label>
+                                    <select id="retro-type" class="w-full border border-gray-300 rounded-md p-2">
+                                        <option value="上班">上班</option>
+                                        <option value="下班">下班</option>
+                                        <option value="外出">外出</option>
+                                        <option value="抵達">抵達</option>
+                                        <option value="離開">離開</option>
+                                        <option value="返回">返回</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div id="retro-extra" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">事由</label>
+                                    <input type="text" id="retro-reason" placeholder="請輸入事由" class="w-full border border-gray-300 rounded-md p-2" />
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">地點</label>
+                                    <input type="text" id="retro-location" placeholder="請輸入地點" class="w-full border border-gray-300 rounded-md p-2" />
+                                </div>
+                            </div>
+                            <div class="flex justify-end space-x-2">
+                                <button id="retro-submit" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">送出申請</button>
+                            </div>
+                        </div>
+                        <div id="retro-submit-status" class="mt-3 text-sm text-gray-500"></div>
+                    </div>`;
+                try { lucide.createIcons(); } catch (e) {}
+                const typeEl = document.getElementById('retro-type');
+                const reasonEl = document.getElementById('retro-reason');
+                const locEl = document.getElementById('retro-location');
+                const toggleExtra = () => {
+                    const t = typeEl.value;
+                    const needExtra = ['外出','抵達','離開'].includes(t);
+                    reasonEl.parentElement.style.display = needExtra ? 'block' : 'none';
+                    locEl.parentElement.style.display = needExtra ? 'block' : 'none';
+                };
+                typeEl.addEventListener('change', toggleExtra);
+                toggleExtra();
+
+                document.getElementById('retro-submit').addEventListener('click', async () => {
+                    const dateStr = document.getElementById('retro-date').value;
+                    const timeStr = document.getElementById('retro-time').value;
+                    const type = typeEl.value;
+                    const reason = reasonEl.value.trim();
+                    const locationName = locEl.value.trim();
+                    if (!dateStr || !timeStr) { showToast('請填寫日期與時間', true); return; }
+                    if (['外出','抵達','離開'].includes(type)) {
+                        if (!reason || !locationName) { showToast('外出/抵達/離開需填寫事由與地點', true); return; }
+                    }
+                    const dt = new Date(`${dateStr}T${timeStr}:00`);
+                    const { addDoc, collection, Timestamp } = window.__fs; const db = window.__db; const user = window.__auth?.currentUser;
+                    if (!user) { showToast('尚未登入', true); return; }
+                    const payload = {
+                        userId: user.uid,
+                        type,
+                        reason: reason || '',
+                        locationName: locationName || '',
+                        requestedAt: Timestamp?.fromDate ? Timestamp.fromDate(new Date()) : new Date(),
+                        targetTime: Timestamp?.fromDate ? Timestamp.fromDate(dt) : dt,
+                        status: 'pending'
+                    };
+                    try {
+                        await addDoc(collection(db, 'retroClockRequests'), payload);
+                        showToast('已送出補打卡申請');
+                        document.getElementById('retro-submit-status').textContent = '申請已送出，待管理員審核';
+                    } catch (e) {
+                        console.error('送出補打卡申請失敗', e);
+                        showToast('送出申請失敗', true);
+                    }
+                });
+            }
+
+            // 補打申請審核頁面
+            async function renderRetroApprovals(container) {
+                container.innerHTML = `
+                    <div class="p-4 h-full">
+                        <div class="bg-white rounded-lg shadow-sm border p-4">
+                            <div class="flex items-center justify-between mb-3">
+                                <h2 class="text-lg font-bold">補打申請審核</h2>
+                                <span class="text-sm text-gray-500">僅管理員可審核</span>
+                            </div>
+                            <div id="retro-requests-list" class="space-y-3"></div>
+                        </div>
+                    </div>`;
+                try { lucide.createIcons(); } catch(e) {}
+                const { collection, query, where, orderBy, getDocs, addDoc, updateDoc, doc, Timestamp, GeoPoint } = window.__fs; const db = window.__db;
+                const listEl = document.getElementById('retro-requests-list');
+                listEl.innerHTML = `<div class="p-4 text-center text-gray-500"><div class="flex items-center justify-center"><i data-lucide="loader" class="w-5 h-5 mr-2 animate-spin"></i>載入申請...</div></div>`;
+                let qs;
+                try {
+                    qs = await getDocs(query(collection(db, 'retroClockRequests'), where('status','==','pending'), orderBy('requestedAt','desc')));
+                } catch (e) {
+                    console.error('讀取補打申請失敗', e);
+                    listEl.innerHTML = `<p class="text-center text-gray-500 p-4">讀取失敗</p>`;
+                    return;
+                }
+                if (qs.empty) { listEl.innerHTML = `<p class="text-center text-gray-500 p-4">目前沒有待審核申請</p>`; return; }
+                const userMap = {};
+                try {
+                    const us = await getDocs(collection(db, 'users'));
+                    us.forEach(d => userMap[d.id] = d.data().name);
+                } catch(e) {}
+                listEl.innerHTML = '';
+                qs.forEach(docSnap => {
+                    const req = { id: docSnap.id, ...docSnap.data() };
+                    const when = req.targetTime?.toDate?.() ? req.targetTime.toDate() : (req.targetTime ? new Date(req.targetTime) : null);
+                    const userName = userMap[req.userId] || req.userId;
+                    const item = document.createElement('div');
+                    item.className = 'p-3 border rounded-md bg-white flex items-center justify-between';
+                    item.innerHTML = `
+                        <div>
+                            <p class="font-medium text-gray-800">${userName}</p>
+                            <p class="text-sm text-gray-600">${req.type} · ${when ? when.toLocaleString('zh-TW') : ''}</p>
+                            ${req.locationName ? `<p class="text-xs text-gray-500">地點：${req.locationName}</p>` : ''}
+                            ${req.reason ? `<p class="text-xs text-gray-500">事由：${req.reason}</p>` : ''}
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <button class="approve-btn px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700" data-id="${req.id}">同意</button>
+                            <button class="reject-btn px-3 py-2 bg-red-600 text-white rounded-md hover:bg-red-700" data-id="${req.id}">不同意</button>
+                        </div>`;
+                    listEl.appendChild(item);
+                });
+                const isAdmin = await (window.checkAdminStatus ? window.checkAdminStatus() : Promise.resolve(false));
+                const handleApprove = async (id) => {
+                    if (!isAdmin) { showToast('僅管理員可審核', true); return; }
+                    try {
+                        const reqDoc = await window.__fs.getDoc(window.__fs.doc(db, 'retroClockRequests', id));
+                        if (!reqDoc.exists()) { showToast('申請不存在', true); return; }
+                        const r = reqDoc.data();
+                        const ts = r.targetTime?.toDate?.() ? r.targetTime.toDate() : (r.targetTime ? new Date(r.targetTime) : new Date());
+                        await addDoc(collection(db, 'clockInRecords'), {
+                            userId: r.userId,
+                            type: r.type,
+                            timestamp: Timestamp?.fromDate ? Timestamp.fromDate(ts) : ts,
+                            location: GeoPoint ? new GeoPoint(0,0) : { latitude: 0, longitude: 0 },
+                            photoUrls: [],
+                            descriptions: [],
+                            deviceId: 'retro',
+                            locationName: r.locationName || null,
+                            dutyType: null,
+                            isAutomatic: false
+                        });
+                        await updateDoc(doc(db, 'retroClockRequests', id), {
+                            status: 'approved',
+                            reviewerId: window.__auth?.currentUser?.uid || null,
+                            reviewedAt: Timestamp?.fromDate ? Timestamp.fromDate(new Date()) : new Date()
+                        });
+                        showToast('已核准並新增打卡紀錄');
+                        renderRetroApprovals(container);
+                    } catch (e) {
+                        console.error('核准失敗', e);
+                        showToast('核准失敗', true);
+                    }
+                };
+                const handleReject = async (id) => {
+                    if (!isAdmin) { showToast('僅管理員可審核', true); return; }
+                    try {
+                        await updateDoc(doc(db, 'retroClockRequests', id), {
+                            status: 'rejected',
+                            reviewerId: window.__auth?.currentUser?.uid || null,
+                            reviewedAt: Timestamp?.fromDate ? Timestamp.fromDate(new Date()) : new Date()
+                        });
+                        showToast('已退回申請');
+                        renderRetroApprovals(container);
+                    } catch (e) {
+                        console.error('退回失敗', e);
+                        showToast('退回失敗', true);
+                    }
+                };
+                container.querySelectorAll('.approve-btn').forEach(btn => btn.addEventListener('click', (e) => handleApprove(e.currentTarget.dataset.id)));
+                container.querySelectorAll('.reject-btn').forEach(btn => btn.addEventListener('click', (e) => handleReject(e.currentTarget.dataset.id)));
             }
 
             // 人事分頁：出勤列表、請假列表
@@ -5884,6 +6075,10 @@
                         
                         // 更新頁面顯示
                         updateStatusDisplay();
+                        // 立即更新按鈕狀態，確保離開/返回等循環按鈕文字與樣式正確
+                        if (typeof updateButtonStatus === 'function') {
+                            try { updateButtonStatus(); } catch (e) { console.warn('updateButtonStatus 執行失敗', e); }
+                        }
                         
                         showToast(`${type}打卡成功！`);
                         close();

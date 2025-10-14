@@ -1138,7 +1138,7 @@
                         <button data-subtab="location" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'location' ? 'active' : ''}">aR?a??a??a?!</button>
                         <button data-subtab="records" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'records' ? 'active' : ''}">a??a?!c���e??</button>
                         <button data-subtab="leaves" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'leaves' ? 'active' : ''}">e??a??c���e??</button>
-                        <button data-subtab="workdays" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'workdays' ? 'active' : ''}">上班日期</button>
+                        <button data-subtab="retro" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'retro' ? 'active' : ''}">補打卡</button>
                     </div>
                     <div id="sub-page-content" class="overflow-y-auto" style="height: calc(100% - 50px);"></div>`;
                 
@@ -1149,8 +1149,8 @@
                     renderClockInRecords(subPageContent);
                 } else if (subPage === 'leaves') {
                     renderMyLeaveRecords(subPageContent);
-                } else if (subPage === 'workdays') {
-                    renderWorkdaysMonthView(subPageContent);
+                } else if (subPage === 'retro') {
+                    renderRetroClockRequestForm(subPageContent);
                 }
                 
                 mainContent.querySelectorAll('.sub-tab-btn').forEach(btn => btn.addEventListener('click', () => showPage('clock-in', btn.dataset.subtab)));
@@ -2295,7 +2295,7 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                         <button data-subtab="map" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'map' || !subPage ? 'active' : ''}">aooa?!a?�Xa??</button>
                         <button data-subtab="attendance" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'attendance' ? 'active' : ''}">a?oa??c���e??</button>
                         <button data-subtab="leave" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'leave' ? 'active' : ''}">a??a?Ra��ca?�M</button>
-                        <button data-subtab="devices" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'devices' ? 'active' : ''}">a??a?!e�G?c?R</button>
+                        <button data-subtab="retro" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'retro' ? 'active' : ''}">補打申請</button>
                     </div>
                     <div id="sub-page-content" class="overflow-y-auto" style="height: calc(100% - 50px);"></div>`;
                 
@@ -2304,13 +2304,191 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                     renderTrackingAttendance(subPageContent);
                 } else if (subPage === 'leave') {
                     renderTrackingLeave(subPageContent);
-                } else if (subPage === 'devices') {
-                    renderTrackingDevices(subPageContent);
+                } else if (subPage === 'retro') {
+                    renderRetroApprovals(subPageContent);
                 } else {
                     renderTrackingMap(subPageContent);
                 }
                 
                 mainContent.querySelectorAll('.sub-tab-btn').forEach(btn => btn.addEventListener('click', () => showPage('tracking', btn.dataset.subtab)));
+            }
+
+            async function renderRetroClockRequestForm(container) {
+                const user = auth.currentUser;
+                if (!user) {
+                    container.innerHTML = `<div class="p-4 text-red-600">請先登入以提交補打卡申請。</div>`;
+                    return;
+                }
+
+                container.innerHTML = `
+                    <div class="p-4 space-y-4">
+                        <div class="text-gray-700">補打卡申請</div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm text-gray-600">日期</label>
+                                <input type="date" id="retro-date" class="mt-1 w-full border rounded px-3 py-2" />
+                            </div>
+                            <div>
+                                <label class="block text-sm text-gray-600">時間</label>
+                                <input type="time" id="retro-time" class="mt-1 w-full border rounded px-3 py-2" />
+                            </div>
+                            <div>
+                                <label class="block text-sm text-gray-600">類型</label>
+                                <select id="retro-type" class="mt-1 w-full border rounded px-3 py-2">
+                                    <option value="clock_in">上班打卡</option>
+                                    <option value="clock_out">下班打卡</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm text-gray-600">地點</label>
+                                <input type="text" id="retro-location" class="mt-1 w-full border rounded px-3 py-2" placeholder="如：總部、工地A、遠端" />
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-sm text-gray-600">理由</label>
+                                <textarea id="retro-reason" class="mt-1 w-full border rounded px-3 py-2" rows="3" placeholder="請填寫補打卡原因"></textarea>
+                            </div>
+                        </div>
+                        <div class="flex justify-end">
+                            <button id="retro-submit" class="px-4 py-2 bg-blue-600 text-white rounded">提交申請</button>
+                        </div>
+                        <div id="retro-msg" class="text-sm mt-2"></div>
+                    </div>
+                `;
+
+                const submitBtn = container.querySelector('#retro-submit');
+                const msg = container.querySelector('#retro-msg');
+                submitBtn.addEventListener('click', async () => {
+                    const date = container.querySelector('#retro-date').value;
+                    const time = container.querySelector('#retro-time').value;
+                    const type = container.querySelector('#retro-type').value;
+                    const reason = container.querySelector('#retro-reason').value.trim();
+                    const location = container.querySelector('#retro-location').value.trim();
+
+                    if (!date || !time || !type || !reason) {
+                        msg.textContent = '請完整填寫日期、時間、類型與理由。';
+                        msg.className = 'text-sm mt-2 text-red-600';
+                        return;
+                    }
+                    try {
+                        const ts = new Date(`${date}T${time}:00`);
+                        const payload = {
+                            userId: user.uid,
+                            userName: user.displayName || '',
+                            type, // 'clock_in' | 'clock_out'
+                            timestamp: ts,
+                            reason,
+                            location,
+                            status: 'pending',
+                            createdAt: serverTimestamp()
+                        };
+                        await addDoc(collection(db, 'retroClockRequests'), payload);
+                        msg.textContent = '已提交補打卡申請，待審核。';
+                        msg.className = 'text-sm mt-2 text-green-600';
+                        container.querySelector('#retro-date').value = '';
+                        container.querySelector('#retro-time').value = '';
+                        container.querySelector('#retro-type').value = 'clock_in';
+                        container.querySelector('#retro-reason').value = '';
+                        container.querySelector('#retro-location').value = '';
+                    } catch (e) {
+                        console.error(e);
+                        msg.textContent = '提交失敗，請稍後再試。';
+                        msg.className = 'text-sm mt-2 text-red-600';
+                    }
+                });
+            }
+
+            async function renderRetroApprovals(container) {
+                const user = auth.currentUser;
+                if (!user) {
+                    container.innerHTML = `<div class="p-4 text-red-600">請先登入以審核補打卡申請。</div>`;
+                    return;
+                }
+
+                // 僅管理員可見，若已有角色系統可在此擴充
+                const token = await user.getIdTokenResult();
+                const isAdmin = token.claims.admin || token.claims.manager || false;
+                if (!isAdmin) {
+                    container.innerHTML = `<div class="p-4 text-gray-600">您沒有審核權限。</div>`;
+                    return;
+                }
+
+                container.innerHTML = `<div class="p-4">
+                    <div class="text-gray-700 mb-4">待審核補打卡申請</div>
+                    <div id="retro-list" class="space-y-3"></div>
+                </div>`;
+
+                const q = query(collection(db, 'retroClockRequests'), where('status', '==', 'pending'));
+                const snap = await getDocs(q);
+                const list = container.querySelector('#retro-list');
+                if (snap.empty) {
+                    list.innerHTML = `<div class="text-sm text-gray-500">目前沒有待審核申請。</div>`;
+                    return;
+                }
+
+                snap.forEach(docSnap => {
+                    const data = docSnap.data();
+                    const ts = data.timestamp?.toDate ? data.timestamp.toDate() : new Date(data.timestamp);
+                    const id = docSnap.id;
+                    const row = document.createElement('div');
+                    row.className = 'border rounded p-3 flex items-center justify-between';
+                    row.innerHTML = `
+                        <div>
+                            <div class="text-sm text-gray-700">使用者：${data.userName || data.userId}</div>
+                            <div class="text-sm text-gray-700">類型：${data.type === 'clock_in' ? '上班' : '下班'}</div>
+                            <div class="text-sm text-gray-700">時間：${ts.toLocaleString()}</div>
+                            <div class="text-sm text-gray-700">地點：${data.location || ''}</div>
+                            <div class="text-sm text-gray-700">理由：${data.reason || ''}</div>
+                        </div>
+                        <div class="flex gap-2">
+                            <button class="approve px-3 py-1 bg-green-600 text-white rounded" data-id="${id}">核准</button>
+                            <button class="reject px-3 py-1 bg-red-600 text-white rounded" data-id="${id}">駁回</button>
+                        </div>
+                    `;
+                    list.appendChild(row);
+                });
+
+                list.addEventListener('click', async (e) => {
+                    const target = e.target;
+                    if (!(target instanceof HTMLElement)) return;
+                    const id = target.dataset.id;
+                    if (!id) return;
+
+                    if (target.classList.contains('approve')) {
+                        try {
+                            const ref = doc(db, 'retroClockRequests', id);
+                            const dataSnap = await getDoc(ref);
+                            if (!dataSnap.exists()) return;
+                            const data = dataSnap.data();
+                            const ts = data.timestamp?.toDate ? data.timestamp.toDate() : new Date(data.timestamp);
+                            // 新增打卡紀錄
+                            const record = {
+                                userId: data.userId,
+                                userName: data.userName || '',
+                                type: data.type, // 'clock_in' | 'clock_out'
+                                timestamp: ts,
+                                location: data.location || '',
+                                isAutomatic: false,
+                                deviceId: 'retro-approval',
+                                createdAt: serverTimestamp()
+                            };
+                            await addDoc(collection(db, 'clockInRecords'), record);
+                            await updateDoc(ref, { status: 'approved', approvedAt: serverTimestamp(), approvedBy: user.uid });
+                            target.closest('div.border')?.remove();
+                        } catch (err) {
+                            console.error(err);
+                            alert('核准失敗，請稍後再試');
+                        }
+                    } else if (target.classList.contains('reject')) {
+                        try {
+                            const ref = doc(db, 'retroClockRequests', id);
+                            await updateDoc(ref, { status: 'rejected', rejectedAt: serverTimestamp(), approvedBy: user.uid });
+                            target.closest('div.border')?.remove();
+                        } catch (err) {
+                            console.error(err);
+                            alert('駁回失敗，請稍後再試');
+                        }
+                    }
+                });
             }
 
             // aooao?a??e??i??a?oa??a??e!�La�?e??a??a??e!�L
