@@ -2410,7 +2410,6 @@
                                 <h3 class="font-semibold">${titleText}</h3>
                                 <div class="space-x-2">
                                     <button id="print-month-report" class="px-3 py-1.5 bg-white text-indigo-700 rounded hover:bg-gray-100">列印</button>
-                                    <button id="export-month-report" class="px-3 py-1.5 bg-white text-indigo-700 rounded hover:bg-gray-100">匯出PDF</button>
                                     <button id="close-month-report" class="px-3 py-1.5 bg-white text-indigo-700 rounded hover:bg-gray-100">關閉</button>
                                 </div>
                             </div>
@@ -2510,7 +2509,7 @@
                         bodyEl.appendChild(tr);
                     }
 
-                    // 注入列印樣式（A4、隱藏背景、只顯示報表內容）
+                    // 注入列印樣式（A4、靠上對齊、水平置中，僅顯示報表內容）
                     if (!document.getElementById('monthly-report-print-style')) {
                         const style = document.createElement('style');
                         style.id = 'monthly-report-print-style';
@@ -2518,9 +2517,11 @@
                         @page { size: A4; margin: 10mm; }
                         @media print {
                             body { -webkit-print-color-adjust: exact; }
-                            body * { visibility: hidden !important; }
-                            #month-report-content, #month-report-content * { visibility: visible !important; }
-                            #month-report-content { width: 190mm !important; margin: 0 auto; }
+                            body > * { display: none !important; }
+                            #monthly-report-container { display: block !important; position: static !important; }
+                            #monthly-report-container .px-4.py-3.bg-indigo-600 { display: none !important; }
+                            #monthly-report-container .p-4.flex-1 { padding: 0 !important; }
+                            #month-report-content { width: 190mm !important; margin: 0 auto !important; }
                             table { border-collapse: collapse; }
                             th, td { font-size: 11px; line-height: 1.2; padding: 2px 4px; }
                         }
@@ -2532,78 +2533,7 @@
                     container.querySelector('#print-month-report').addEventListener('click', () => {
                         window.print();
                     });
-                    container.querySelector('#export-month-report').addEventListener('click', async () => {
-                        const ensureHtml2pdf = () => new Promise((resolve, reject) => {
-                            if (window.html2pdf) return resolve();
-                            const s = document.createElement('script');
-                            s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
-                            s.onload = () => resolve();
-                            s.onerror = (e) => reject(e);
-                            document.head.appendChild(s);
-                        });
-                        try {
-                            await ensureHtml2pdf();
-                            const wrapper = document.getElementById('month-report-content');
-                            const inner = document.getElementById('month-report-inner');
-                            const fileName = `${ymTag}-出勤紀錄-${name}.pdf`;
-                            const opt = {
-                                margin: [10, 10, 10, 10], // mm
-                                filename: fileName,
-                                image: { type: 'jpeg', quality: 0.95 },
-                                html2canvas: { scale: 2 },
-                                pagebreak: { mode: ['avoid-all','css','legacy'] },
-                                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-                            };
-                            // 動態縮放以強制單頁：計算A4可用高度（扣除上下邊距），再縮放內層內容並限制外層高度
-                            const pxPerMm = (() => {
-                                const test = document.createElement('div');
-                                test.style.width = '1mm';
-                                test.style.height = '1mm';
-                                test.style.position = 'absolute';
-                                test.style.visibility = 'hidden';
-                                document.body.appendChild(test);
-                                const px = test.offsetHeight || 3.78; // fallback 96dpi
-                                document.body.removeChild(test);
-                                return px;
-                            })();
-                            const pageContentMm = 297 - (opt.margin[0] + opt.margin[2]);
-                            const limitPx = pageContentMm * pxPerMm;
-                            const contentHeightPx = inner.scrollHeight;
-                            const scale = Math.min(1, limitPx / contentHeightPx);
-                            const prevTransform = inner.style.transform;
-                            const prevOrigin = inner.style.transformOrigin;
-                            const prevHeight = wrapper.style.height;
-                            const prevOverflow = wrapper.style.overflow;
-                            inner.style.transformOrigin = 'top left';
-                            inner.style.transform = `scale(${scale})`;
-                            wrapper.style.height = `${pageContentMm}mm`;
-                            wrapper.style.overflow = 'hidden';
-                            window.html2pdf().set(opt).from(wrapper).save().then(() => {
-                                inner.style.transform = prevTransform;
-                                inner.style.transformOrigin = prevOrigin;
-                                wrapper.style.height = prevHeight;
-                                wrapper.style.overflow = prevOverflow;
-                            });
-                        } catch (e) {
-                            console.error('PDF 下載失敗，改用列印備援', e);
-                            const content = document.getElementById('month-report-content');
-                            const win = window.open('', '_blank');
-                            const printCss = `
-                                <style>
-                                    @page { size: A4; margin: 10mm; }
-                                    body { -webkit-print-color-adjust: exact; }
-                                    #month-report-content { width: 190mm; margin: 0 auto; }
-                                    table { border-collapse: collapse; width: 100%; }
-                                    th, td { border: 1px solid #D1D5DB; font-size: 11px; line-height: 1.2; padding: 2px 4px; }
-                                    tr { height: 7mm; }
-                                    thead tr { background: #F3F4F6; height: 8mm; }
-                                    h2 { margin: 0 0 4mm 0; font-size: 16px; text-align:center; }
-                                </style>`;
-                            win.document.write(`<html><head><title>${titleText}</title>${printCss}</head><body>${content.outerHTML}</body></html>`);
-                            win.document.close();
-                            setTimeout(() => { win.focus(); win.print(); win.close(); }, 300);
-                        }
-                    });
+                    // 已取消 PDF 匯出功能
                 }
             }
 

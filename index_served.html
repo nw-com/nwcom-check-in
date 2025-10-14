@@ -2330,7 +2330,6 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                                 <h3 class="font-semibold">${titleText}</h3>
                                 <div class="space-x-2">
                                     <button id="print-month-report" class="px-3 py-1.5 bg-white text-indigo-700 rounded hover:bg-gray-100">列印</button>
-                                    <button id="export-month-report" class="px-3 py-1.5 bg-white text-indigo-700 rounded hover:bg-gray-100">匯出PDF</button>
                                     <button id="close-month-report" class="px-3 py-1.5 bg-white text-indigo-700 rounded hover:bg-gray-100">關閉</button>
                                 </div>
                             </div>
@@ -2422,7 +2421,7 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                         bodyEl.appendChild(tr);
                     }
 
-                    // 列印樣式注入
+                    // 列印樣式注入（靠上對齊、水平置中，僅顯示報表內容）
                     if (!document.getElementById('monthly-report-print-style')) {
                         const style = document.createElement('style');
                         style.id = 'monthly-report-print-style';
@@ -2430,9 +2429,11 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                         @page { size: A4; margin: 10mm; }
                         @media print {
                             body { -webkit-print-color-adjust: exact; }
-                            body * { visibility: hidden !important; }
-                            #month-report-content, #month-report-content * { visibility: visible !important; }
-                            #month-report-content { width: 190mm !important; margin: 0 auto; }
+                            body > * { display: none !important; }
+                            #monthly-report-container { display: block !important; position: static !important; }
+                            #monthly-report-container .px-4.py-3.bg-indigo-600 { display: none !important; }
+                            #monthly-report-container .p-4.flex-1 { padding: 0 !important; }
+                            #month-report-content { width: 190mm !important; margin: 0 auto !important; }
                             table { border-collapse: collapse; }
                             th, td { font-size: 11px; line-height: 1.2; padding: 2px 4px; }
                         }
@@ -2440,67 +2441,10 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                         document.head.appendChild(style);
                     }
 
-                    // 關閉、列印、匯出事件
+                    // 關閉、列印事件（已取消匯出PDF）
                     container.querySelector('#close-month-report').addEventListener('click', () => container.remove());
                     container.querySelector('#print-month-report').addEventListener('click', () => {
                         window.print();
-                    });
-                    container.querySelector('#export-month-report').addEventListener('click', async () => {
-                        const ensureHtml2pdf = () => new Promise((resolve, reject) => {
-                            if (window.html2pdf) return resolve();
-                            const s = document.createElement('script');
-                            s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
-                            s.onload = () => resolve();
-                            s.onerror = (e) => reject(e);
-                            document.head.appendChild(s);
-                        });
-                        try {
-                            await ensureHtml2pdf();
-                            const wrapper = document.getElementById('month-report-content');
-                            const inner = document.getElementById('month-report-inner');
-                            const fileName = `${ymTag}-出勤紀錄-${name}.pdf`;
-                            const opt = {
-                                margin: [10, 10, 10, 10], // mm
-                                filename: fileName,
-                                image: { type: 'jpeg', quality: 0.95 },
-                                html2canvas: { scale: 2 },
-                                pagebreak: { mode: ['avoid-all','css','legacy'] },
-                                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-                            };
-                            // 動態縮放以單頁輸出
-                            const pxPerMm = (() => {
-                                const test = document.createElement('div');
-                                test.style.width = '1mm';
-                                test.style.height = '1mm';
-                                test.style.position = 'absolute';
-                                test.style.visibility = 'hidden';
-                                document.body.appendChild(test);
-                                const px = test.offsetHeight || 3.78;
-                                document.body.removeChild(test);
-                                return px;
-                            })();
-                            const pageContentMm = 297 - (opt.margin[0] + opt.margin[2]);
-                            const limitPx = pageContentMm * pxPerMm;
-                            const contentHeightPx = inner.scrollHeight;
-                            const scale = Math.min(1, limitPx / contentHeightPx);
-                            const prevTransform = inner.style.transform;
-                            const prevOrigin = inner.style.transformOrigin;
-                            const prevHeight = wrapper.style.height;
-                            const prevOverflow = wrapper.style.overflow;
-                            inner.style.transformOrigin = 'top left';
-                            inner.style.transform = `scale(${scale})`;
-                            wrapper.style.height = `${pageContentMm}mm`;
-                            wrapper.style.overflow = 'hidden';
-                            window.html2pdf().set(opt).from(wrapper).save().then(() => {
-                                inner.style.transform = prevTransform;
-                                inner.style.transformOrigin = prevOrigin;
-                                wrapper.style.height = prevHeight;
-                                wrapper.style.overflow = prevOverflow;
-                            });
-                        } catch (e) {
-                            console.error('PDF 下載失敗，改用列印備援', e);
-                            window.print();
-                        }
                     });
                 }
             }
