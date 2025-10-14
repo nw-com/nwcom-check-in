@@ -2196,13 +2196,11 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                                         <button class="map-btn bg-blue-500 text-white px-2 py-1 rounded text-sm" data-lat="${record.location?.latitude || 0}" data-lng="${record.location?.longitude || 0}">
                                             <i data-lucide="map-pin"></i> 地圖
                                         </button>
-                                        <button class="apply-mod-btn bg-orange-500 text-white px-2 py-1 rounded text-sm" data-record='${encodeURIComponent(JSON.stringify({
-                                            id: record.id,
-                                            type: record.type || '',
-                                            timestamp: record.timestamp,
-                                            locationName: record.locationName || '',
-                                            dutyType: record.dutyType || null
-                                        }))}'>
+                                        <button class="apply-mod-btn bg-orange-500 text-white px-2 py-1 rounded text-sm"
+                                            data-id="${record.id}"
+                                            data-type="${record.type || ''}"
+                                            data-ts="${(record.timestamp?.toMillis ? record.timestamp.toMillis() : (record.timestamp?.seconds ? record.timestamp.seconds * 1000 : (record.timestamp ? (new Date(record.timestamp)).getTime() : Date.now())))}"
+                                            data-locationname="${record.locationName || ''}">
                                             <i data-lucide="edit"></i> 申請修改
                                         </button>
                                     </div>
@@ -2231,11 +2229,13 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                         // 申請修改按鈕事件
                         document.querySelectorAll('.apply-mod-btn').forEach(btn => {
                             btn.addEventListener('click', async (e) => {
-                                const raw = e.currentTarget.dataset.record || '';
-                                let rec;
-                                try { rec = JSON.parse(decodeURIComponent(raw)); } catch(_) { rec = null; }
-                                if (!rec) { showToast('無法讀取此筆打卡資訊', true); return; }
-                                const ts = rec.timestamp?.toDate ? rec.timestamp.toDate() : (rec.timestamp ? new Date(rec.timestamp) : new Date());
+                                const d = e.currentTarget.dataset;
+                                const tsMillis = parseInt(d.ts || '0', 10);
+                                const ts = Number.isFinite(tsMillis) && tsMillis > 0 ? new Date(tsMillis) : new Date();
+                                const recTypeRaw = d.type || '';
+                                const recLocationName = d.locationname || '';
+                                const typeMap = { clock_in: '上班', clock_out: '下班', out: '外出', arrive: '抵達', leave: '離開', return: '返回' };
+                                const recType = typeMap[recTypeRaw] || recTypeRaw;
                                 // 建立彈窗
                                 const backdrop = document.createElement('div');
                                 backdrop.className = 'fixed inset-0 bg-black bg-opacity-40 z-40';
@@ -2257,12 +2257,12 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                                         <div>
                                             <label class="text-sm font-medium">項目</label>
                                             <select id="mod-type" class="w-full border border-gray-300 rounded-md p-2">
-                                                <option value="上班" ${rec.type==='上班' ? 'selected' : ''}>上班</option>
-                                                <option value="下班" ${rec.type==='下班' ? 'selected' : ''}>下班</option>
-                                                <option value="外出" ${rec.type==='外出' ? 'selected' : ''}>外出</option>
-                                                <option value="抵達" ${rec.type==='抵達' ? 'selected' : ''}>抵達</option>
-                                                <option value="離開" ${rec.type==='離開' ? 'selected' : ''}>離開</option>
-                                                <option value="返回" ${rec.type==='返回' ? 'selected' : ''}>返回</option>
+                                                <option value="上班" ${recType==='上班' ? 'selected' : ''}>上班</option>
+                                                <option value="下班" ${recType==='下班' ? 'selected' : ''}>下班</option>
+                                                <option value="外出" ${recType==='外出' ? 'selected' : ''}>外出</option>
+                                                <option value="抵達" ${recType==='抵達' ? 'selected' : ''}>抵達</option>
+                                                <option value="離開" ${recType==='離開' ? 'selected' : ''}>離開</option>
+                                                <option value="返回" ${recType==='返回' ? 'selected' : ''}>返回</option>
                                             </select>
                                         </div>
                                         <div id="mod-extra" class="grid grid-cols-2 gap-3">
@@ -2272,7 +2272,7 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                                             </div>
                                             <div>
                                                 <label class="text-sm font-medium">地點</label>
-                                                <input type="text" id="mod-location" class="w-full border border-gray-300 rounded-md p-2" placeholder="請輸入地點" value="${rec.locationName || ''}" />
+                                                <input type="text" id="mod-location" class="w-full border border-gray-300 rounded-md p-2" placeholder="請輸入地點" value="${recLocationName}" />
                                             </div>
                                         </div>
                                         <div>
