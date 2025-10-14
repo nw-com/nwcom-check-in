@@ -2585,9 +2585,26 @@
                         // 外出次數
                         const outboundCount = records.filter(r => r.type === '外出').length;
 
-                        // 假日 / 請假日 / 值班
-                        const indicators = [];
-                        if (w === 5 || w === 6 || w === 0) indicators.push('假日');
+                        // 讀取使用者本月上班設定以判斷假日
+                        let indicators = [];
+                        try {
+                            const ymId = `${year}-${String(monthIndex+1).padStart(2,'0')}`;
+                            const { doc, getDoc } = window.__fs || {};
+                            const db = window.__db;
+                            if (doc && getDoc && db) {
+                                const ref = doc(db, 'users', state.currentUser.uid, 'workdays', ymId);
+                                const snap = await getDoc(ref);
+                                const days = snap.exists() ? (snap.data().days || []) : [];
+                                const set = new Set(days.map(n => Number(n)));
+                                if (!set.has(d)) indicators.push('假日');
+                            } else {
+                                // 後備判斷：週末為假日
+                                if (w === 6 || w === 0) indicators.push('假日');
+                            }
+                        } catch(e) {
+                            // 讀取失敗，維持週末為假日
+                            if (w === 6 || w === 0) indicators.push('假日');
+                        }
                         // 請假日（時間範圍相交）
                         const nextDay = new Date(dayStart); nextDay.setDate(nextDay.getDate()+1);
                         const isLeave = leaves.some(l => {
@@ -5100,6 +5117,8 @@
                     labelEl.textContent = `${targetYear}年${String(targetMonth + 1).padStart(2,'0')}月`;
                     renderMonthGrid();
                     loadWorkdays();
+                    // 載入本月週五值班人員
+                    loadFridayDuty?.();
                 }
 
                 function daysInMonth(y, m0) {
@@ -5134,11 +5153,11 @@
                             <div class="text-lg">${d}</div>
                         `;
                         if (isSelected) {
-                            cell.classList.add('bg-green-100','border-green-400');
+                            cell.classList.add('bg-blue-100','border-blue-400');
                         }
                         cell.addEventListener('click', () => {
-                            cell.classList.toggle('bg-green-100');
-                            cell.classList.toggle('border-green-400');
+                            cell.classList.toggle('bg-blue-100');
+                            cell.classList.toggle('border-blue-400');
                         });
                         gridEl.appendChild(cell);
                     }
@@ -5165,7 +5184,7 @@
                 function getSelectedDays() {
                     const selected = [];
                     gridEl.querySelectorAll('button[data-day]').forEach(btn => {
-                        if (btn.classList.contains('bg-green-100')) {
+                        if (btn.classList.contains('bg-blue-100')) {
                             selected.push(Number(btn.dataset.day));
                         }
                     });
@@ -5186,15 +5205,15 @@
                         const day = Number(btn.dataset.day);
                         const dow = new Date(targetYear, targetMonth, day).getDay();
                         if (dow >= 1 && dow <= 5) {
-                            btn.classList.add('bg-green-100','border-green-400');
+                            btn.classList.add('bg-blue-100','border-blue-400');
                         } else {
-                            btn.classList.remove('bg-green-100','border-green-400');
+                            btn.classList.remove('bg-blue-100','border-blue-400');
                         }
                     });
                 });
                 document.getElementById('clear-selection').addEventListener('click', () => {
                     gridEl.querySelectorAll('button[data-day]').forEach(btn => {
-                        btn.classList.remove('bg-green-100','border-green-400');
+                        btn.classList.remove('bg-blue-100','border-blue-400');
                     });
                 });
 
@@ -5213,6 +5232,70 @@
                         showLoading(false);
                     }
                 });
+
+                // 動態插入週五值班人員設定區塊
+                try {
+                    const root = container.querySelector('.p-4');
+                    const dutyHTML = `
+                        <div class="bg-white p-4 rounded-md shadow-sm border mb-2">
+                            <div class="flex items-center justify-between mb-2">
+                                <h3 class="font-bold text-lg">本月每週五值班人員</h3>
+                            </div>
+                            <p class="text-sm text-gray-600 mb-3">以逗號分隔，例如：小王, 小李</p>
+                            <div class="flex items-center space-x-2">
+                                <input id="friday-duty-input" type="text" class="flex-1 border border-gray-300 rounded-md px-3 py-2" placeholder="輸入人員名單">
+                                <button id="save-friday-duty" class="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-indigo-700 flex items-center justify-center">
+                                    <i data-lucide="save" class="w-4 h-4 mr-2"></i>儲存週五值班
+                                </button>
+                            </div>
+                            <div class="text-sm text-gray-500 mt-2">已儲存：<span id="friday-duty-display"></span></div>
+                        </div>`;
+                    root?.insertAdjacentHTML('beforeend', dutyHTML);
+                    lucide.createIcons();
+                } catch(e) { console.warn('插入週五值班人員區塊失敗', e); }
+
+                // 週五值班人員載入
+                async function loadFridayDuty() {
+                    try {
+                        const ymId = `${targetYear}-${String(targetMonth + 1).padStart(2,'0')}`;
+                        const ref = doc(db, 'users', user.uid, 'workdays', ymId);
+                        const snap = await getDoc(ref);
+                        const names = snap.exists() ? (snap.data().fridayDutyNames || []) : [];
+                        const display = document.getElementById('friday-duty-display');
+                        const input = document.getElementById('friday-duty-input');
+                        if (display) display.textContent = names.join('、');
+                        if (input) input.value = names.join(', ');
+                    } catch (e) {
+                        console.warn('載入週五值班人員失敗', e);
+                    }
+                }
+
+                function parseDutyNames(str) {
+                    return (str || '')
+                        .split(/[,，、\s]+/)
+                        .map(s => s.trim())
+                        .filter(s => s.length > 0);
+                }
+
+                const saveFridayBtn = document.getElementById('save-friday-duty');
+                if (saveFridayBtn) {
+                    saveFridayBtn.addEventListener('click', async () => {
+                        try {
+                            showLoading(true);
+                            const ymId = `${targetYear}-${String(targetMonth + 1).padStart(2,'0')}`;
+                            const ref = doc(db, 'users', user.uid, 'workdays', ymId);
+                            const names = parseDutyNames(document.getElementById('friday-duty-input').value);
+                            await setDoc(ref, { fridayDutyNames: names, updatedAt: serverTimestamp() }, { merge: true });
+                            document.getElementById('friday-duty-display').textContent = names.join('、');
+                            showToast('本月週五值班人員已儲存');
+                        } catch (err) {
+                            console.error('儲存週五值班人員失敗:', err);
+                            showToast('儲存週五值班人員失敗', true);
+                        } finally {
+                            showLoading(false);
+                        }
+                    });
+                }
 
                 setMonth(new Date());
             }

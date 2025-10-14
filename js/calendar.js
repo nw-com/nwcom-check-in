@@ -167,15 +167,82 @@ function generateCalendar(year, month) {
         } catch (e) {
             // ignore
         }
-        
+
+        dayCell.dataset.ymd = formatYMD(currentDate);
         dayCell.innerHTML = `
             <div class="text-sm ${isToday ? 'font-bold text-red-600' : ''}">${currentDate.getDate()}</div>
             <div class="text-xs text-gray-500 mt-1" id="events-${currentDate.getTime()}">
                 <!-- 事件將在這裡顯示 -->
             </div>
         `;
-        
+
         calendarGrid.appendChild(dayCell);
+    }
+
+    // 依使用者上班設定與打卡狀態標色（工作日淺藍、完成綠、異常淺紅）
+    applyCalendarStatus(year, month).catch(() => {});
+}
+
+async function applyCalendarStatus(year, month) {
+    try {
+        const user = window.__auth?.currentUser;
+        const fs = window.__fs;
+        const db = window.__db;
+        if (!user || !fs || !db) return;
+        const { doc, getDoc, collection, query, where, getDocs, Timestamp } = fs;
+
+        const ymId = `${year}-${String(month + 1).padStart(2,'0')}`;
+        const ref = doc(db, 'users', user.uid, 'workdays', ymId);
+        const snap = await getDoc(ref);
+        const workdays = new Set((snap.exists() ? (snap.data().days || []) : []).map(n => Number(n)));
+
+        const startTS = Timestamp?.fromDate ? Timestamp.fromDate(new Date(year, month, 1)) : new Date(year, month, 1);
+        const endTS = Timestamp?.fromDate ? Timestamp.fromDate(new Date(year, month + 1, 0, 23, 59, 59, 999)) : new Date(year, month + 1, 0, 23, 59, 59, 999);
+        const q = query(
+            collection(db, 'clockInRecords'),
+            where('userId', '==', user.uid),
+            where('timestamp', '>=', startTS),
+            where('timestamp', '<=', endTS)
+        );
+        const rs = await getDocs(q);
+        const map = new Map(); // iso -> { start:boolean, end:boolean }
+        rs.forEach(d => {
+            const r = d.data();
+            const dt = r.timestamp?.toDate?.() || (r.timestamp ? new Date(r.timestamp) : null);
+            if (!dt) return;
+            const iso = formatYMD(dt);
+            const obj = map.get(iso) || { start:false, end:false };
+            if (r.type === '上班') obj.start = true;
+            if (r.type === '下班' || r.type === '自動下班') obj.end = true;
+            map.set(iso, obj);
+        });
+
+        // 套用標色
+        const cells = document.querySelectorAll('#calendar-grid [data-ymd]');
+        cells.forEach(cell => {
+            const iso = cell.dataset.ymd;
+            const dt = new Date(iso);
+            const d = dt.getDate();
+            // 當月日期才標色
+            if (dt.getMonth() !== month) return;
+
+            const status = map.get(iso);
+            if (status && status.start && status.end) {
+                cell.classList.remove('bg-gray-200');
+                cell.classList.add('bg-green-100','border-green-300');
+                return;
+            }
+            if (status && (status.start !== status.end)) {
+                cell.classList.remove('bg-gray-200');
+                cell.classList.add('bg-red-100','border-red-300');
+                return;
+            }
+            if (workdays.has(d)) {
+                cell.classList.add('bg-blue-100','border-blue-300');
+            }
+        });
+    } catch (e) {
+        console.warn('套用行事曆狀態失敗', e);
     }
 }
 
