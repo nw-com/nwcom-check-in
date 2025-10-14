@@ -2540,7 +2540,13 @@
                         <div class="bg-white rounded-lg shadow-sm border p-4">
                             <div class="flex items-center justify-between mb-3">
                                 <h2 class="text-lg font-bold">補打申請審核</h2>
-                                <span class="text-sm text-gray-500">僅管理員可審核</span>
+                                <button id="manual-add-record" class="px-3 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">新增人員打卡紀錄</button>
+                            </div>
+                            <div class="mb-3 flex items-center gap-2">
+                                <input type="date" id="retro-filter-date" class="border border-gray-300 rounded-md p-2">
+                                <select id="retro-filter-user" class="border border-gray-300 rounded-md p-2 min-w-[180px]">
+                                    <option value="">全部人員</option>
+                                </select>
                             </div>
                             <div id="retro-requests-list" class="space-y-3"></div>
                         </div>
@@ -2548,90 +2554,220 @@
                 try { lucide.createIcons(); } catch(e) {}
                 const { collection, query, where, orderBy, getDocs, addDoc, updateDoc, doc, Timestamp, GeoPoint } = window.__fs; const db = window.__db;
                 const listEl = document.getElementById('retro-requests-list');
-                listEl.innerHTML = `<div class="p-4 text-center text-gray-500"><div class="flex items-center justify-center"><i data-lucide="loader" class="w-5 h-5 mr-2 animate-spin"></i>載入申請...</div></div>`;
-                let qs;
-                try {
-                    qs = await getDocs(query(collection(db, 'retroClockRequests'), where('status','==','pending'), orderBy('requestedAt','desc')));
-                } catch (e) {
-                    console.error('讀取補打申請失敗', e);
-                    listEl.innerHTML = `<p class="text-center text-gray-500 p-4">讀取失敗</p>`;
-                    return;
-                }
-                if (qs.empty) { listEl.innerHTML = `<p class="text-center text-gray-500 p-4">目前沒有待審核申請</p>`; return; }
-                const userMap = {};
+                const filterDateEl = document.getElementById('retro-filter-date');
+                const filterUserEl = document.getElementById('retro-filter-user');
+
+                // 載入人員下拉
                 try {
                     const us = await getDocs(collection(db, 'users'));
-                    us.forEach(d => userMap[d.id] = d.data().name);
+                    us.forEach(d => {
+                        const opt = document.createElement('option');
+                        opt.value = d.id; opt.textContent = d.data().name || d.id;
+                        filterUserEl.appendChild(opt);
+                    });
                 } catch(e) {}
-                listEl.innerHTML = '';
-                qs.forEach(docSnap => {
-                    const req = { id: docSnap.id, ...docSnap.data() };
-                    const when = req.targetTime?.toDate?.() ? req.targetTime.toDate() : (req.targetTime ? new Date(req.targetTime) : null);
-                    const userName = userMap[req.userId] || req.userId;
-                    const item = document.createElement('div');
-                    item.className = 'p-3 border rounded-md bg-white flex items-center justify-between';
-                    item.innerHTML = `
-                        <div>
-                            <p class="font-medium text-gray-800">${userName}</p>
-                            <p class="text-sm text-gray-600">${req.type} · ${when ? when.toLocaleString('zh-TW') : ''}</p>
-                            ${req.locationName ? `<p class="text-xs text-gray-500">地點：${req.locationName}</p>` : ''}
-                            ${req.reason ? `<p class="text-xs text-gray-500">事由：${req.reason}</p>` : ''}
+
+                async function renderList() {
+                    listEl.innerHTML = `<div class="p-4 text-center text-gray-500"><div class="flex items-center justify-center"><i data-lucide="loader" class="w-5 h-5 mr-2 animate-spin"></i>載入申請...</div></div>`;
+                    try {
+                        const qs = await getDocs(query(collection(db, 'retroClockRequests'), where('status','==','pending'), orderBy('requestedAt','desc')));
+                        const selectedUser = filterUserEl.value || '';
+                        const selectedDate = filterDateEl.value || '';
+                        const items = [];
+                        qs.forEach(docSnap => {
+                            const req = { id: docSnap.id, ...docSnap.data() };
+                            const when = req.targetTime?.toDate?.() ? req.targetTime.toDate() : (req.targetTime ? new Date(req.targetTime) : null);
+                            const dateStr = when ? when.toISOString().split('T')[0] : '';
+                            if (selectedUser && req.userId !== selectedUser) return;
+                            if (selectedDate && dateStr !== selectedDate) return;
+                            items.push({ ...req, when });
+                        });
+                        if (items.length === 0) { listEl.innerHTML = `<p class="text-center text-gray-500 p-4">無符合條件的申請</p>`; return; }
+                        // 載入使用者名稱映射
+                        const userMap = {};
+                        try {
+                            const us = await getDocs(collection(db, 'users'));
+                            us.forEach(d => userMap[d.id] = d.data().name || d.id);
+                        } catch(e) {}
+                        listEl.innerHTML = '';
+                        items.forEach(req => {
+                            const userName = userMap[req.userId] || req.userId;
+                            const item = document.createElement('div');
+                            item.className = 'p-3 border rounded-md bg-white flex items-center justify-between';
+                            item.innerHTML = `
+                                <div>
+                                    <p class=\"font-medium text-gray-800\">${userName}</p>
+                                    <p class=\"text-sm text-gray-600\">${req.type} · ${req.when ? req.when.toLocaleString('zh-TW') : ''}</p>
+                                    ${req.locationName ? `<p class=\"text-xs text-gray-500\">地點：${req.locationName}</p>` : ''}
+                                    ${req.reason ? `<p class=\"text-xs text-gray-500\">事由：${req.reason}</p>` : ''}
+                                </div>
+                                <div class=\"flex items-center space-x-2\">
+                                    <button class=\"approve-btn px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700\" data-id=\"${req.id}\">同意</button>
+                                    <button class=\"reject-btn px-3 py-2 bg-red-600 text-white rounded-md hover:bg-red-700\" data-id=\"${req.id}\">不同意</button>
+                                </div>`;
+                            listEl.appendChild(item);
+                        });
+                        try { lucide.createIcons(); } catch(e) {}
+                        // 綁定事件
+                        const canReview = await (window.checkReviewerStatus ? window.checkReviewerStatus() : (window.checkAdminStatus ? window.checkAdminStatus() : Promise.resolve(false)));
+                        const handleApprove = async (id) => {
+                            if (!canReview) { showToast('僅管理員/人事/高階主管可審核', true); return; }
+                            try {
+                                const reqDoc = await window.__fs.getDoc(window.__fs.doc(db, 'retroClockRequests', id));
+                                if (!reqDoc.exists()) { showToast('申請不存在', true); return; }
+                                const r = reqDoc.data();
+                                const ts = r.targetTime?.toDate?.() ? r.targetTime.toDate() : (r.targetTime ? new Date(r.targetTime) : new Date());
+                                await addDoc(collection(db, 'clockInRecords'), {
+                                    userId: r.userId,
+                                    type: r.type,
+                                    timestamp: Timestamp?.fromDate ? Timestamp.fromDate(ts) : ts,
+                                    location: GeoPoint ? new GeoPoint(0,0) : { latitude: 0, longitude: 0 },
+                                    photoUrls: [],
+                                    descriptions: [],
+                                    deviceId: 'retro',
+                                    locationName: r.locationName || null,
+                                    dutyType: null,
+                                    isAutomatic: false
+                                });
+                                await updateDoc(doc(db, 'retroClockRequests', id), {
+                                    status: 'approved',
+                                    reviewerId: window.__auth?.currentUser?.uid || null,
+                                    reviewedAt: Timestamp?.fromDate ? Timestamp.fromDate(new Date()) : new Date()
+                                });
+                                showToast('已核准並新增打卡紀錄');
+                                renderList();
+                            } catch (e) {
+                                console.error('核准失敗', e);
+                                showToast('核准失敗', true);
+                            }
+                        };
+                        const handleReject = async (id) => {
+                            if (!canReview) { showToast('僅管理員/人事/高階主管可審核', true); return; }
+                            try {
+                                await updateDoc(doc(db, 'retroClockRequests', id), {
+                                    status: 'rejected',
+                                    reviewerId: window.__auth?.currentUser?.uid || null,
+                                    reviewedAt: Timestamp?.fromDate ? Timestamp.fromDate(new Date()) : new Date()
+                                });
+                                showToast('已退回申請');
+                                renderList();
+                            } catch (e) {
+                                console.error('退回失敗', e);
+                                showToast('退回失敗', true);
+                            }
+                        };
+                        container.querySelectorAll('.approve-btn').forEach(btn => btn.addEventListener('click', (e) => handleApprove(e.currentTarget.dataset.id)));
+                        container.querySelectorAll('.reject-btn').forEach(btn => btn.addEventListener('click', (e) => handleReject(e.currentTarget.dataset.id)));
+                    } catch (e) {
+                        console.error('讀取補打申請失敗', e);
+                        listEl.innerHTML = `<p class="text-center text-gray-500 p-4">讀取失敗</p>`;
+                    }
+                }
+
+                filterDateEl.addEventListener('change', renderList);
+                filterUserEl.addEventListener('change', renderList);
+
+                // 手動新增人員打卡紀錄（彈窗）
+                document.getElementById('manual-add-record').addEventListener('click', () => {
+                    const backdrop = document.createElement('div');
+                    backdrop.className = 'fixed inset-0 bg-black bg-opacity-40 z-40';
+                    const modal = document.createElement('div');
+                    modal.className = 'fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg p-4 z-50 w-[90%] max-w-[520px]';
+                    modal.innerHTML = `
+                        <h3 class=\"text-lg font-bold mb-3\">新增人員打卡紀錄</h3>
+                        <div class=\"space-y-3\">
+                            <div>
+                                <label class=\"text-sm font-medium\">人員姓名</label>
+                                <select id=\"manual-user\" class=\"w-full border border-gray-300 rounded-md p-2\"></select>
+                            </div>
+                            <div class=\"grid grid-cols-2 gap-3\">
+                                <div>
+                                    <label class=\"text-sm font-medium\">日期</label>
+                                    <input type=\"date\" id=\"manual-date\" class=\"w-full border border-gray-300 rounded-md p-2\" />
+                                </div>
+                                <div>
+                                    <label class=\"text-sm font-medium\">時間</label>
+                                    <input type=\"time\" id=\"manual-time\" class=\"w-full border border-gray-300 rounded-md p-2\" />
+                                </div>
+                            </div>
+                            <div>
+                                <label class=\"text-sm font-medium\">項目</label>
+                                <select id=\"manual-type\" class=\"w-full border border-gray-300 rounded-md p-2\">
+                                    <option value=\"上班\">上班</option>
+                                    <option value=\"下班\">下班</option>
+                                    <option value=\"外出\">外出</option>
+                                    <option value=\"抵達\">抵達</option>
+                                    <option value=\"離開\">離開</option>
+                                    <option value=\"返回\">返回</option>
+                                </select>
+                            </div>
+                            <div id=\"manual-extra\" class=\"grid grid-cols-2 gap-3\">
+                                <div>
+                                    <label class=\"text-sm font-medium\">事由</label>
+                                    <input type=\"text\" id=\"manual-reason\" class=\"w-full border border-gray-300 rounded-md p-2\" placeholder=\"請輸入事由\" />
+                                </div>
+                                <div>
+                                    <label class=\"text-sm font-medium\">地點</label>
+                                    <input type=\"text\" id=\"manual-location\" class=\"w-full border border-gray-300 rounded-md p-2\" placeholder=\"請輸入地點\" />
+                                </div>
+                            </div>
                         </div>
-                        <div class="flex items-center space-x-2">
-                            <button class="approve-btn px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700" data-id="${req.id}">同意</button>
-                            <button class="reject-btn px-3 py-2 bg-red-600 text-white rounded-md hover:bg-red-700" data-id="${req.id}">不同意</button>
-                        </div>`;
-                    listEl.appendChild(item);
+                        <div class=\"flex justify-end gap-2 mt-4\">
+                            <button id=\"manual-cancel\" class=\"px-3 py-2 border rounded-md\">取消</button>
+                            <button id=\"manual-submit\" class=\"px-3 py-2 bg-indigo-600 text-white rounded-md\">新增</button>
+                        </div>
+                    `;
+                    document.body.appendChild(backdrop);
+                    document.body.appendChild(modal);
+                    // 填入人員
+                    filterUserEl.querySelectorAll('option').forEach(opt => {
+                        if (!opt.value) return;
+                        const o = document.createElement('option'); o.value = opt.value; o.textContent = opt.textContent;
+                        modal.querySelector('#manual-user').appendChild(o);
+                    });
+                    const typeSelect = modal.querySelector('#manual-type');
+                    const reasonInput = modal.querySelector('#manual-reason');
+                    const locInput = modal.querySelector('#manual-location');
+                    const toggle = () => {
+                        const need = ['外出','抵達','離開'].includes(typeSelect.value);
+                        modal.querySelector('#manual-extra').style.display = need ? 'grid' : 'none';
+                    };
+                    typeSelect.addEventListener('change', toggle); toggle();
+                    modal.querySelector('#manual-cancel').addEventListener('click', () => { backdrop.remove(); modal.remove(); });
+                    backdrop.addEventListener('click', () => { backdrop.remove(); modal.remove(); });
+                    modal.querySelector('#manual-submit').addEventListener('click', async () => {
+                        try {
+                            const userId = modal.querySelector('#manual-user').value;
+                            const dateStr = modal.querySelector('#manual-date').value;
+                            const timeStr = modal.querySelector('#manual-time').value;
+                            const type = typeSelect.value;
+                            const reason = (reasonInput.value || '').trim();
+                            const locationName = (locInput.value || '').trim();
+                            if (!userId || !dateStr || !timeStr) { showToast('請完整填寫人員與日期時間', true); return; }
+                            if (['外出','抵達','離開'].includes(type) && (!reason || !locationName)) { showToast('外出/抵達/離開需填寫事由與地點', true); return; }
+                            const tsDate = new Date(`${dateStr}T${timeStr}:00`);
+                            await addDoc(collection(db, 'clockInRecords'), {
+                                userId,
+                                type,
+                                timestamp: Timestamp?.fromDate ? Timestamp.fromDate(tsDate) : tsDate,
+                                location: GeoPoint ? new GeoPoint(0,0) : { latitude: 0, longitude: 0 },
+                                photoUrls: [],
+                                descriptions: [],
+                                deviceId: 'manual-admin',
+                                locationName: ['外出','抵達','離開'].includes(type) ? `${locationName}${reason ? '｜'+reason : ''}` : (locationName || null),
+                                dutyType: null,
+                                isAutomatic: false
+                            });
+                            showToast('已新增打卡紀錄');
+                            backdrop.remove(); modal.remove();
+                        } catch (err) {
+                            console.error('新增打卡失敗', err);
+                            showToast('新增失敗', true);
+                        }
+                    });
                 });
-                const canReview = await (window.checkReviewerStatus ? window.checkReviewerStatus() : (window.checkAdminStatus ? window.checkAdminStatus() : Promise.resolve(false)));
-                const handleApprove = async (id) => {
-                    if (!canReview) { showToast('僅管理員/人事/高階主管可審核', true); return; }
-                    try {
-                        const reqDoc = await window.__fs.getDoc(window.__fs.doc(db, 'retroClockRequests', id));
-                        if (!reqDoc.exists()) { showToast('申請不存在', true); return; }
-                        const r = reqDoc.data();
-                        const ts = r.targetTime?.toDate?.() ? r.targetTime.toDate() : (r.targetTime ? new Date(r.targetTime) : new Date());
-                        await addDoc(collection(db, 'clockInRecords'), {
-                            userId: r.userId,
-                            type: r.type,
-                            timestamp: Timestamp?.fromDate ? Timestamp.fromDate(ts) : ts,
-                            location: GeoPoint ? new GeoPoint(0,0) : { latitude: 0, longitude: 0 },
-                            photoUrls: [],
-                            descriptions: [],
-                            deviceId: 'retro',
-                            locationName: r.locationName || null,
-                            dutyType: null,
-                            isAutomatic: false
-                        });
-                        await updateDoc(doc(db, 'retroClockRequests', id), {
-                            status: 'approved',
-                            reviewerId: window.__auth?.currentUser?.uid || null,
-                            reviewedAt: Timestamp?.fromDate ? Timestamp.fromDate(new Date()) : new Date()
-                        });
-                        showToast('已核准並新增打卡紀錄');
-                        renderRetroApprovals(container);
-                    } catch (e) {
-                        console.error('核准失敗', e);
-                        showToast('核准失敗', true);
-                    }
-                };
-                const handleReject = async (id) => {
-                    if (!canReview) { showToast('僅管理員/人事/高階主管可審核', true); return; }
-                    try {
-                        await updateDoc(doc(db, 'retroClockRequests', id), {
-                            status: 'rejected',
-                            reviewerId: window.__auth?.currentUser?.uid || null,
-                            reviewedAt: Timestamp?.fromDate ? Timestamp.fromDate(new Date()) : new Date()
-                        });
-                        showToast('已退回申請');
-                        renderRetroApprovals(container);
-                    } catch (e) {
-                        console.error('退回失敗', e);
-                        showToast('退回失敗', true);
-                    }
-                };
-                container.querySelectorAll('.approve-btn').forEach(btn => btn.addEventListener('click', (e) => handleApprove(e.currentTarget.dataset.id)));
-                container.querySelectorAll('.reject-btn').forEach(btn => btn.addEventListener('click', (e) => handleReject(e.currentTarget.dataset.id)));
+
+                await renderList();
             }
 
             // 人事分頁：出勤列表、請假列表
