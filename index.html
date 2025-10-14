@@ -2400,20 +2400,21 @@
                     if (old) old.remove();
                     const container = document.createElement('div');
                     container.id = 'monthly-report-container';
-                    container.className = 'fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50';
+                    container.className = 'fixed inset-0 z-50 bg-white';
                     const name = state.currentUserData?.name || state.currentUser.displayName || state.currentUser.email || '';
                     const titleText = `當月出勤紀錄-${name}`;
                     container.innerHTML = `
-                        <div class="bg-white rounded-lg shadow-xl w-11/12 max-w-5xl overflow-hidden">
-                            <div class="px-4 py-3 bg-indigo-600 text-white flex items-center justify-between">
+                        <div class="bg-white w-full h-full flex flex-col">
+                            <div class="px-4 py-3 bg-indigo-600 text-white flex items-center justify-between shrink-0">
                                 <h3 class="font-semibold">${titleText}</h3>
                                 <div class="space-x-2">
-                                    <button id="print-month-report" class="px-3 py-1.5 bg-white text-indigo-700 rounded hover:bg-gray-100">列印/匯出PDF</button>
+                                    <button id="print-month-report" class="px-3 py-1.5 bg-white text-indigo-700 rounded hover:bg-gray-100">列印</button>
+                                    <button id="export-month-report" class="px-3 py-1.5 bg-white text-indigo-700 rounded hover:bg-gray-100">匯出PDF</button>
                                     <button id="close-month-report" class="px-3 py-1.5 bg-white text-indigo-700 rounded hover:bg-gray-100">關閉</button>
                                 </div>
                             </div>
-                            <div class="p-4">
-                                <div id="month-report-content" class="overflow-auto">
+                            <div class="p-4 flex-1 overflow-auto">
+                                <div id="month-report-content" class="max-w-[980px] mx-auto">
                                     <h2 class="text-xl font-bold mb-2 text-center">${titleText}</h2>
                                     <table class="w-full border border-gray-300 text-sm">
                                         <thead>
@@ -2525,6 +2526,13 @@
                     container.querySelector('#close-month-report').addEventListener('click', () => container.remove());
                     container.querySelector('#print-month-report').addEventListener('click', () => {
                         window.print();
+                    });
+                    container.querySelector('#export-month-report').addEventListener('click', () => {
+                        const prev = document.title;
+                        const ymTag = `${year}-${String(monthIndex+1).padStart(2,'0')}`;
+                        document.title = `${titleText}-${ymTag}`;
+                        window.print();
+                        setTimeout(() => { document.title = prev; }, 500);
                     });
                 }
             }
