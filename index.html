@@ -2445,6 +2445,13 @@
                             </div>
                         </div>
                         <div id="retro-submit-status" class="mt-3 text-sm text-gray-500"></div>
+                        <div class="mt-4 bg-white rounded-lg shadow-sm border p-4">
+                            <div class="flex items-center justify-between mb-3">
+                                <h3 class="font-bold">我的申請列表</h3>
+                                <span class="text-sm text-gray-500">顯示本人已提交補打卡</span>
+                            </div>
+                            <div id="my-retro-list" class="space-y-3"></div>
+                        </div>
                     </div>`;
                 try { lucide.createIcons(); } catch (e) {}
                 const typeEl = document.getElementById('retro-type');
@@ -2485,11 +2492,45 @@
                         await addDoc(collection(db, 'retroClockRequests'), payload);
                         showToast('已送出補打卡申請');
                         document.getElementById('retro-submit-status').textContent = '申請已送出，待管理員審核';
+                        try { await renderMyRetroRequests(); } catch (e) {}
                     } catch (e) {
                         console.error('送出補打卡申請失敗', e);
                         showToast('送出申請失敗', true);
                     }
                 });
+
+                // 我的申請列表（本人）
+                async function renderMyRetroRequests() {
+                    const listEl = document.getElementById('my-retro-list');
+                    if (!listEl) return;
+                    listEl.innerHTML = `<div class="p-2 text-center text-gray-500"><div class="flex items-center justify-center"><i data-lucide="loader" class="w-4 h-4 mr-2 animate-spin"></i>載入中...</div></div>`;
+                    try {
+                        const { collection, query, where, orderBy, getDocs } = window.__fs; const db = window.__db; const user = window.__auth?.currentUser;
+                        if (!user) { listEl.innerHTML = '<p class="text-sm text-red-600">請先登入</p>'; return; }
+                        const qs = await getDocs(query(collection(db, 'retroClockRequests'), where('userId','==', user.uid), orderBy('requestedAt', 'desc')));
+                        if (qs.empty) { listEl.innerHTML = '<p class="text-sm text-gray-500">尚無申請</p>'; return; }
+                        listEl.innerHTML = '';
+                        qs.forEach(docSnap => {
+                            const r = { id: docSnap.id, ...docSnap.data() };
+                            const when = r.targetTime?.toDate?.() ? r.targetTime.toDate() : (r.targetTime ? new Date(r.targetTime) : null);
+                            const item = document.createElement('div');
+                            item.className = 'p-3 border rounded-md bg-white flex items-center justify-between';
+                            item.innerHTML = `
+                                <div>
+                                    <p class=\"font-medium text-gray-800\">${r.type}</p>
+                                    <p class=\"text-sm text-gray-600\">${when ? when.toLocaleString('zh-TW') : ''}</p>
+                                    ${r.locationName ? `<p class=\"text-xs text-gray-500\">地點：${r.locationName}</p>` : ''}
+                                    ${r.reason ? `<p class=\"text-xs text-gray-500\">事由：${r.reason}</p>` : ''}
+                                </div>
+                                <span class=\"text-sm ${r.status==='approved' ? 'text-green-600' : (r.status==='rejected' ? 'text-red-600' : 'text-gray-500')}\">${r.status || 'pending'}</span>`;
+                            listEl.appendChild(item);
+                        });
+                    } catch (e) {
+                        console.error('載入申請列表失敗', e);
+                        listEl.innerHTML = '<p class="text-sm text-red-600">載入失敗</p>';
+                    } finally { try { lucide.createIcons(); } catch(e) {} }
+                }
+                try { renderMyRetroRequests(); } catch(e) {}
             }
 
             // 補打申請審核頁面
