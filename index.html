@@ -78,6 +78,7 @@
             align-items: center;
             justify-content: center;
             padding: 12px; /* 基本安全內距 */
+            overflow: auto; /* 避免內容過長造成遮罩阻擋互動 */
         }
         .modal-content {
             position: fixed;
@@ -4633,9 +4634,6 @@
                             <div class="flex justify-between items-center p-4 border-b">
                                 <h3 class="font-bold text-lg">照片瀏覽</h3>
                                 <div class="flex items-center gap-2">
-                                    <button class="download-btn text-gray-600 hover:text-gray-800" title="下載">
-                                        <i data-lucide="download" class="w-5 h-5"></i>
-                                    </button>
                                     <button class="close-btn text-gray-500 hover:text-gray-700">
                                         <i data-lucide="x" class="w-5 h-5"></i>
                                     </button>
@@ -4661,65 +4659,7 @@
                 modal.querySelector('.close-btn').addEventListener('click', () => {
                     modal.remove();
                 });
-                const dlBtn = modal.querySelector('.download-btn');
-                if (dlBtn) {
-                    dlBtn.addEventListener('click', async () => {
-                        try {
-                            const slides = modal.querySelectorAll('.photo-slide');
-                            if (!slides || slides.length === 0) { showToast('無照片可下載', true); return; }
-                            let currentIndex = 0;
-                            if (slides.length > 1) {
-                                const idx = Array.from(slides).findIndex(s => s.style.display !== 'none');
-                                currentIndex = idx >= 0 ? idx : 0;
-                            }
-                            const imgEl = slides[currentIndex]?.querySelector('img');
-                            const src = imgEl?.src;
-                            if (!src) { showToast('無照片可下載', true); return; }
-
-                            const defaultName = `clock-in-photo-${Date.now()}`;
-                            const canDownloadAttr = 'download' in HTMLAnchorElement.prototype;
-                            const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-
-                            if (src.startsWith('data:')) {
-                                const mime = src.substring(5, src.indexOf(';'));
-                                let ext = 'jpg';
-                                if (mime.includes('png')) ext = 'png';
-                                else if (mime.includes('jpeg')) ext = 'jpg';
-                                else if (mime.includes('webp')) ext = 'webp';
-                                if (canDownloadAttr && !isIOS) {
-                                    const a = document.createElement('a');
-                                    a.href = src;
-                                    a.download = `${defaultName}.${ext}`;
-                                    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-                                } else {
-                                    window.open(src, '_blank');
-                                }
-                            } else {
-                                try {
-                                    const res = await fetch(src, { mode: 'cors' });
-                                    if (!res.ok) throw new Error('下載失敗');
-                                    const blob = await res.blob();
-                                    const url = URL.createObjectURL(blob);
-                                    const extGuess = (blob.type && blob.type.split('/')[1]) || 'jpg';
-                                    if (canDownloadAttr && !isIOS) {
-                                        const a = document.createElement('a');
-                                        a.href = url;
-                                        a.download = `${defaultName}.${extGuess}`;
-                                        document.body.appendChild(a); a.click(); document.body.removeChild(a);
-                                    } else {
-                                        window.open(url, '_blank');
-                                    }
-                                    setTimeout(() => URL.revokeObjectURL(url), 5000);
-                                } catch (fetchErr) {
-                                    window.open(src, '_blank');
-                                }
-                            }
-                        } catch (err) {
-                            console.error('下載照片失敗', err);
-                            showToast('下載照片失敗', true);
-                        }
-                    });
-                }
+                // 下載功能已移除
                 
                 if ((photos?.length || 0) > 1) {
                     const slides = modal.querySelectorAll('.photo-slide');
@@ -5641,7 +5581,7 @@
                             <div id="camera-view" class="flex-grow relative flex items-center justify-center">
                                 <video id="camera-video" playsinline autoplay muted class="w-full h-full object-cover rounded-lg"></video>
                                 <canvas id="camera-canvas" class="hidden"></canvas>
-                                <div id="camera-loader" class="absolute inset-0 flex items-center justify-center bg-black/50"><div class="loader"></div></div>
+                                <div id="camera-loader" class="absolute inset-0 flex items-center justify-center bg-black/50 pointer-events-none"><div class="loader"></div></div>
                             </div>
                             <div id="preview-view" class="hide flex-grow flex flex-col">
                                 <img id="photo-preview" class="w-full h-auto flex-grow object-contain rounded-lg">
@@ -5649,11 +5589,11 @@
                             </div>
 
                             <div class="flex-shrink-0 pt-4">
-                                <div id="capture-controls" class="flex items-center justify-between">
+                                <div id="capture-controls" class="flex items-center justify-between relative" style="z-index: 999;">
                                     <button id="switch-camera-btn" class="w-12 h-12 bg-gray-700 rounded-full flex items-center justify-center">
                                         <i data-lucide="refresh-cw" class="w-6 h-6"></i>
                                     </button>
-                                    <button id="capture-btn" class="w-20 h-20 bg-white rounded-full border-4 border-gray-500 flex items-center justify-center">
+                                    <button id="capture-btn" class="w-20 h-20 bg-white rounded-full border-4 border-gray-500 flex items-center justify-center" style="z-index: 1000;">
                                         <i data-lucide="camera" class="w-10 h-10 text-gray-800"></i>
                                     </button>
                                     <div class="w-12 h-12"></div><!-- 空白元素保持對稱 -->
@@ -5808,6 +5748,23 @@
                             return;
                         }
 
+                        // 勤務時間檢查：開始前禁止打卡，結束後標記超時巡邏
+                        const toDate = v => v?.toDate ? v.toDate() : (v ? new Date(v) : null);
+                        const dutyStart = toDate(state.currentUserData?.dutyStartTime);
+                        const dutyEnd = toDate(state.currentUserData?.dutyEndTime);
+                        const restrictedTypes = ['外出','抵達','離開'];
+                        let isOvertime = false;
+                        if (restrictedTypes.includes(type) && (dutyStart || dutyEnd)) {
+                            const now = new Date();
+                            if (dutyStart && now < dutyStart) {
+                                showToast(`勤務尚未開始（${dutyStart.toLocaleString('zh-TW')}），不可打卡`, true);
+                                return;
+                            }
+                            if (dutyEnd && now > dutyEnd) {
+                                isOvertime = true;
+                            }
+                        }
+
                         // 將照片轉換為 Data URL 並儲存（恢復原行為）
                         const photoPromises = capturedPhotos.map(async (photo) => {
                             return new Promise((resolve) => {
@@ -5846,8 +5803,10 @@
                             descriptions,
                             deviceId: state.deviceId || 'unknown-device'
                         };
-                        // 勤務項目（僅外出時可能存在）：避免 undefined 寫入
-                        if (type === '外出' && state.dutyType) {
+                        // 勤務項目與超時巡邏標記：避免 undefined 寫入
+                        if (isOvertime) {
+                            recordData.dutyType = '超時巡邏';
+                        } else if (type === '外出' && state.dutyType) {
                             recordData.dutyType = state.dutyType;
                         }
                         
@@ -5892,8 +5851,10 @@
                                 userUpdateData.outboundLocation = locName2.slice(0, 100);
                             }
                         }
-                        // 外出時同步寫入勤務項目（若有）
-                        if (type === '外出' && state.dutyType) {
+                        // 超時巡邏標記或外出同步勤務項目（若有）
+                        if (isOvertime) {
+                            userUpdateData.dutyType = '超時巡邏';
+                        } else if (type === '外出' && state.dutyType) {
                             userUpdateData.dutyType = state.dutyType;
                         }
                         
