@@ -2402,7 +2402,8 @@
                     container.id = 'monthly-report-container';
                     container.className = 'fixed inset-0 z-50 bg-white';
                     const name = state.currentUserData?.name || state.currentUser.displayName || state.currentUser.email || '';
-                    const titleText = `當月出勤紀錄-${name}`;
+                    const ymTag = `${year}-${String(monthIndex+1).padStart(2,'0')}`;
+                    const titleText = `${ymTag}出勤紀錄-${name}`;
                     container.innerHTML = `
                         <div class="bg-white w-full h-full flex flex-col">
                             <div class="px-4 py-3 bg-indigo-600 text-white flex items-center justify-between shrink-0">
@@ -2507,18 +2508,20 @@
                         bodyEl.appendChild(tr);
                     }
 
-                    // 列印樣式（A4一頁，四邊1cm）
+                    // 列印樣式（A4一頁，四邊1cm），修正行動版重複頁面：僅顯示報表內容
                     if (!document.getElementById('monthly-report-print-style')) {
                         const style = document.createElement('style');
                         style.id = 'monthly-report-print-style';
                         style.textContent = `
                         @page { size: A4; margin: 1cm; }
                         @media print {
-                            body * { visibility: hidden; }
-                            #month-report-content, #month-report-content * { visibility: visible; }
-                            #month-report-content { position: absolute; left: 0; top: 0; width: 100%; }
+                            body * { display: none !important; }
+                            #month-report-content, #month-report-content * { display: block !important; }
+                            #month-report-content { width: 100%; margin: 0; }
                             table { border-collapse: collapse; }
-                            th, td { font-size: 12px; }
+                            th, td { font-size: 12px; line-height: 1.3; }
+                            html, body { height: auto; }
+                        }
                         }`;
                         document.head.appendChild(style);
                     }
@@ -2527,12 +2530,31 @@
                     container.querySelector('#print-month-report').addEventListener('click', () => {
                         window.print();
                     });
-                    container.querySelector('#export-month-report').addEventListener('click', () => {
-                        const prev = document.title;
-                        const ymTag = `${year}-${String(monthIndex+1).padStart(2,'0')}`;
-                        document.title = `${titleText}-${ymTag}`;
-                        window.print();
-                        setTimeout(() => { document.title = prev; }, 500);
+                    container.querySelector('#export-month-report').addEventListener('click', async () => {
+                        const ensureHtml2pdf = () => new Promise((resolve, reject) => {
+                            if (window.html2pdf) return resolve();
+                            const s = document.createElement('script');
+                            s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+                            s.onload = () => resolve();
+                            s.onerror = (e) => reject(e);
+                            document.head.appendChild(s);
+                        });
+                        try {
+                            await ensureHtml2pdf();
+                            const element = document.getElementById('month-report-content');
+                            const fileName = `${ymTag}-出勤紀錄-${name}.pdf`;
+                            const opt = {
+                                margin: [10, 10, 10, 10], // mm
+                                filename: fileName,
+                                image: { type: 'jpeg', quality: 0.95 },
+                                html2canvas: { scale: 2 },
+                                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                            };
+                            window.html2pdf().set(opt).from(element).save();
+                        } catch (e) {
+                            console.error('PDF 下載失敗，改用列印備援', e);
+                            window.print();
+                        }
                     });
                 }
             }
