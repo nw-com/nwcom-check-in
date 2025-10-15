@@ -482,14 +482,17 @@ function loadPersonalSchedule() {
                 const dateTime = data.dateTime?.toDate?.() ||
                                   data.date?.toDate?.() ||
                                   (data.dateTime ? new Date(data.dateTime) : (data.date ? new Date(data.date) : null));
-                const timeStr = (dateTime && typeof dateTime.getHours === 'function')
-                    ? `${String(dateTime.getHours()).padStart(2, '0')}:${String(dateTime.getMinutes()).padStart(2, '0')}`
-                    : (data.time || '');
+                const timeStr = (data.time && typeof data.time === 'string' && data.time.includes(':'))
+                    ? data.time
+                    : ((dateTime && typeof dateTime.getHours === 'function')
+                        ? `${String(dateTime.getHours()).padStart(2, '0')}:${String(dateTime.getMinutes()).padStart(2, '0')}`
+                        : '');
                 schedules.push({
                     id: d.id,
                     title: data.title || '',
                     date: dateTime,
                     time: timeStr,
+                    reminderTime: (typeof data.reminderTime === 'string' && data.reminderTime.includes(':')) ? data.reminderTime : '09:00',
                     location: data.location || '',
                     description: data.description || '',
                     remindersDays: Array.isArray(data.remindersDays) ? data.remindersDays : [2,1]
@@ -571,13 +574,16 @@ function renderCalendarNotifications(container) {
 }
 
 // 載入通知
-function loadNotifications() {
+async function loadNotifications() {
     const notificationsList = document.getElementById('notifications-list');
     const fromSchedules = Array.isArray(window.__personalSchedules) ? window.__personalSchedules : [];
     const existing = Array.isArray(window.__notifications) ? window.__notifications : null;
+    let scheduleNotifications = computeScheduleNotifications(fromSchedules);
+    let dutyNotifications = [];
+    try { dutyNotifications = await computeDutyNotifications(); } catch (e) { dutyNotifications = []; }
     let notifications = existing && existing.length > 0
         ? existing
-        : computeScheduleNotifications(fromSchedules);
+        : [...scheduleNotifications, ...dutyNotifications];
     // 如果剛重新計算，盡量保留既有已讀狀態
     if (!existing || existing.length === 0) {
         const prevMap = new Map((Array.isArray(window.__notifications) ? window.__notifications : []).map(n => [String(n.id), n.status]));
@@ -606,7 +612,7 @@ function loadNotifications() {
                 </div>
                 <div class="flex items-center space-x-2">
                     <div class="w-3 h-3 rounded-full ${getNotificationColor(notification.type)}"></div>
-                    <button class="text-gray-400 hover:text-gray-600" onclick="deleteNotification('${notification.id}')">
+                    <button class="text-gray-400 hover:text-gray-600" onclick="(event && event.stopPropagation ? event.stopPropagation() : null); deleteNotification('${notification.id}')">
                         <i data-lucide="x" class="w-4 h-4"></i>
                     </button>
                 </div>
@@ -639,6 +645,7 @@ function getNotificationColor(type) {
         'clock-in': 'bg-green-500',
         'system': 'bg-yellow-500',
         'reminder': 'bg-purple-500',
+        'duty': 'bg-yellow-500',
         'default': 'bg-gray-500'
     };
     return colors[type] || colors.default;
@@ -650,12 +657,30 @@ function computeScheduleNotifications(schedules) {
         const arr = Array.isArray(schedules) ? schedules : [];
         const out = [];
         arr.forEach(s => {
-            const dt = s?.date instanceof Date ? s.date : (s?.date ? new Date(s.date) : null);
+            const baseDate = s?.date instanceof Date ? s.date : (s?.date ? new Date(s.date) : null);
+            if (!baseDate) return;
+            // 將行程的時間字串套用到日期（若存在）
+            const eventTimeStr = (typeof s.time === 'string' && s.time.includes(':')) ? s.time : null;
+            const dt = new Date(baseDate);
+            if (eventTimeStr) {
+                const [eh, em] = eventTimeStr.split(':').map(v => parseInt(v, 10));
+                if (!Number.isNaN(eh) && !Number.isNaN(em)) {
+                    dt.setHours(eh, em, 0, 0);
+                }
+            }
             if (!dt) return;
             const daysArr = Array.isArray(s.remindersDays) ? s.remindersDays : [2,1];
             daysArr.forEach(d => {
                 if (typeof d !== 'number') return;
+                // 設定提醒時間字串（若有）到 t
                 const t = new Date(dt.getTime() - d * 86400000);
+                const reminderTimeStr = (typeof s.reminderTime === 'string' && s.reminderTime.includes(':'))
+                    ? s.reminderTime
+                    : (eventTimeStr || '09:00');
+                const [rh, rm] = reminderTimeStr.split(':').map(v => parseInt(v, 10));
+                if (!Number.isNaN(rh) && !Number.isNaN(rm)) {
+                    t.setHours(rh, rm, 0, 0);
+                }
                 out.push({
                     id: `sched_${s.id}_${d}`,
                     title: s.title || '行程提醒',
@@ -670,6 +695,45 @@ function computeScheduleNotifications(schedules) {
         return out;
     } catch (e) {
         console.warn('產生行程提醒通知失敗', e);
+        return [];
+    }
+}
+
+// 由週五值班名單產生通知（於該週一早上發送）
+async function computeDutyNotifications() {
+    try {
+        const fs = window.__fs; const db = window.__db;
+        if (!fs || !db) return [];
+        const { doc, getDoc } = fs;
+        const settingsRef = doc(db, 'settings', 'general');
+        const snap = await getDoc(settingsRef);
+        const roster = snap.exists() ? (snap.data().fridayDutyRoster || {}) : {};
+        const out = [];
+        const now = new Date();
+        Object.keys(roster).forEach(iso => {
+            const fri = new Date(iso);
+            if (String(fri) === 'Invalid Date') return;
+            const mon = new Date(fri.getTime() - 4 * 86400000);
+            // 僅產生未來 90 天的值班通知，避免過多歷史訊息
+            const diffDays = (fri - now) / 86400000;
+            if (diffDays < -7 || diffDays > 90) return;
+            const names = Array.isArray(roster[iso]) ? roster[iso] : [];
+            const msgNames = names.length ? names.join('、') : '（名單未設定）';
+            // 設定週一 09:00 發送
+            mon.setHours(9, 0, 0, 0);
+            out.push({
+                id: `duty_${iso}`,
+                title: '週五值班通知',
+                message: `本週五（${iso}）值班：${msgNames}`,
+                time: mon,
+                read: false,
+                type: 'duty'
+            });
+        });
+        out.sort((a,b) => a.time - b.time);
+        return out;
+    } catch (e) {
+        console.warn('產生值班通知失敗', e);
         return [];
     }
 }
@@ -718,7 +782,13 @@ function showAddScheduleModal() {
                     </div>
                     <div>
                         <label class="block text-sm text-gray-700">時間</label>
-                        <input id="schedule-time" type="text" class="w-full border rounded px-3 py-2" placeholder="例如 14:30" />
+                        <input id="schedule-time" type="time" class="w-full border rounded px-3 py-2" />
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-sm text-gray-700">提醒時間</label>
+                        <input id="schedule-reminder-time" type="time" class="w-full border rounded px-3 py-2" />
                     </div>
                 </div>
                 <div>
@@ -745,12 +815,15 @@ function showAddScheduleModal() {
 
         const today = new Date();
         document.getElementById('schedule-date').value = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+        document.getElementById('schedule-time').value = '09:00';
+        document.getElementById('schedule-reminder-time').value = '09:00';
 
         document.getElementById('schedule-save').onclick = async () => {
             try {
                 const title = document.getElementById('schedule-title').value.trim();
                 const dateStr = document.getElementById('schedule-date').value;
                 const time = document.getElementById('schedule-time').value.trim();
+                const reminderTime = document.getElementById('schedule-reminder-time').value.trim();
                 const location = document.getElementById('schedule-location').value.trim();
                 const description = document.getElementById('schedule-desc').value.trim();
                 if (!title) { alert('請輸入標題'); return; }
@@ -764,6 +837,7 @@ function showAddScheduleModal() {
                     title,
                     date: Timestamp?.fromDate ? Timestamp.fromDate(date) : dateStr,
                     time,
+                    reminderTime,
                     location,
                     description,
                     createdAt: serverTimestamp?.() || new Date().toISOString(),
@@ -849,7 +923,13 @@ function editSchedule(id) {
                             </div>
                             <div>
                                 <label class="block text-sm text-gray-700">時間</label>
-                                <input id="schedule-time" type="text" class="w-full border rounded px-3 py-2" value="${item.time}" />
+                                <input id="schedule-time" type="time" class="w-full border rounded px-3 py-2" value="${item.time || '09:00'}" />
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-sm text-gray-700">提醒時間</label>
+                                <input id="schedule-reminder-time" type="time" class="w-full border rounded px-3 py-2" value="${item.reminderTime || '09:00'}" />
                             </div>
                         </div>
                         <div>
@@ -878,6 +958,7 @@ function editSchedule(id) {
                         const title = document.getElementById('schedule-title').value.trim();
                         const dateStr = document.getElementById('schedule-date').value;
                         const time = document.getElementById('schedule-time').value.trim();
+                        const reminderTime = document.getElementById('schedule-reminder-time').value.trim();
                         const location = document.getElementById('schedule-location').value.trim();
                         const description = document.getElementById('schedule-desc').value.trim();
                         if (!title) { alert('請輸入標題'); return; }
@@ -889,6 +970,7 @@ function editSchedule(id) {
                             title,
                             date: Timestamp?.fromDate ? Timestamp.fromDate(date) : dateStr,
                             time,
+                            reminderTime,
                             location,
                             description,
                             updatedAt: serverTimestamp?.() || new Date().toISOString()
