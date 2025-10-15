@@ -77,9 +77,9 @@ function renderCalendarOverview(container) {
             </div>
             
             <div class="bg-white rounded-lg shadow-sm border p-4">
-                <h3 class="text-lg font-bold text-gray-800 mb-3">本月重要事項</h3>
+                <h3 class="text-lg font-bold text-gray-800 mb-3">標註日期行程表</h3>
                 <div id="monthly-events" class="space-y-2">
-                    <!-- 重要事項將在這裡顯示 -->
+                    <!-- 標註日期的行程與提醒將在這裡顯示 -->
                 </div>
             </div>
     </div>`;
@@ -89,7 +89,7 @@ function renderCalendarOverview(container) {
         .catch(() => {})
         .finally(() => {
             generateCalendar(displayedDate.getFullYear(), displayedDate.getMonth());
-            loadMonthlyEvents(displayedDate.getFullYear(), displayedDate.getMonth());
+            loadMarkedSchedule(displayedDate.getFullYear(), displayedDate.getMonth());
         });
     
     // 月份切換事件
@@ -97,14 +97,14 @@ function renderCalendarOverview(container) {
         // 向前一個月（自目前顯示的月份）
         displayedDate.setMonth(displayedDate.getMonth() - 1);
         generateCalendar(displayedDate.getFullYear(), displayedDate.getMonth());
-        loadMonthlyEvents(displayedDate.getFullYear(), displayedDate.getMonth());
+        loadMarkedSchedule(displayedDate.getFullYear(), displayedDate.getMonth());
     });
     
     document.getElementById('next-month').addEventListener('click', () => {
         // 向後一個月（自目前顯示的月份）
         displayedDate.setMonth(displayedDate.getMonth() + 1);
         generateCalendar(displayedDate.getFullYear(), displayedDate.getMonth());
-        loadMonthlyEvents(displayedDate.getFullYear(), displayedDate.getMonth());
+        loadMarkedSchedule(displayedDate.getFullYear(), displayedDate.getMonth());
     });
 }
 
@@ -181,6 +181,8 @@ function generateCalendar(year, month) {
 
     // 依使用者上班設定與打卡狀態標色（工作日淺藍、完成綠、異常淺紅）
     applyCalendarStatus(year, month).catch(() => {});
+    // 在當月的週五標註值班徽章與人員
+    applyFridayDutyBadges(year, month).catch(() => {});
 }
 
 async function applyCalendarStatus(year, month) {
@@ -456,6 +458,7 @@ function getEventColor(type) {
         'meeting': 'bg-blue-500',
         'training': 'bg-green-500',
         'evaluation': 'bg-yellow-500',
+        'duty': 'bg-yellow-500',
         'default': 'bg-gray-500'
     };
     return colors[type] || colors.default;
@@ -531,6 +534,92 @@ function formatYMD(date) {
     const m = String(date.getMonth() + 1).padStart(2, '0');
     const d = String(date.getDate()).padStart(2, '0');
     return `${y}-${m}-${d}`;
+}
+
+// 週五值班徽章套用
+async function applyFridayDutyBadges(year, month) {
+    try {
+        const fs = window.__fs;
+        const db = window.__db;
+        if (!fs || !db) return;
+        const { doc, getDoc } = fs;
+        const settingsRef = doc(db, 'settings', 'general');
+        const snap = await getDoc(settingsRef);
+        const roster = snap.exists() ? (snap.data().fridayDutyRoster || {}) : {};
+
+        // 逐一把本月有名單的週五加上徽章
+        Object.keys(roster).forEach(iso => {
+            const dt = new Date(iso);
+            if (dt.getFullYear() !== year || dt.getMonth() !== month) return;
+            const names = roster[iso] || [];
+            if (!Array.isArray(names) || names.length === 0) return;
+            const cell = document.querySelector(`#calendar-grid [data-ymd="${iso}"]`);
+            if (!cell) return;
+            const badgeWrap = document.createElement('div');
+            badgeWrap.className = 'mt-1';
+            const badge = document.createElement('span');
+            badge.className = 'inline-flex items-center px-2 py-0.5 rounded-full text-[10px] bg-yellow-100 text-yellow-800 border border-yellow-300';
+            badge.textContent = '值班';
+            badge.title = names.join('、');
+            badgeWrap.appendChild(badge);
+            cell.appendChild(badgeWrap);
+        });
+    } catch (e) {
+        console.warn('套用週五值班徽章失敗', e);
+    }
+}
+
+// 載入「標註日期行程表」：目前包含週五值班提醒，可擴充其他提醒
+async function loadMarkedSchedule(year, month) {
+    try {
+        const listEl = document.getElementById('monthly-events');
+        if (!listEl) return;
+        const fs = window.__fs;
+        const db = window.__db;
+        if (!fs || !db) {
+            listEl.innerHTML = '<p class="text-gray-500 text-center py-4">本月暫無標註行程</p>';
+            return;
+        }
+        const { doc, getDoc } = fs;
+        const settingsRef = doc(db, 'settings', 'general');
+        const snap = await getDoc(settingsRef);
+        const roster = snap.exists() ? (snap.data().fridayDutyRoster || {}) : {};
+
+        const events = [];
+        Object.keys(roster).forEach(iso => {
+            const dt = new Date(iso);
+            if (dt.getFullYear() !== year || dt.getMonth() !== month) return;
+            const names = roster[iso] || [];
+            if (!Array.isArray(names) || names.length === 0) return;
+            events.push({ date: dt, title: '週五值班', type: 'duty', names });
+        });
+
+        events.sort((a, b) => a.date - b.date);
+        listEl.innerHTML = '';
+
+        if (events.length === 0) {
+            listEl.innerHTML = '<p class="text-gray-500 text-center py-4">本月暫無標註行程</p>';
+            return;
+        }
+
+        events.forEach(event => {
+            const eventDiv = document.createElement('div');
+            eventDiv.className = 'flex items-center justify-between p-3 bg-gray-50 rounded-md';
+            eventDiv.innerHTML = `
+                <div class="flex items-center space-x-3">
+                    <div class="w-3 h-3 rounded-full ${getEventColor(event.type)}"></div>
+                    <span class="font-medium">${event.title}</span>
+                    <span class="text-sm text-gray-600">${event.names.join('、')}</span>
+                </div>
+                <span class="text-sm text-gray-500">${event.date.getDate()}日</span>
+            `;
+            listEl.appendChild(eventDiv);
+        });
+    } catch (e) {
+        console.warn('載入標註日期行程表失敗', e);
+        const listEl = document.getElementById('monthly-events');
+        if (listEl) listEl.innerHTML = '<p class="text-gray-500 text-center py-4">本月暫無標註行程</p>';
+    }
 }
 
 function fetchHolidaySettingsOnce() {
