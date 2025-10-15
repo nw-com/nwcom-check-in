@@ -268,7 +268,7 @@
         import { 
             getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut,
             createUserWithEmailAndPassword, updatePassword, reauthenticateWithCredential,
-            EmailAuthProvider
+            EmailAuthProvider, sendPasswordResetEmail
         } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
         import { 
             getFirestore, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, collection, onSnapshot,
@@ -485,6 +485,18 @@
                         if (docSnap.exists()) {
                             const wasNotInitialized = !state.currentUserData;
                             state.currentUserData = { id: user.uid, ...docSnap.data() };
+                            // 若標記為離職，立即登出並提示
+                            if (state.currentUserData && state.currentUserData.resigned === true) {
+                                try {
+                                    openInfoModal('登入提示', '您已離職、無法登入');
+                                } catch (e) {
+                                    // 後備：若 modal 建立失敗，使用 toast 或 alert
+                                    if (typeof showToast === 'function') showToast('您已離職、無法登入', true);
+                                    else alert('您已離職、無法登入');
+                                }
+                                signOut(auth);
+                                return;
+                            }
                             if (wasNotInitialized) {
                                 initializeAppUI();
                             } else {
@@ -5892,6 +5904,47 @@
                                         <option value="admin" ${isEditing && user.role === 'admin' ? 'selected' : ''}>管理員</option>
                                     </select>
                                 </div>
+
+                                ${isEditing ? `
+                                <div class="flex items-center gap-2">
+                                    <input type="checkbox" id="user-resigned" class="h-4 w-4" ${user.resigned ? 'checked' : ''} />
+                                    <label for="user-resigned" class="text-sm text-gray-700">離職（停用登入）</label>
+                                </div>
+                                <p class="text-xs text-gray-500">啟用後此帳號將無法登入，並顯示「您已離職、無法登入」。取消啟用則恢復。</p>
+                                ` : ''}
+
+                                ${isEditing ? `
+                                <div class="border-t pt-4 space-y-3">
+                                    <h4 class="font-semibold mb-1">密碼管理</h4>
+                                    ${window.__auth?.currentUser?.uid === user.id ? `
+                                    <div class="grid gap-2">
+                                        <div>
+                                            <label class="text-sm">目前密碼</label>
+                                            <input id="curr-password" type="password" class="border rounded px-2 py-1 w-full" />
+                                        </div>
+                                        <div>
+                                            <label class="text-sm">新密碼（至少 6 位）</label>
+                                            <input id="new-password" type="password" class="border rounded px-2 py-1 w-full" />
+                                        </div>
+                                        <div>
+                                            <label class="text-sm">再次確認新密碼</label>
+                                            <input id="confirm-new-password" type="password" class="border rounded px-2 py-1 w-full" />
+                                        </div>
+                                        <div class="flex justify-end">
+                                            <button type="button" id="self-save-password-btn" class="px-3 py-1 rounded bg-blue-600 text-white">變更我的密碼</button>
+                                        </div>
+                                    </div>
+                                    ` : `
+                                    <div class="text-sm text-gray-600">你正在編輯其他人的帳號，無法直接變更其密碼。</div>
+                                    `}
+                                    <div class="flex items-center gap-2">
+                                        <button type="button" id="send-reset-email-btn" class="px-3 py-1 rounded bg-indigo-600 text-white" ${isEditing && user.email ? '' : 'disabled'}>寄送重設密碼信</button>
+                                        ${isEditing && user.email ? `<span class="text-xs text-gray-500">${user.email}</span>` : '<span class="text-xs text-red-600">此帳號沒有電子郵件，無法寄送</span>'}
+                                    </div>
+                                    <p id="password-section-error" class="text-red-500 text-sm"></p>
+                                    <p id="password-section-success" class="text-green-600 text-sm"></p>
+                                </div>
+                                ` : ''}
                                 
                                 <p id="user-form-error" class="text-red-500 text-sm text-center"></p>
                                 <div class="flex justify-end space-x-2 pt-2 flex-shrink-0">
@@ -5979,6 +6032,60 @@
                 modal.querySelector('.close-btn').addEventListener('click', close);
                 modal.querySelector('.cancel-btn').addEventListener('click', close);
 
+                // --- Password Management (editing) ---
+                if (isEditing) {
+                    const sendResetBtn = document.getElementById('send-reset-email-btn');
+                    if (sendResetBtn) {
+                        sendResetBtn.addEventListener('click', async () => {
+                            try {
+                                const email = user.email;
+                                if (!email) { showToast('此帳號未設定電子郵件，無法寄送重設信', true); return; }
+                                showLoading(true);
+                                await sendPasswordResetEmail(auth, email);
+                                showToast(`已寄送重設密碼信至 ${email}`);
+                            } catch (err) {
+                                console.error('send reset email error', err);
+                                const msg = err?.message || '寄送重設密碼信失敗，請稍後再試';
+                                showToast(msg, true);
+                            } finally {
+                                showLoading(false);
+                            }
+                        });
+                    }
+
+                    const isSelf = window.__auth?.currentUser?.uid === user.id;
+                    const selfSaveBtn = document.getElementById('self-save-password-btn');
+                    if (isSelf && selfSaveBtn) {
+                        selfSaveBtn.addEventListener('click', async () => {
+                            try {
+                                const currentUser = auth.currentUser;
+                                if (!currentUser || currentUser.uid !== user.id) {
+                                    showToast('您只能變更自己的密碼', true);
+                                    return;
+                                }
+                                const curr = document.getElementById('curr-password')?.value || '';
+                                const np = document.getElementById('new-password')?.value || '';
+                                const cp = document.getElementById('confirm-new-password')?.value || '';
+                                if (np.length < 6) { showToast('新密碼至少 6 位', true); return; }
+                                if (np !== cp) { showToast('兩次新密碼不一致', true); return; }
+                                showLoading(true);
+                                const credential = EmailAuthProvider.credential(currentUser.email, curr);
+                                await reauthenticateWithCredential(currentUser, credential);
+                                await updatePassword(currentUser, np);
+                                showToast('密碼已更新');
+                                const ids = ['curr-password','new-password','confirm-new-password'];
+                                ids.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+                            } catch (err) {
+                                console.error('update password error', err);
+                                const msg = err?.code === 'auth/wrong-password' ? '目前密碼錯誤' : (err?.message || '變更密碼失敗');
+                                showToast(msg, true);
+                            } finally {
+                                showLoading(false);
+                            }
+                        });
+                    }
+                }
+
                 userForm.addEventListener('submit', async (e) => {
                     e.preventDefault();
                     showLoading(true);
@@ -5992,6 +6099,14 @@
                     const role = document.getElementById('user-role').value;
                     
                     const updateData = { name, phone, lineId, role, email };
+
+                    // 編輯模式：同步離職狀態
+                    if (isEditing) {
+                        const resignedEl = document.getElementById('user-resigned');
+                        if (resignedEl) {
+                            updateData.resigned = !!resignedEl.checked;
+                        }
+                    }
 
                     try {
                         let targetUserId = isEditing ? user.id : null;
@@ -6063,6 +6178,7 @@
                             showToast("使用者資料更新成功");
                         } else {
                             updateData.status = "未打卡";
+                            updateData.resigned = false; // 新增帳號預設為可登入
                             updateData.createdAt = serverTimestamp();
                             await setDoc(doc(db, "users", targetUserId), updateData);
                             showToast("新帳號建立成功");
@@ -6077,6 +6193,31 @@
                         showLoading(false);
                     }
                 });
+            }
+
+            // 簡易提示視窗（小視窗）
+            function openInfoModal(title, message) {
+                const modalId = `info-modal-${Date.now()}`;
+                const modalHTML = `
+                    <div id="${modalId}" class="modal-backdrop">
+                        <div class="modal-content w-[90%] max-w-[420px] bg-white rounded-lg shadow-xl flex flex-col">
+                            <div class="flex justify-between items-center p-4 border-b">
+                                <h3 class="font-bold text-lg">${title}</h3>
+                                <button class="close-btn text-gray-500 hover:text-gray-700"><i data-lucide="x" class="w-5 h-5"></i></button>
+                            </div>
+                            <div class="p-4">
+                                <p class="text-gray-700">${message}</p>
+                            </div>
+                            <div class="flex justify-end gap-2 p-4 border-t">
+                                <button class="close-btn px-3 py-1 rounded bg-blue-600 text-white">知道了</button>
+                            </div>
+                        </div>
+                    </div>`;
+                document.body.insertAdjacentHTML('beforeend', modalHTML);
+                lucide.createIcons();
+                const modal = document.getElementById(modalId);
+                const close = () => modal?.remove();
+                modal.querySelectorAll('.close-btn').forEach(btn => btn.addEventListener('click', close));
             }
             
             function openRuleModal(rule = null) {

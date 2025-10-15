@@ -73,6 +73,9 @@ function renderCalendarOverview(container) {
                         <button id="next-month" class="p-2 rounded-md bg-gray-100 hover:bg-gray-200">
                             <i data-lucide="chevron-right" class="w-4 h-4"></i>
                         </button>
+                        <button id="go-today" class="p-2 rounded-md bg-blue-100 text-blue-700 hover:bg-blue-200">
+                            今日
+                        </button>
                     </div>
                 </div>
                 <div id="calendar-grid" class="grid grid-cols-7 gap-1">
@@ -123,6 +126,13 @@ function renderCalendarOverview(container) {
         const isTodayInMonth = (today.getFullYear() === y && today.getMonth() === m);
         const initialIso = isTodayInMonth ? formatYMD(today) : formatYMD(new Date(y, m, 1));
         onCalendarDateSelect(initialIso);
+    });
+
+    // 回到今天
+    document.getElementById('go-today').addEventListener('click', () => {
+        displayedDate = new Date(today.getFullYear(), today.getMonth(), 1);
+        generateCalendar(displayedDate.getFullYear(), displayedDate.getMonth());
+        onCalendarDateSelect(formatYMD(today));
     });
 }
 
@@ -204,6 +214,8 @@ function generateCalendar(year, month) {
     applyCalendarStatus(year, month).catch(() => {});
     // 在當月的週五標註值班徽章與人員
     applyFridayDutyBadges(year, month).catch(() => {});
+    // 額外事件標記：月事件/個人行程
+    applyExtraEventMarkers(year, month).catch(() => {});
 }
 
 // 點選月曆日期後，更新下方「日期行程表」內容（目前顯示週五值班名單）
@@ -233,40 +245,81 @@ async function onCalendarDateSelect(iso) {
     }
 }
 
-// 載入指定日期的標註行程（目前支援週五值班），無則顯示暫無
+// 載入指定日期的標註行程（整合：週五值班、月事件、個人行程、通知）
 async function loadDailyMarkedSchedule(iso) {
     try {
         const listEl = document.getElementById('monthly-events');
         if (!listEl) return;
         const fs = window.__fs;
         const db = window.__db;
-        if (!fs || !db) {
+        const items = [];
+
+        // 週五值班（settings.general.fridayDutyRoster）
+        try {
+            if (fs && db) {
+                const { doc, getDoc } = fs;
+                const settingsRef = doc(db, 'settings', 'general');
+                const snap = await getDoc(settingsRef);
+                const roster = snap.exists() ? (snap.data().fridayDutyRoster || {}) : {};
+                const names = roster[iso] || [];
+                if (Array.isArray(names) && names.length > 0) {
+                    items.push({ type: 'duty', title: '週五值班', detail: names.join('、'), date: new Date(iso) });
+                }
+            }
+        } catch (e) { /* 忽略載入值班錯誤 */ }
+
+        // 月事件（模擬資料）
+        try {
+            const dt = new Date(iso);
+            const y = dt.getFullYear();
+            const m = dt.getMonth();
+            const monthlyEvents = [
+                { date: new Date(y, m, 5), title: '月會', type: 'meeting' },
+                { date: new Date(y, m, 15), title: '員工訓練', type: 'training' },
+                { date: new Date(y, m, 25), title: '績效評估', type: 'evaluation' }
+            ];
+            monthlyEvents.filter(ev => formatYMD(ev.date) === iso).forEach(ev => {
+                items.push({ type: ev.type, title: ev.title, detail: '', date: ev.date });
+            });
+        } catch (e) { /* 忽略載入月事件錯誤 */ }
+
+        // 個人行程（若已載入至全域）
+        try {
+            const schedules = Array.isArray(window.__personalSchedules) ? window.__personalSchedules : [];
+            schedules.filter(s => formatYMD(s.date) === iso).forEach(s => {
+                items.push({ type: 'personal', title: s.title, detail: `${s.time} ${s.location || ''}`.trim(), date: s.date });
+            });
+        } catch (e) { /* 忽略個人行程錯誤 */ }
+
+        // 通知（若已載入至全域，當日通知）
+        try {
+            const notifs = Array.isArray(window.__notifications) ? window.__notifications : [];
+            notifs.filter(n => formatYMD(n.time) === iso).forEach(n => {
+                items.push({ type: n.type || 'system', title: `通知：${n.title}`, detail: n.message || '', date: n.time });
+            });
+        } catch (e) { /* 忽略通知錯誤 */ }
+
+        // 渲染
+        listEl.innerHTML = '';
+        if (items.length === 0) {
             listEl.innerHTML = '<p class="text-gray-500 text-center py-4">本日暫無標註行程</p>';
             return;
         }
-        const { doc, getDoc } = fs;
-        const settingsRef = doc(db, 'settings', 'general');
-        const snap = await getDoc(settingsRef);
-        const roster = snap.exists() ? (snap.data().fridayDutyRoster || {}) : {};
-
-        listEl.innerHTML = '';
-        const names = roster[iso] || [];
-        if (Array.isArray(names) && names.length > 0) {
-            const dt = new Date(iso);
+        // 依時間排序（同日顯示即可）
+        items.sort((a, b) => a.date - b.date);
+        items.forEach(ev => {
             const eventDiv = document.createElement('div');
             eventDiv.className = 'flex items-center justify-between p-3 bg-gray-50 rounded-md';
             eventDiv.innerHTML = `
                 <div class="flex items-center space-x-3">
-                    <div class="w-3 h-3 rounded-full ${getEventColor('duty')}"></div>
-                    <span class="font-medium">週五值班</span>
-                    <span class="text-sm text-gray-600">${names.join('、')}</span>
+                    <div class="w-3 h-3 rounded-full ${getEventColor(ev.type)}"></div>
+                    <span class="font-medium">${ev.title}</span>
+                    ${ev.detail ? `<span class="text-sm text-gray-600">${ev.detail}</span>` : ''}
                 </div>
-                <span class="text-sm text-gray-500">${dt.getDate()}日</span>
+                <span class="text-sm text-gray-500">${ev.date.getDate()}日</span>
             `;
             listEl.appendChild(eventDiv);
-        } else {
-            listEl.innerHTML = '<p class="text-gray-500 text-center py-4">本日暫無標註行程</p>';
-        }
+        });
     } catch (e) {
         console.warn('載入指定日期行程失敗', e);
         const listEl = document.getElementById('monthly-events');
@@ -441,6 +494,8 @@ function loadPersonalSchedule() {
             description: '檢討本月專案進度'
         }
     ];
+    // 同步到全域供其他頁使用（例如日曆每日行程）
+    try { window.__personalSchedules = schedules; } catch (e) {}
     
     scheduleList.innerHTML = '';
     
@@ -531,6 +586,8 @@ function loadNotifications() {
             type: 'system'
         }
     ];
+    // 同步到全域供其他頁使用（例如日曆每日行程）
+    try { window.__notifications = notifications; } catch (e) {}
     
     notificationsList.innerHTML = '';
     
@@ -573,6 +630,7 @@ function getEventColor(type) {
         'training': 'bg-green-500',
         'evaluation': 'bg-yellow-500',
         'duty': 'bg-yellow-500',
+        'personal': 'bg-purple-500',
         'default': 'bg-gray-500'
     };
     return colors[type] || colors.default;
@@ -685,6 +743,53 @@ async function applyFridayDutyBadges(year, month) {
         });
     } catch (e) {
         console.warn('套用週五值班徽章失敗', e);
+    }
+}
+
+// 額外事件標記：在日期格下加入彩色小點（月事件、個人行程）
+async function applyExtraEventMarkers(year, month) {
+    try {
+        // 彙整月事件（模擬）
+        const events = [
+            { date: new Date(year, month, 5), title: '月會', type: 'meeting' },
+            { date: new Date(year, month, 15), title: '員工訓練', type: 'training' },
+            { date: new Date(year, month, 25), title: '績效評估', type: 'evaluation' }
+        ];
+        const markers = new Map(); // iso -> [types]
+        events.forEach(ev => {
+            const iso = formatYMD(ev.date);
+            const arr = markers.get(iso) || [];
+            arr.push(ev.type);
+            markers.set(iso, arr);
+        });
+
+        // 彙整個人行程（若有）
+        const schedules = Array.isArray(window.__personalSchedules) ? window.__personalSchedules : [];
+        schedules.forEach(s => {
+            if (!s?.date) return;
+            const dt = new Date(s.date);
+            if (dt.getFullYear() !== year || dt.getMonth() !== month) return;
+            const iso = formatYMD(dt);
+            const arr = markers.get(iso) || [];
+            arr.push('personal');
+            markers.set(iso, arr);
+        });
+
+        // 套用於月曆日期格
+        markers.forEach((types, iso) => {
+            const cell = document.querySelector(`#calendar-grid [data-ymd="${iso}"]`);
+            if (!cell) return;
+            const wrap = document.createElement('div');
+            wrap.className = 'mt-1 flex items-center space-x-1';
+            types.slice(0, 4).forEach(t => {
+                const dot = document.createElement('span');
+                dot.className = `inline-block w-2 h-2 rounded-full ${getEventColor(t)}`;
+                wrap.appendChild(dot);
+            });
+            cell.appendChild(wrap);
+        });
+    } catch (e) {
+        console.warn('套用額外事件標記失敗', e);
     }
 }
 
