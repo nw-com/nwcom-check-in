@@ -55,6 +55,10 @@ function renderCalendarOverview(container) {
     const currentMonth = currentDate.getMonth();
     // 使用可變日期狀態以支援連續月份切換
     let displayedDate = new Date(currentYear, currentMonth, 1);
+    const today = new Date();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    const markedTitle = `${mm}-${dd} 日期行程表`;
     
     container.innerHTML = `
         <div class="p-4 space-y-4">
@@ -77,7 +81,7 @@ function renderCalendarOverview(container) {
             </div>
             
             <div class="bg-white rounded-lg shadow-sm border p-4">
-                <h3 class="text-lg font-bold text-gray-800 mb-3">標註日期行程表</h3>
+                <h3 class="text-lg font-bold text-gray-800 mb-3">${markedTitle}</h3>
                 <div id="monthly-events" class="space-y-2">
                     <!-- 標註日期的行程與提醒將在這裡顯示 -->
                 </div>

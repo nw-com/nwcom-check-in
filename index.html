@@ -5362,13 +5362,13 @@
                     const dutyHTML = `
                         <div class="bg-white p-4 rounded-md shadow-sm border mb-2">
                             <div class="flex items-center justify-between mb-2">
-                                <h3 class="font-bold text-lg">本月每週五值班名單（分週設定）</h3>
+                                <h3 class="font-bold text-lg">指定月份每週五值班名單（分週設定）</h3>
                             </div>
-                            <p class="text-sm text-gray-600 mb-3">每週單獨填寫，使用逗號分隔人員名稱，例如：小王, 小李</p>
+                            <p class="text-sm text-gray-600 mb-3">每週單獨設定，請從下拉清單選擇值班人員（可多選），不要手寫輸入。</p>
                             <div id="friday-roster-list" class="space-y-2"></div>
                             <div class="flex items-center justify-end mt-2">
                                 <button id="save-friday-roster" class="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-indigo-700 flex items-center justify-center">
-                                    <i data-lucide="save" class="w-4 h-4 mr-2"></i>儲存本月值班名單
+                                    <i data-lucide="save" class="w-4 h-4 mr-2"></i>儲存指定月份值班名單
                                 </button>
                             </div>
                             <div class="text-sm text-gray-500 mt-2">已儲存：<span id="friday-duty-display"></span></div>
@@ -5376,6 +5376,29 @@
                     root?.insertAdjacentHTML('beforeend', dutyHTML);
                     lucide.createIcons();
                 } catch(e) { console.warn('插入週五值班人員區塊失敗', e); }
+
+                // 供值班名單選擇使用：所有使用者姓名
+                let allUserNames = [];
+
+                async function loadAllUserNames() {
+                    try {
+                        if (typeof getDocs !== 'function' || typeof collection !== 'function') {
+                            allUserNames = [];
+                            return;
+                        }
+                        const snap = await getDocs(collection(db, 'users'));
+                        const namesSet = new Set();
+                        snap.forEach(docu => {
+                            const data = docu.data();
+                            const name = (data.displayName || data.name || data.email || docu.id || '').toString().trim();
+                            if (name) namesSet.add(name);
+                        });
+                        allUserNames = Array.from(namesSet).sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+                    } catch (e) {
+                        console.warn('讀取所有帳號姓名失敗', e);
+                        allUserNames = [];
+                    }
+                }
 
                 // 工具：取得某月所有週五日期（YYYY-MM-DD）
                 function getFridaysInMonth(year, month0) {
@@ -5393,20 +5416,33 @@
                     return fridays;
                 }
 
-                // 將名單渲染成每週輸入列
+                // 將名單渲染成每週多選下拉列
                 function renderFridayRosterList(rosterMap) {
                     const listEl = document.getElementById('friday-roster-list');
                     if (!listEl) return;
                     const fridays = getFridaysInMonth(targetYear, targetMonth);
                     listEl.innerHTML = '';
                     fridays.forEach((iso) => {
-                        const preset = (rosterMap[iso] || []).join(', ');
+                        const presetArr = (rosterMap[iso] || []);
                         const row = document.createElement('div');
-                        row.className = 'flex items-center space-x-3';
-                        row.innerHTML = `
-                            <label class="w-40 text-sm text-gray-700">${iso}（週五）</label>
-                            <input type="text" data-iso="${iso}" value="${preset}" class="flex-1 border border-gray-300 rounded-md px-3 py-2" placeholder="輸入人員名單">
-                        `;
+                        row.className = 'space-y-1';
+                        const label = document.createElement('label');
+                        label.className = 'block text-sm text-gray-700';
+                        label.textContent = `${iso}（週五）`;
+                        const select = document.createElement('select');
+                        select.className = 'w-full border border-gray-300 rounded-md px-3 py-2';
+                        select.multiple = true;
+                        select.setAttribute('data-iso', iso);
+                        // 建立選項
+                        (allUserNames || []).forEach(name => {
+                            const opt = document.createElement('option');
+                            opt.value = name;
+                            opt.textContent = name;
+                            if (presetArr.includes(name)) opt.selected = true;
+                            select.appendChild(opt);
+                        });
+                        row.appendChild(label);
+                        row.appendChild(select);
                         listEl.appendChild(row);
                     });
                 }
@@ -5442,6 +5478,10 @@
                             }
                         }
 
+                        // 先載入所有使用者姓名，再渲染多選清單
+                        if (!allUserNames || allUserNames.length === 0) {
+                            await loadAllUserNames();
+                        }
                         renderFridayRosterList(renderMap);
                         const display = document.getElementById('friday-duty-display');
                         if (display) display.textContent = summarizeRosterDisplay(renderMap);
@@ -5468,14 +5508,14 @@
                             const fridays = getFridaysInMonth(targetYear, targetMonth);
                             const updated = { ...current };
                             fridays.forEach(iso => {
-                                const input = document.querySelector(`#friday-roster-list input[data-iso="${iso}"]`);
-                                const names = parseDutyNames(input?.value || '');
+                                const select = document.querySelector(`#friday-roster-list select[data-iso="${iso}"]`);
+                                const names = Array.from(select?.selectedOptions || []).map(o => o.value);
                                 updated[iso] = names;
                             });
                             await setDoc(settingsRef, { fridayDutyRoster: updated, updatedAt: serverTimestamp() }, { merge: true });
                             const display = document.getElementById('friday-duty-display');
                             if (display) display.textContent = summarizeRosterDisplay(updated);
-                            showToast('本月週五值班名單已儲存');
+                            showToast('指定月份週五值班名單已儲存');
                         } catch (err) {
                             console.error('儲存週五值班名單失敗:', err);
                             showToast('儲存週五值班名單失敗', true);
