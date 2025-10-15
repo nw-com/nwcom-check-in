@@ -986,7 +986,8 @@
                     // 1) 上班中-辦公室 2) 返回-辦公室 3) 外出-項目-地點 4) 抵達-項目-地點
                     // 5) 離開-項目-地點 6) 請假中 7) 已下班 其餘置後
                     const statusPriority = (user) => {
-                        const locationText = user.clockInStatus === '外出' && user.outboundLocation ? user.outboundLocation : user.lastLocation;
+                        const isOutRelated = ['外出','抵達','離開'].includes(user.clockInStatus);
+                        const locationText = isOutRelated && user.outboundLocation ? user.outboundLocation : user.lastLocation;
                         const display = getStatusDisplayText(user.clockInStatus || '未打卡', locationText, user.dutyType);
                         let isLeave = (user.clockInStatus === '臨時請假') || (display.includes('請假'));
                         if (!isLeave) {
@@ -1201,8 +1202,8 @@
                         visibleUsersList.sort((a, b) => {
                             const latestA = latestMap[a.id] || null;
                             const latestB = latestMap[b.id] || null;
-                            const locA = latestA?.locationName || (a.clockInStatus === '外出' && a.outboundLocation ? a.outboundLocation : a.lastLocation);
-                            const locB = latestB?.locationName || (b.clockInStatus === '外出' && b.outboundLocation ? b.outboundLocation : b.lastLocation);
+                            const locA = latestA?.locationName || ((['外出','抵達','離開'].includes(a.clockInStatus) && a.outboundLocation) ? a.outboundLocation : a.lastLocation);
+                            const locB = latestB?.locationName || ((['外出','抵達','離開'].includes(b.clockInStatus) && b.outboundLocation) ? b.outboundLocation : b.lastLocation);
                             const displayA = latestA ? getStatusDisplayText(latestA.type || '未知', latestA.locationName || null, latestA.dutyType || null)
                                                      : getStatusDisplayText(a.clockInStatus || '未打卡', locA, a.dutyType);
                             const displayB = latestB ? getStatusDisplayText(latestB.type || '未知', latestB.locationName || null, latestB.dutyType || null)
@@ -1246,7 +1247,7 @@
                             return a.name.localeCompare(b.name, 'zh-Hant');
                         }).forEach(user => {
                             const latest = latestMap[user.id] || null;
-                            const locText = latest?.locationName || (user.clockInStatus === '外出' && user.outboundLocation ? user.outboundLocation : user.lastLocation);
+                            const locText = latest?.locationName || ((['外出','抵達','離開'].includes(user.clockInStatus) && user.outboundLocation) ? user.outboundLocation : user.lastLocation);
                             const statusText = latest ? getStatusDisplayText(latest.type || '未知', latest.locationName || null, latest.dutyType || null)
                                                       : getStatusDisplayText(user.clockInStatus || '未打卡', locText, user.dutyType);
                             const statusColor = getStatusColor(statusText);
@@ -3344,7 +3345,7 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                                 <img src="${user.avatarUrl || `https://placehold.co/32x32/EFEFEF/333333?text=${user.name.charAt(0)}`}" class="w-8 h-8 rounded-full mr-3 object-cover">
                                 <div>
                                     <p class="font-medium text-sm text-gray-800">${user.name}</p>
-<p class="text-xs text-gray-500">${getStatusDisplayText(user.status, user.lastLocation?.address, user.dutyType) || 'a?aa??a?!'}</p>
+<p class="text-xs text-gray-500">${getStatusDisplayText(user.status, ((['外出','抵達','離開'].includes(user.status) && user.outboundLocation) ? user.outboundLocation : user.lastLocation?.address), user.dutyType) || 'a?aa??a?!'}</p>
                                 </div>
                             </div>
                             <span class="text-xs text-gray-400">${user.lastClockInTime ? 'a?�e??c?�a??a??e??i??' + timeAgo(user.lastClockInTime.toDate()) : 'c?!c���e??'}</span>
@@ -3359,7 +3360,7 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                             const infoWindow = new google.maps.InfoWindow({ content: `
                                 <div class="p-1">
                                     <p class="font-bold">${user.name}</p>
-<p>c?�a??: ${getStatusDisplayText(user.status, user.lastLocation?.address, user.dutyType)}</p>
+<p>c?�a??: ${getStatusDisplayText(user.status, ((['外出','抵達','離開'].includes(user.status) && user.outboundLocation) ? user.outboundLocation : user.lastLocation?.address), user.dutyType)}</p>
                                     <p>a?�e??c?�a??a??e??: ${user.lastClockInTime ? formatDateTime(user.lastClockInTime) : 'N/A'}</p>
                                 </div>` });
                             marker.addListener('click', () => infoWindow.open({ anchor: marker, map: state.groupMap }));
@@ -4209,7 +4210,7 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                                 <img src="${user.avatarUrl || `https://placehold.co/32x32/EFEFEF/333333?text=${user.name.charAt(0)}`}" class="w-8 h-8 rounded-full mr-3 object-cover">
                                 <div>
                                     <p class="font-medium text-sm text-gray-800">${user.name}</p>
-                                    <p class="text-xs text-gray-500">${getStatusDisplayText(user.status, user.lastLocation?.address) || 'a?aa??a?!'}</p>
+                                    <p class="text-xs text-gray-500">${getStatusDisplayText(user.status, ((['外出','抵達','離開'].includes(user.status) && user.outboundLocation) ? user.outboundLocation : user.lastLocation?.address), user.dutyType) || 'a?aa??a?!'}</p>
                                 </div>
                             </div>
                             <span class="text-xs text-gray-400">${user.lastClockInTime ? 'a?�e??c?�a??a??e??i??' + timeAgo(user.lastClockInTime.toDate()) : 'c?!c���e??'}</span>
@@ -4234,7 +4235,7 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                                 content: `
                                     <div class="p-1">
                                         <p class="font-bold">${user.name}</p>
-                                        <p>c?�a??: ${getStatusDisplayText(user.status, user.lastLocation?.address)}</p>
+                                        <p>c?�a??: ${getStatusDisplayText(user.status, ((['外出','抵達','離開'].includes(user.status) && user.outboundLocation) ? user.outboundLocation : user.lastLocation?.address), user.dutyType)}</p>
                                         <p>a?�e??c?�a??a??e??: ${user.lastClockInTime ? formatDateTime(user.lastClockInTime) : 'N/A'}</p>
                                     </div>
                                 `

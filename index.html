@@ -1047,7 +1047,8 @@
                     // 1) 上班中-辦公室 2) 返回-辦公室 3) 外出-項目-地點 4) 抵達-項目-地點
                     // 5) 離開-項目-地點 6) 請假中 7) 已下班 其餘置後
                     const statusPriority = (user) => {
-                        const locationText = user.clockInStatus === '外出' && user.outboundLocation ? user.outboundLocation : (user.lastLocation?.address || null);
+                        const isOutRelated = ['外出','抵達','離開'].includes(user.clockInStatus);
+                        const locationText = isOutRelated && user.outboundLocation ? user.outboundLocation : (user.lastLocation?.address || null);
                         const display = getStatusDisplayText(user.clockInStatus || '未打卡', locationText, user.dutyType);
                         // 請假中：臨時請假或當天有效的請假申請
                         let isLeave = (user.clockInStatus === '臨時請假') || (display.includes('請假'));
@@ -1085,7 +1086,8 @@
                         if (tA.getTime() !== tB.getTime()) return tB - tA;
                         return a.name.localeCompare(b.name, 'zh-Hant');
                     }).forEach(user => {
-                            const locationText = user.clockInStatus === '外出' && user.outboundLocation ? user.outboundLocation : (user.lastLocation?.address || null);
+                            const isOutRelated = ['外出','抵達','離開'].includes(user.clockInStatus);
+                            const locationText = isOutRelated && user.outboundLocation ? user.outboundLocation : (user.lastLocation?.address || null);
                             const statusText = getStatusDisplayText(user.clockInStatus || '未打卡', locationText, user.dutyType);
                             const statusColor = getStatusColor(statusText);
                         if (user.id === state.currentUser.uid) {
@@ -1231,7 +1233,8 @@
                     
                     // 排序：自訂狀態優先級 + 最近更新時間（新至舊） + 姓名
                     const statusPriority = (user) => {
-                        const locationText = user.clockInStatus === '外出' && user.outboundLocation ? user.outboundLocation : (user.lastLocation?.address || null);
+                            const isOutRelated = ['外出','抵達','離開'].includes(user.clockInStatus);
+                            const locationText = isOutRelated && user.outboundLocation ? user.outboundLocation : (user.lastLocation?.address || null);
                         const display = getStatusDisplayText(user.clockInStatus || '未打卡', locationText, user.dutyType);
                         let isLeave = (user.clockInStatus === '臨時請假') || (display.includes('請假'));
                         if (!isLeave) {
@@ -1283,8 +1286,8 @@
                     visibleUsersList.sort((a, b) => {
                             const latestA = latestMap[a.id] || null;
                             const latestB = latestMap[b.id] || null;
-                            const locA = latestA?.locationName || (a.clockInStatus === '外出' && a.outboundLocation ? a.outboundLocation : (a.lastLocation?.address || null));
-                            const locB = latestB?.locationName || (b.clockInStatus === '外出' && b.outboundLocation ? b.outboundLocation : (b.lastLocation?.address || null));
+                            const locA = latestA?.locationName || ((['外出','抵達','離開'].includes(a.clockInStatus) && a.outboundLocation) ? a.outboundLocation : (a.lastLocation?.address || null));
+                            const locB = latestB?.locationName || ((['外出','抵達','離開'].includes(b.clockInStatus) && b.outboundLocation) ? b.outboundLocation : (b.lastLocation?.address || null));
                             const displayA = latestA ? getStatusDisplayText(latestA.type || '未知', latestA.locationName || null, latestA.dutyType || null)
                                                      : getStatusDisplayText(a.clockInStatus || '未打卡', locA, a.dutyType);
                             const displayB = latestB ? getStatusDisplayText(latestB.type || '未知', latestB.locationName || null, latestB.dutyType || null)
@@ -1343,7 +1346,7 @@
                             return a.name.localeCompare(b.name, 'zh-Hant');
                         }).forEach(user => {
                             const latest = latestMap[user.id] || null;
-                            const locText = latest?.locationName || (user.clockInStatus === '外出' && user.outboundLocation ? user.outboundLocation : (user.lastLocation?.address || null));
+                            const locText = latest?.locationName || ((['外出','抵達','離開'].includes(user.clockInStatus) && user.outboundLocation) ? user.outboundLocation : (user.lastLocation?.address || null));
                             const statusText = latest ? getStatusDisplayText(latest.type || '未知', latest.locationName || null, latest.dutyType || null)
                                                       : getStatusDisplayText(user.clockInStatus || '未打卡', locText, user.dutyType);
                             const statusColor = getStatusColor(statusText);
@@ -3558,7 +3561,7 @@
                         const userElement = document.createElement('div');
                         userElement.className = `flex items-center justify-between p-2 rounded-md cursor-pointer hover:bg-gray-100 ${!hasLocation ? 'opacity-50' : ''}`;
                         const latest = latestMap[user.id] || null;
-                        const locText = latest?.locationName || (user.clockInStatus === '外出' && user.outboundLocation ? user.outboundLocation : user.lastLocation?.address);
+                        const locText = latest?.locationName || ((['外出','抵達','離開'].includes(user.clockInStatus) && user.outboundLocation) ? user.outboundLocation : user.lastLocation?.address);
                         const statusText = latest ? getStatusDisplayText(latest.type || '未知', latest.locationName || null, latest.dutyType || null)
                                                   : (getStatusDisplayText(user.clockInStatus || '未打卡', locText, user.dutyType) || '未打卡');
                         const latestTime = latest ? (latest.timestamp?.toDate?.() || (latest.timestamp ? new Date(latest.timestamp) : null))
@@ -4537,7 +4540,7 @@
                     Promise.all(augmentedPromises).then((augmentedUsers) => {
                         // 排序對齊「所有同仁狀態」：狀態優先級 -> 最近更新時間(新→舊) -> 姓名
                         const statusPriority = (u) => {
-                        const display = u.__statusText || getStatusDisplayText(u.clockInStatus || '未打卡', (u.clockInStatus === '外出' && u.outboundLocation ? u.outboundLocation : (u.lastLocation?.address || null)), u.dutyType);
+                        const display = u.__statusText || getStatusDisplayText(u.clockInStatus || '未打卡', ((['外出','抵達','離開'].includes(u.clockInStatus) && u.outboundLocation) ? u.outboundLocation : (u.lastLocation?.address || null)), u.dutyType);
                             let isLeave = (u.clockInStatus === '臨時請假') || (display.includes('請假'));
                             if (!isLeave) {
                                 const leave = u.leaveStatus || '';
@@ -4612,7 +4615,7 @@
                                 });
 
                                 const locationName = user.__latestRecord?.locationName
-                                    || (user.clockInStatus === '外出' ? (user.outboundLocation || '') : '')
+                                    || ((['外出','抵達','離開'].includes(user.clockInStatus) ? (user.outboundLocation || '') : ''))
                                     || (user.lastLocation?.address || '');
                                 const infoWindow = new google.maps.InfoWindow({
                                     content: `
