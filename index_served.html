@@ -300,6 +300,7 @@
             googleMapsLoaded: false,
             activeListeners: [],
             currentLocation: null,
+            currentPage: null,
             users: [],
             trackingMap: null,
             trackingMarkers: [],
@@ -714,6 +715,14 @@
             document.getElementById('profile-avatar-btn').addEventListener('click', renderProfileModal);
 
             function showPage(pageName, subPage = null, params = {}) {
+                const prevPage = state.currentPage;
+                try {
+                    if (prevPage === 'calendar' && pageName !== 'calendar' && window.__calendarCleanup) {
+                        window.__calendarCleanup();
+                    }
+                } catch (e) {
+                    console.warn('Calendar cleanup failed:', e);
+                }
                 cleanupListeners();
                 state.currentLocation = null;
                 state.trackingMap = null;
@@ -733,6 +742,7 @@
                 const renderFunction = router[pageName] || renderAccessDenied;
                 try {
                     renderFunction(params);
+                    state.currentPage = pageName;
                 } catch(e) {
                     console.error("Failed to render page:", e);
                     mainContent.innerHTML = `<div class="p-4 text-red-500">e??e?�Fe??a?�Da?��a??a�?</div>`;

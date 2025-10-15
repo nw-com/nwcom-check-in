@@ -10,6 +10,11 @@ function renderCalendar(subPage) {
         <div id="sub-page-content" class="overflow-y-auto" style="height: calc(100% - 50px);"></div>`;
     
     const subPageContent = document.getElementById('sub-page-content');
+    // 導出清理函式供其他頁面在切換時解除監聽
+    try { window.__calendarCleanup = cleanupRealtimeSchedulesListeners; } catch (e) {}
+    // 初始化即時監聽，確保首次進入非「行程表」分頁也能載入資料
+    try { initRealtimeSchedulesListeners(); } catch (e) {}
+    try { initRealtimeSettingsListener(); } catch (e) {}
     if (subPage === 'overview') {
         renderCalendarOverview(subPageContent);
     } else if (subPage === 'schedule') {
@@ -455,9 +460,288 @@ function renderCalendarSchedule(container) {
         </div>`;
     
     loadPersonalSchedule();
+    // 啟用即時監聽（個人與共享行程、設定值班名單）
+    try { initRealtimeSchedulesListeners(); } catch (e) {}
+    try { initRealtimeSettingsListener(); } catch (e) {}
     
     document.getElementById('add-schedule').addEventListener('click', showAddScheduleModal);
 }
+
+// 初始化即時監聽，讓行程與通知即時更新
+function initRealtimeSchedulesListeners() {
+    try {
+        const auth = window.__auth;
+        const fs = window.__fs;
+        const db = window.__db;
+        if (!auth?.currentUser || !fs || !db) return;
+        const { collection, collectionGroup, query, where } = fs;
+
+        if (!window.__unsubOwnSchedules && fs?.onSnapshot) {
+            const ownRef = collection(db, 'users', auth.currentUser.uid, 'schedules');
+            window.__unsubOwnSchedules = fs.onSnapshot(ownRef, async (rs) => {
+                try {
+                    const usersMap = await fetchUsersOnce().catch(() => ({}));
+                    const map = window.__ownSchedulesMap || new Map();
+                    map.clear();
+                    rs.forEach(d => {
+                        const data = d.data();
+                        const dateTime = data.dateTime?.toDate?.() || data.date?.toDate?.() ||
+                                         (data.dateTime ? new Date(data.dateTime) : (data.date ? new Date(data.date) : null));
+                        const timeStr = (data.time && typeof data.time === 'string' && data.time.includes(':'))
+                            ? data.time
+                            : ((dateTime && typeof dateTime.getHours === 'function')
+                                ? `${String(dateTime.getHours()).padStart(2, '0')}:${String(dateTime.getMinutes()).padStart(2, '0')}`
+                                : '');
+                        const schedObj = {
+                            id: d.id,
+                            title: data.title || '',
+                            date: dateTime,
+                            time: timeStr,
+                            reminderTime: (typeof data.reminderTime === 'string' && data.reminderTime.includes(':')) ? data.reminderTime : '09:00',
+                            location: data.location || '',
+                            description: data.description || '',
+                            remindersDays: Array.isArray(data.remindersDays) ? data.remindersDays : [2,1],
+                            participants: Array.isArray(data.participants) ? data.participants : [],
+                            participantsNames: Array.isArray(data.participants) ? data.participants.map(uid => usersMap?.[uid] || uid) : [],
+                            ownerId: auth.currentUser.uid,
+                            origin: 'own'
+                        };
+                        map.set(`${schedObj.ownerId}:${schedObj.id}`, schedObj);
+                    });
+                    window.__ownSchedulesMap = map;
+                    rebuildSchedulesFromRealtime();
+                } catch (e) { /* ignore */ }
+            });
+        }
+
+        if (!window.__unsubSharedSchedules && fs?.onSnapshot && typeof collectionGroup === 'function' && typeof query === 'function' && typeof where === 'function') {
+            const cg = collectionGroup(db, 'schedules');
+            const q = query(cg, where('participants', 'array-contains', auth.currentUser.uid));
+            window.__unsubSharedSchedules = fs.onSnapshot(q, async (rs) => {
+                try {
+                    const usersMap = await fetchUsersOnce().catch(() => ({}));
+                    const map = window.__sharedSchedulesMap || new Map();
+                    map.clear();
+                    rs.forEach(d => {
+                        try {
+                            const data = d.data();
+                            const ownerId = d.ref?.parent?.parent?.id || null;
+                            if (ownerId && ownerId === auth.currentUser.uid) return; // 自己的已載入
+                            const dateTime = data.dateTime?.toDate?.() || data.date?.toDate?.() ||
+                                             (data.dateTime ? new Date(data.dateTime) : (data.date ? new Date(data.date) : null));
+                            const timeStr = (data.time && typeof data.time === 'string' && data.time.includes(':'))
+                                ? data.time
+                                : ((dateTime && typeof dateTime.getHours === 'function')
+                                    ? `${String(dateTime.getHours()).padStart(2, '0')}:${String(dateTime.getMinutes()).padStart(2, '0')}`
+                                    : '');
+                            const schedObj = {
+                                id: d.id,
+                                title: data.title || '',
+                                date: dateTime,
+                                time: timeStr,
+                                reminderTime: (typeof data.reminderTime === 'string' && data.reminderTime.includes(':')) ? data.reminderTime : '09:00',
+                                location: data.location || '',
+                                description: data.description || '',
+                                remindersDays: Array.isArray(data.remindersDays) ? data.remindersDays : [2,1],
+                                participants: Array.isArray(data.participants) ? data.participants : [],
+                                participantsNames: Array.isArray(data.participants) ? data.participants.map(uid => usersMap?.[uid] || uid) : [],
+                                ownerId,
+                                origin: 'shared'
+                            };
+                            map.set(`${schedObj.ownerId}:${schedObj.id}`, schedObj);
+                        } catch (e) { /* ignore */ }
+                    });
+                    window.__sharedSchedulesMap = map;
+                    rebuildSchedulesFromRealtime();
+                } catch (e) { /* ignore */ }
+            });
+        }
+    } catch (e) { /* ignore */ }
+}
+
+// 初始化即時監聽（settings/general），讓值班名單與標註日期即時更新
+function initRealtimeSettingsListener() {
+    try {
+        const fs = window.__fs; const db = window.__db;
+        if (!fs || !db || !fs.onSnapshot || !fs.doc) return;
+        if (window.__unsubSettings) return; // 已初始化
+        const { doc } = fs;
+        const settingsRef = doc(db, 'settings', 'general');
+        window.__unsubSettings = fs.onSnapshot(settingsRef, (snap) => {
+            try {
+                const data = snap.exists() ? snap.data() : {};
+                window.__fridayDutyRoster = data.fridayDutyRoster || {};
+                // 更新通知（合併行程與值班通知，保留已讀與刪除黑名單）
+                try { refreshNotificationsFromRealtime(); } catch (e) {}
+                // 刷新月曆值班徽章與「標註日期行程表」
+                try {
+                    const ymText = document.getElementById('current-month-year')?.textContent || '';
+                    const y = parseInt(ymText.split('年')[0]);
+                    const m = parseInt(ymText.split('年')[1]) - 1;
+                    if (!Number.isNaN(y) && !Number.isNaN(m)) {
+                        applyFridayDutyBadges(y, m).catch(() => {});
+                        loadMarkedSchedule(y, m).catch(() => {});
+                    }
+                } catch (e) {}
+                // 若目前有選定日期，刷新右側列表
+                try {
+                    const iso = window.__selectedCalendarIso;
+                    if (iso) loadDailyMarkedSchedule(iso).catch(() => {});
+                } catch (e) {}
+            } catch (e) { /* ignore */ }
+        });
+    } catch (e) { /* ignore */ }
+}
+
+// 由快取的值班名單產出通知（避免每次重新抓取設定文件）
+function computeDutyNotificationsFromRoster() {
+    try {
+        const roster = window.__fridayDutyRoster || {};
+        const out = [];
+        Object.keys(roster).forEach(iso => {
+            const fri = new Date(iso);
+            if (String(fri) === 'Invalid Date') return;
+            const mon = new Date(fri.getTime() - 4 * 86400000);
+            const names = Array.isArray(roster[iso]) ? roster[iso] : [];
+            const msgNames = names.length ? names.join('、') : '（名單未設定）';
+            mon.setHours(9, 0, 0, 0);
+            out.push({
+                id: `duty_${iso}`,
+                title: '週五值班通知',
+                message: `本週五（${iso}）值班：${msgNames}`,
+                time: mon,
+                read: false,
+                type: 'duty'
+            });
+        });
+        out.sort((a,b) => a.time - b.time);
+        return out;
+    } catch (e) { return []; }
+}
+
+// 合併即時行程與值班通知，保留已讀與黑名單
+function refreshNotificationsFromRealtime() {
+    try {
+        const schedules = Array.isArray(window.__personalSchedules) ? window.__personalSchedules : [];
+        const scheduleNotifications = computeScheduleNotifications(schedules);
+        const dutyNotifications = computeDutyNotificationsFromRoster();
+        const prev = Array.isArray(window.__notifications) ? window.__notifications : [];
+        const statusMap = new Map(prev.map(n => [String(n.id), n.status]));
+        const byId = new Map();
+        const mergeIn = (n) => {
+            const id = String(n.id);
+            const prevN = byId.get(id);
+            byId.set(id, { ...n, status: prevN?.status || statusMap.get(id) || n.status || 'unread' });
+        };
+        scheduleNotifications.forEach(mergeIn);
+        dutyNotifications.forEach(mergeIn);
+        let next = Array.from(byId.values()).sort((a,b) => a.time - b.time);
+        const deleted = window.__deletedNotificationIds;
+        if (deleted && deleted.size) {
+            next = next.filter(n => !deleted.has(String(n.id)));
+        }
+        window.__notifications = next;
+        // 若通知列表當前顯示，同步刷新
+        try { if (document.getElementById('notifications-list')) loadNotifications(); } catch (e) {}
+    } catch (e) { /* ignore */ }
+}
+
+// 依據即時監聽資料重建行程與通知並更新 UI
+function rebuildSchedulesFromRealtime() {
+    try {
+        const scheduleList = document.getElementById('schedule-list');
+        if (!scheduleList) return;
+        const own = window.__ownSchedulesMap ? Array.from(window.__ownSchedulesMap.values()) : [];
+        const shared = window.__sharedSchedulesMap ? Array.from(window.__sharedSchedulesMap.values()) : [];
+        const schedules = own.concat(shared);
+        schedules.sort((a,b) => (a.date?.getTime?.() || 0) - (b.date?.getTime?.() || 0));
+        window.__personalSchedules = schedules;
+
+        // 合併行程與值班通知（保留已讀與刪除黑名單）
+        refreshNotificationsFromRealtime();
+
+        // 重新渲染行程列表
+        scheduleList.innerHTML = '';
+        if (schedules.length === 0) {
+            scheduleList.innerHTML = '<p class="text-gray-500 text-center py-8">暫無行程安排</p>';
+        } else {
+            schedules.forEach(schedule => {
+                const scheduleDiv = document.createElement('div');
+                scheduleDiv.className = 'border border-gray-200 rounded-lg p-4 hover:bg-gray-50';
+                const dateText = schedule.date ? schedule.date.toLocaleDateString('zh-TW') : '';
+                scheduleDiv.innerHTML = `
+                    <div class="flex items-start justify-between">
+                        <div class="flex-1">
+                            <h3 class="font-semibold text-gray-800">${schedule.title}</h3>
+                            <div class="flex items-center space-x-4 mt-2 text-sm text-gray-600">
+                                <span><i data-lucide=\"calendar\" class=\"w-4 h-4 inline mr-1\"></i>${dateText}</span>
+                                <span><i data-lucide=\"clock\" class=\"w-4 h-4 inline mr-1\"></i>${schedule.time}</span>
+                            </div>
+                            ${Array.isArray(schedule.participantsNames) && schedule.participantsNames.length ? `<div class=\"mt-2 text-xs text-gray-500\">陪同：${schedule.participantsNames.join('、')}</div>` : ''}
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            ${schedule.origin === 'own' ? `
+                            <button class="text-blue-600 hover:text-blue-800 text-sm" data-action="edit" data-id="${schedule.id}">編輯</button>
+                            <button class="text-red-600 hover:text-red-800 text-sm" data-action="delete" data-id="${schedule.id}">刪除</button>
+                            ` : `
+                            <span class="text-xs text-gray-400">共享（僅檢視）</span>
+                            `}
+                        </div>
+                    </div>`;
+                scheduleList.appendChild(scheduleDiv);
+            });
+
+            // 綁定編輯/刪除事件
+            scheduleList.querySelectorAll('button[data-action="edit"]').forEach(btn => {
+                btn.addEventListener('click', () => showEditScheduleModal(btn.getAttribute('data-id')));
+            });
+            scheduleList.querySelectorAll('button[data-action="delete"]').forEach(btn => {
+                btn.addEventListener('click', () => deleteSchedule(btn.getAttribute('data-id')));
+            });
+        }
+
+        // 若通知列表當前顯示，同步刷新（已在 refreshNotificationsFromRealtime 中處理）
+
+        // 刷新月曆彩點（如果當前月份可解析）
+        try {
+            const ymText = document.getElementById('current-month-year')?.textContent || '';
+            const y = parseInt(ymText.split('年')[0]);
+            const m = parseInt(ymText.split('年')[1]) - 1;
+            if (!Number.isNaN(y) && !Number.isNaN(m)) {
+                applyExtraEventMarkers(y, m);
+                // 同步刷新標註日期行程表（值班與其他標註）
+                loadMarkedSchedule(y, m).catch(() => {});
+            }
+        } catch (e) {}
+
+        // 若目前有選定日期，刷新右側列表
+        try {
+            const iso = window.__selectedCalendarIso;
+            if (iso) loadDailyMarkedSchedule(iso).catch(() => {});
+        } catch (e) {}
+    } catch (e) { /* ignore */ }
+}
+
+// 解除即時監聽（在切換出行事曆分頁或頁面卸載時呼叫）
+function cleanupRealtimeSchedulesListeners() {
+    try {
+        if (window.__unsubOwnSchedules) {
+            try { window.__unsubOwnSchedules(); } catch (e) {}
+            window.__unsubOwnSchedules = null;
+        }
+        if (window.__unsubSharedSchedules) {
+            try { window.__unsubSharedSchedules(); } catch (e) {}
+            window.__unsubSharedSchedules = null;
+        }
+        if (window.__unsubSettings) {
+            try { window.__unsubSettings(); } catch (e) {}
+            window.__unsubSettings = null;
+        }
+    } catch (e) { /* ignore */ }
+}
+
+// 頁面卸載時自動清理，避免殘留監聽
+try { window.addEventListener('beforeunload', cleanupRealtimeSchedulesListeners); } catch (e) {}
 
 // 載入個人行程
 function loadPersonalSchedule() {
@@ -473,10 +757,10 @@ function loadPersonalSchedule() {
                 scheduleList.innerHTML = '<p class="text-gray-500 text-center py-8">請先登入</p>';
                 return;
             }
-            const { collection, getDocs } = fs;
+            const { collection, getDocs, collectionGroup, query, where } = fs;
             const ref = collection(db, 'users', auth.currentUser.uid, 'schedules');
             const snap = await getDocs(ref);
-            const schedules = [];
+            const schedulesMap = new Map();
             // 載入使用者名單供顯示陪同參與人員名稱
             const usersMap = await fetchUsersOnce().catch(() => ({}));
             snap.forEach(d => {
@@ -489,7 +773,7 @@ function loadPersonalSchedule() {
                     : ((dateTime && typeof dateTime.getHours === 'function')
                         ? `${String(dateTime.getHours()).padStart(2, '0')}:${String(dateTime.getMinutes()).padStart(2, '0')}`
                         : '');
-                schedules.push({
+                const schedObj = {
                     id: d.id,
                     title: data.title || '',
                     date: dateTime,
@@ -499,18 +783,70 @@ function loadPersonalSchedule() {
                     description: data.description || '',
                     remindersDays: Array.isArray(data.remindersDays) ? data.remindersDays : [2,1],
                     participants: Array.isArray(data.participants) ? data.participants : [],
-                    participantsNames: Array.isArray(data.participants) ? data.participants.map(uid => usersMap?.[uid] || uid) : []
-                });
+                    participantsNames: Array.isArray(data.participants) ? data.participants.map(uid => usersMap?.[uid] || uid) : [],
+                    ownerId: auth.currentUser.uid,
+                    origin: 'own'
+                };
+                schedulesMap.set(`${schedObj.ownerId}:${schedObj.id}`, schedObj);
             });
+            // 讀取共享給本人的他人行程（collection group 查詢）
+            try {
+                if (typeof collectionGroup === 'function' && typeof query === 'function' && typeof where === 'function') {
+                    const cg = collectionGroup(db, 'schedules');
+                    const q = query(cg, where('participants', 'array-contains', auth.currentUser.uid));
+                    const rs = await getDocs(q);
+                    rs.forEach(d => {
+                        try {
+                            const data = d.data();
+                            const ownerId = d.ref?.parent?.parent?.id || null;
+                            if (ownerId && ownerId === auth.currentUser.uid) return; // 自己的已載入
+                            const dateTime = data.dateTime?.toDate?.() ||
+                                             data.date?.toDate?.() ||
+                                             (data.dateTime ? new Date(data.dateTime) : (data.date ? new Date(data.date) : null));
+                            const timeStr = (data.time && typeof data.time === 'string' && data.time.includes(':'))
+                                ? data.time
+                                : ((dateTime && typeof dateTime.getHours === 'function')
+                                    ? `${String(dateTime.getHours()).padStart(2, '0')}:${String(dateTime.getMinutes()).padStart(2, '0')}`
+                                    : '');
+                            const schedObj = {
+                                id: d.id,
+                                title: data.title || '',
+                                date: dateTime,
+                                time: timeStr,
+                                reminderTime: (typeof data.reminderTime === 'string' && data.reminderTime.includes(':')) ? data.reminderTime : '09:00',
+                                location: data.location || '',
+                                description: data.description || '',
+                                remindersDays: Array.isArray(data.remindersDays) ? data.remindersDays : [2,1],
+                                participants: Array.isArray(data.participants) ? data.participants : [],
+                                participantsNames: Array.isArray(data.participants) ? data.participants.map(uid => usersMap?.[uid] || uid) : [],
+                                ownerId,
+                                origin: 'shared'
+                            };
+                            schedulesMap.set(`${schedObj.ownerId}:${schedObj.id}`, schedObj);
+                        } catch (e) {}
+                    });
+                }
+            } catch (e) {
+                console.warn('讀取共享行程失敗', e);
+            }
+            const schedules = Array.from(schedulesMap.values());
             schedules.sort((a,b) => (a.date?.getTime?.() || 0) - (b.date?.getTime?.() || 0));
             try { window.__personalSchedules = schedules; } catch (e) {}
             try {
                 const prev = Array.isArray(window.__notifications) ? window.__notifications : [];
                 const statusMap = new Map(prev.map(n => [String(n.id), n.status]));
-                const next = computeScheduleNotifications(schedules).map(n => ({
+                let next = computeScheduleNotifications(schedules).map(n => ({
                     ...n,
-                    status: statusMap.get(String(n.id)) || n.status || 'unread'
+                    // 嘗試保留舊版 ID 的已讀狀態（sched_<scheduleId>_<d>）
+                    status: (statusMap.get(String(n.id)) ||
+                            (() => { try { const p = String(n.id).split('_'); return statusMap.get(`sched_${p[2]}_${p[3]}`); } catch (e) { return null; } })() ||
+                            n.status || 'unread')
                 }));
+                // 若存在刪除黑名單，忽略被刪除的通知
+                const deleted = window.__deletedNotificationIds;
+                if (deleted && deleted.size) {
+                    next = next.filter(n => !deleted.has(String(n.id)));
+                }
                 window.__notifications = next;
             } catch (e) {}
 
@@ -537,16 +873,18 @@ function loadPersonalSchedule() {
                             <p class="text-gray-600 mt-2 text-sm"><i data-lucide="users" class="w-4 h-4 inline mr-1"></i>陪同人員：${schedule.participantsNames.join('、')}</p>
                             ` : ''}
                         </div>
-                        <div class="flex space-x-2">
-                            <button class="text-blue-600 hover:text-blue-800" onclick="editSchedule('${schedule.id}')">
-                                <i data-lucide="edit" class="w-4 h-4"></i>
-                            </button>
-                            <button class="text-red-600 hover:text-red-800" onclick="deleteSchedule('${schedule.id}')">
-                                <i data-lucide="trash-2" class="w-4 h-4"></i>
-                            </button>
-                        </div>
+                    <div class="flex space-x-2">
+                        ${schedule.ownerId === (auth?.currentUser?.uid || '') ? `
+                        <button class="text-blue-600 hover:text-blue-800" onclick="editSchedule('${schedule.id}')">
+                            <i data-lucide=\"edit\" class=\"w-4 h-4\"></i>
+                        </button>
+                        <button class="text-red-600 hover:text-red-800" onclick="deleteSchedule('${schedule.id}')">
+                            <i data-lucide=\"trash-2\" class=\"w-4 h-4\"></i>
+                        </button>
+                        ` : ''}
                     </div>
-                `;
+                </div>
+            `;
                 scheduleList.appendChild(scheduleDiv);
             });
             try { window.lucide?.createIcons?.(); } catch (e) {}
@@ -575,6 +913,9 @@ function renderCalendarNotifications(container) {
             </div>
         </div>`;
     
+    // 確保即時監聽已初始化
+    try { initRealtimeSchedulesListeners(); } catch (e) {}
+    try { initRealtimeSettingsListener(); } catch (e) {}
     loadNotifications();
     
     document.getElementById('mark-all-read').addEventListener('click', markAllNotificationsRead);
@@ -602,7 +943,12 @@ async function loadNotifications() {
     };
     scheduleNotifications.forEach(mergeIn);
     dutyNotifications.forEach(mergeIn);
-    const notifications = Array.from(byId.values()).sort((a, b) => a.time - b.time);
+    let notifications = Array.from(byId.values()).sort((a, b) => a.time - b.time);
+    // 忽略已被刪除的通知（持久化於前端黑名單）
+    const deleted = window.__deletedNotificationIds;
+    if (deleted && deleted.size) {
+        notifications = notifications.filter(n => !deleted.has(String(n.id)));
+    }
     try { window.__notifications = notifications; } catch (e) {}
 
     notificationsList.innerHTML = '';
@@ -695,8 +1041,9 @@ function computeScheduleNotifications(schedules) {
                 if (!Number.isNaN(rh) && !Number.isNaN(rm)) {
                     t.setHours(rh, rm, 0, 0);
                 }
+                const ownerPart = s.ownerId || (window.__auth?.currentUser?.uid || 'me');
                 out.push({
-                    id: `sched_${s.id}_${d}`,
+                    id: `sched_${ownerPart}_${s.id}_${d}`,
                     title: s.title || '行程提醒',
                     message: `行程「${s.title || ''}」於 ${formatYMD(dt)} ${s.time || ''} ${s.location || ''}`.trim(),
                     time: t,
@@ -1178,6 +1525,13 @@ function deleteNotification(id) {
         if (!confirm('確定要刪除此通知嗎？')) return;
         const arr = Array.isArray(window.__notifications) ? window.__notifications : [];
         const next = arr.filter(n => String(n.id) !== String(id));
+        // 將刪除的通知加入黑名單，避免重新生成時再顯示
+        try {
+            if (!window.__deletedNotificationIds) {
+                window.__deletedNotificationIds = new Set();
+            }
+            window.__deletedNotificationIds.add(String(id));
+        } catch (e) {}
         window.__notifications = next;
         loadNotifications();
     } catch (e) {
