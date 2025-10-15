@@ -202,6 +202,23 @@ async function applyCalendarStatus(year, month) {
         const snap = await getDoc(ref);
         const workdays = new Set((snap.exists() ? (snap.data().days || []) : []).map(n => Number(n)));
 
+        // 讀取值班名單作為工作日（本月有名單的週五）
+        let dutySet = new Set();
+        try {
+            const generalRef = doc(db, 'settings', 'general');
+            const setSnap = await getDoc(generalRef);
+            const roster = setSnap.exists() ? (setSnap.data().fridayDutyRoster || {}) : {};
+            Object.keys(roster).forEach(iso => {
+                const dt = new Date(iso);
+                const names = roster[iso] || [];
+                if (dt.getFullYear() === year && dt.getMonth() === month && Array.isArray(names) && names.length > 0) {
+                    dutySet.add(iso);
+                }
+            });
+        } catch (e) {
+            // 無法載入值班名單時略過
+        }
+
         const startTS = Timestamp?.fromDate ? Timestamp.fromDate(new Date(year, month, 1)) : new Date(year, month, 1);
         const endTS = Timestamp?.fromDate ? Timestamp.fromDate(new Date(year, month + 1, 0, 23, 59, 59, 999)) : new Date(year, month + 1, 0, 23, 59, 59, 999);
         const q = query(
@@ -231,20 +248,28 @@ async function applyCalendarStatus(year, month) {
             const d = dt.getDate();
             // 當月日期才標色
             if (dt.getMonth() !== month) return;
+            const isTodayCell = cell.classList.contains('bg-red-100');
 
             const status = map.get(iso);
             if (status && status.start && status.end) {
-                cell.classList.remove('bg-gray-200');
+                cell.classList.remove('bg-gray-200','bg-blue-100','border-blue-300','bg-red-100','border-red-300');
                 cell.classList.add('bg-green-100','border-green-300');
                 return;
             }
             if (status && (status.start !== status.end)) {
-                cell.classList.remove('bg-gray-200');
+                cell.classList.remove('bg-gray-200','bg-blue-100','border-blue-300','bg-green-100','border-green-300');
                 cell.classList.add('bg-red-100','border-red-300');
                 return;
             }
-            if (workdays.has(d)) {
+            if (workdays.has(d) || dutySet.has(iso)) {
+                cell.classList.remove('bg-gray-200');
                 cell.classList.add('bg-blue-100','border-blue-300');
+                return;
+            }
+            // 非上班日一律灰色底（保留「今天」樣式）
+            if (!isTodayCell) {
+                cell.classList.remove('bg-blue-100','border-blue-300','bg-green-100','border-green-300','bg-red-100','border-red-300');
+                cell.classList.add('bg-gray-200');
             }
         });
     } catch (e) {
@@ -559,6 +584,11 @@ async function applyFridayDutyBadges(year, month) {
             if (!Array.isArray(names) || names.length === 0) return;
             const cell = document.querySelector(`#calendar-grid [data-ymd="${iso}"]`);
             if (!cell) return;
+            // 值班日視同上班日：未完成打卡與非異常，套用淺藍底
+            if (!cell.classList.contains('bg-green-100') && !cell.classList.contains('bg-red-100')) {
+                cell.classList.remove('bg-gray-200');
+                cell.classList.add('bg-blue-100','border-blue-300');
+            }
             const badgeWrap = document.createElement('div');
             badgeWrap.className = 'mt-1';
             const badge = document.createElement('span');
