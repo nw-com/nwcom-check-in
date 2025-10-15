@@ -477,6 +477,8 @@ function loadPersonalSchedule() {
             const ref = collection(db, 'users', auth.currentUser.uid, 'schedules');
             const snap = await getDocs(ref);
             const schedules = [];
+            // 載入使用者名單供顯示陪同參與人員名稱
+            const usersMap = await fetchUsersOnce().catch(() => ({}));
             snap.forEach(d => {
                 const data = d.data();
                 const dateTime = data.dateTime?.toDate?.() ||
@@ -495,7 +497,9 @@ function loadPersonalSchedule() {
                     reminderTime: (typeof data.reminderTime === 'string' && data.reminderTime.includes(':')) ? data.reminderTime : '09:00',
                     location: data.location || '',
                     description: data.description || '',
-                    remindersDays: Array.isArray(data.remindersDays) ? data.remindersDays : [2,1]
+                    remindersDays: Array.isArray(data.remindersDays) ? data.remindersDays : [2,1],
+                    participants: Array.isArray(data.participants) ? data.participants : [],
+                    participantsNames: Array.isArray(data.participants) ? data.participants.map(uid => usersMap?.[uid] || uid) : []
                 });
             });
             schedules.sort((a,b) => (a.date?.getTime?.() || 0) - (b.date?.getTime?.() || 0));
@@ -529,6 +533,9 @@ function loadPersonalSchedule() {
                                 <span><i data-lucide="map-pin" class="w-4 h-4 inline mr-1"></i>${schedule.location}</span>
                             </div>
                             <p class="text-gray-600 mt-2">${schedule.description}</p>
+                            ${Array.isArray(schedule.participantsNames) && schedule.participantsNames.length ? `
+                            <p class="text-gray-600 mt-2 text-sm"><i data-lucide="users" class="w-4 h-4 inline mr-1"></i>陪同人員：${schedule.participantsNames.join('、')}</p>
+                            ` : ''}
                         </div>
                         <div class="flex space-x-2">
                             <button class="text-blue-600 hover:text-blue-800" onclick="editSchedule('${schedule.id}')">
@@ -577,19 +584,26 @@ function renderCalendarNotifications(container) {
 async function loadNotifications() {
     const notificationsList = document.getElementById('notifications-list');
     const fromSchedules = Array.isArray(window.__personalSchedules) ? window.__personalSchedules : [];
-    const existing = Array.isArray(window.__notifications) ? window.__notifications : null;
-    let scheduleNotifications = computeScheduleNotifications(fromSchedules);
+    const existing = Array.isArray(window.__notifications) ? window.__notifications : [];
+    const scheduleNotifications = computeScheduleNotifications(fromSchedules);
     let dutyNotifications = [];
     try { dutyNotifications = await computeDutyNotifications(); } catch (e) { dutyNotifications = []; }
-    let notifications = existing && existing.length > 0
-        ? existing
-        : [...scheduleNotifications, ...dutyNotifications];
-    // 如果剛重新計算，盡量保留既有已讀狀態
-    if (!existing || existing.length === 0) {
-        const prevMap = new Map((Array.isArray(window.__notifications) ? window.__notifications : []).map(n => [String(n.id), n.status]));
-        notifications = notifications.map(n => ({ ...n, status: prevMap.get(String(n.id)) || n.status || 'unread' }));
-        try { window.__notifications = notifications; } catch (e) {}
-    }
+    // 合併所有訊息來源（保留既有已讀狀態），確保「顯示所有訊息」
+    const byId = new Map();
+    // 先放入既有通知（可能包含手動或其它來源）
+    existing.forEach(n => {
+        byId.set(String(n.id), n);
+    });
+    // 合併行程提醒與值班通知
+    const mergeIn = (n) => {
+        const id = String(n.id);
+        const prev = byId.get(id);
+        byId.set(id, { ...n, status: prev?.status || n.status || 'unread' });
+    };
+    scheduleNotifications.forEach(mergeIn);
+    dutyNotifications.forEach(mergeIn);
+    const notifications = Array.from(byId.values()).sort((a, b) => a.time - b.time);
+    try { window.__notifications = notifications; } catch (e) {}
 
     notificationsList.innerHTML = '';
     if (notifications.length === 0) {
@@ -709,14 +723,10 @@ async function computeDutyNotifications() {
         const snap = await getDoc(settingsRef);
         const roster = snap.exists() ? (snap.data().fridayDutyRoster || {}) : {};
         const out = [];
-        const now = new Date();
         Object.keys(roster).forEach(iso => {
             const fri = new Date(iso);
             if (String(fri) === 'Invalid Date') return;
             const mon = new Date(fri.getTime() - 4 * 86400000);
-            // 僅產生未來 90 天的值班通知，避免過多歷史訊息
-            const diffDays = (fri - now) / 86400000;
-            if (diffDays < -7 || diffDays > 90) return;
             const names = Array.isArray(roster[iso]) ? roster[iso] : [];
             const msgNames = names.length ? names.join('、') : '（名單未設定）';
             // 設定週一 09:00 發送
@@ -792,6 +802,20 @@ function showAddScheduleModal() {
                     </div>
                 </div>
                 <div>
+                    <label class="block text-sm text-gray-700">提醒天數（可複選）</label>
+                    <div id="schedule-reminder-days" class="flex items-center space-x-4 mt-1">
+                        <label class="inline-flex items-center"><input type="checkbox" value="2" class="mr-2" checked>2天前</label>
+                        <label class="inline-flex items-center"><input type="checkbox" value="1" class="mr-2" checked>1天前</label>
+                        <label class="inline-flex items-center"><input type="checkbox" value="0" class="mr-2">當天</label>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-700">陪同參與人員（依帳號，可複選）</label>
+                    <div id="participants-list" class="max-h-40 overflow-y-auto border rounded p-2 space-y-1">
+                        <div class="text-sm text-gray-500">載入人員名單中...</div>
+                    </div>
+                </div>
+                <div>
                     <label class="block text-sm text-gray-700">地點</label>
                     <input id="schedule-location" type="text" class="w-full border rounded px-3 py-2" placeholder="輸入地點（可選）" />
                 </div>
@@ -818,12 +842,43 @@ function showAddScheduleModal() {
         document.getElementById('schedule-time').value = '09:00';
         document.getElementById('schedule-reminder-time').value = '09:00';
 
+        // 載入人員名單並生成複選項
+        (async () => {
+            try {
+                const users = await fetchUsersOnce();
+                const container = document.getElementById('participants-list');
+                container.innerHTML = '';
+                const auth = window.__auth;
+                const entries = Object.entries(users || {});
+                if (!entries.length) {
+                    container.innerHTML = '<div class="text-sm text-gray-500">目前沒有可選的人員</div>';
+                } else {
+                    entries.forEach(([uid, name]) => {
+                        if (auth?.currentUser?.uid && uid === auth.currentUser.uid) return; // 排除自己
+                        const row = document.createElement('label');
+                        row.className = 'flex items-center';
+                        row.innerHTML = `<input type="checkbox" class="mr-2" value="${uid}"><span class="text-sm">${name}</span>`;
+                        container.appendChild(row);
+                    });
+                }
+            } catch (e) {
+                console.warn('載入人員名單失敗', e);
+            }
+        })();
+
         document.getElementById('schedule-save').onclick = async () => {
             try {
                 const title = document.getElementById('schedule-title').value.trim();
                 const dateStr = document.getElementById('schedule-date').value;
                 const time = document.getElementById('schedule-time').value.trim();
                 const reminderTime = document.getElementById('schedule-reminder-time').value.trim();
+                const reminderDays = Array.from(document.querySelectorAll('#schedule-reminder-days input[type="checkbox"]'))
+                    .filter(el => el.checked)
+                    .map(el => parseInt(el.value, 10))
+                    .filter(v => !Number.isNaN(v));
+                const participants = Array.from(document.querySelectorAll('#participants-list input[type="checkbox"]'))
+                    .filter(el => el.checked)
+                    .map(el => el.value);
                 const location = document.getElementById('schedule-location').value.trim();
                 const description = document.getElementById('schedule-desc').value.trim();
                 if (!title) { alert('請輸入標題'); return; }
@@ -838,6 +893,8 @@ function showAddScheduleModal() {
                     date: Timestamp?.fromDate ? Timestamp.fromDate(date) : dateStr,
                     time,
                     reminderTime,
+                    remindersDays: (Array.isArray(reminderDays) && reminderDays.length) ? reminderDays : [2,1],
+                    participants: Array.isArray(participants) ? participants : [],
                     location,
                     description,
                     createdAt: serverTimestamp?.() || new Date().toISOString(),
@@ -889,6 +946,9 @@ function editSchedule(id) {
                             title: data.title || '',
                             date: data.date?.toDate?.() || (data.date ? new Date(data.date) : new Date()),
                             time: data.time || '',
+                            reminderTime: (typeof data.reminderTime === 'string' && data.reminderTime.includes(':')) ? data.reminderTime : '09:00',
+                            remindersDays: Array.isArray(data.remindersDays) ? data.remindersDays : [2,1],
+                            participants: Array.isArray(data.participants) ? data.participants : [],
                             location: data.location || '',
                             description: data.description || ''
                         };
@@ -933,6 +993,20 @@ function editSchedule(id) {
                             </div>
                         </div>
                         <div>
+                            <label class="block text-sm text-gray-700">提醒天數（可複選）</label>
+                            <div id="schedule-reminder-days" class="flex items-center space-x-4 mt-1">
+                                <label class="inline-flex items-center"><input type="checkbox" value="2" class="mr-2">2天前</label>
+                                <label class="inline-flex items-center"><input type="checkbox" value="1" class="mr-2">1天前</label>
+                                <label class="inline-flex items-center"><input type="checkbox" value="0" class="mr-2">當天</label>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm text-gray-700">陪同參與人員（依帳號，可複選）</label>
+                            <div id="participants-list" class="max-h-40 overflow-y-auto border rounded p-2 space-y-1">
+                                <div class="text-sm text-gray-500">載入人員名單中...</div>
+                            </div>
+                        </div>
+                        <div>
                             <label class="block text-sm text-gray-700">地點</label>
                             <input id="schedule-location" type="text" class="w-full border rounded px-3 py-2" value="${item.location}" />
                         </div>
@@ -953,12 +1027,52 @@ function editSchedule(id) {
                 document.getElementById('schedule-close').onclick = close;
                 document.getElementById('schedule-cancel').onclick = close;
 
+                // 預設提醒天數勾選
+                const days = Array.isArray(item.remindersDays) ? item.remindersDays : [2,1];
+                Array.from(document.querySelectorAll('#schedule-reminder-days input[type="checkbox"]')).forEach(el => {
+                    const v = parseInt(el.value, 10);
+                    if (!Number.isNaN(v) && days.includes(v)) el.checked = true;
+                });
+
+                // 載入人員名單並生成複選項，預設勾選既有參與人員
+                (async () => {
+                    try {
+                        const users = await fetchUsersOnce();
+                        const container = document.getElementById('participants-list');
+                        container.innerHTML = '';
+                        const auth = window.__auth;
+                        const entries = Object.entries(users || {});
+                        const selected = Array.isArray(item.participants) ? item.participants : [];
+                        if (!entries.length) {
+                            container.innerHTML = '<div class="text-sm text-gray-500">目前沒有可選的人員</div>';
+                        } else {
+                            entries.forEach(([uid, name]) => {
+                                if (auth?.currentUser?.uid && uid === auth.currentUser.uid) return; // 排除自己
+                                const row = document.createElement('label');
+                                row.className = 'flex items-center';
+                                const checked = selected.includes(uid) ? 'checked' : '';
+                                row.innerHTML = `<input type="checkbox" class="mr-2" value="${uid}" ${checked}><span class="text-sm">${name}</span>`;
+                                container.appendChild(row);
+                            });
+                        }
+                    } catch (e) {
+                        console.warn('載入人員名單失敗', e);
+                    }
+                })();
+
                 document.getElementById('schedule-save').onclick = async () => {
                     try {
                         const title = document.getElementById('schedule-title').value.trim();
                         const dateStr = document.getElementById('schedule-date').value;
                         const time = document.getElementById('schedule-time').value.trim();
                         const reminderTime = document.getElementById('schedule-reminder-time').value.trim();
+                        const reminderDays = Array.from(document.querySelectorAll('#schedule-reminder-days input[type="checkbox"]'))
+                            .filter(el => el.checked)
+                            .map(el => parseInt(el.value, 10))
+                            .filter(v => !Number.isNaN(v));
+                        const participants = Array.from(document.querySelectorAll('#participants-list input[type="checkbox"]'))
+                            .filter(el => el.checked)
+                            .map(el => el.value);
                         const location = document.getElementById('schedule-location').value.trim();
                         const description = document.getElementById('schedule-desc').value.trim();
                         if (!title) { alert('請輸入標題'); return; }
@@ -971,6 +1085,8 @@ function editSchedule(id) {
                             date: Timestamp?.fromDate ? Timestamp.fromDate(date) : dateStr,
                             time,
                             reminderTime,
+                            remindersDays: (Array.isArray(reminderDays) && reminderDays.length) ? reminderDays : [2,1],
+                            participants: Array.isArray(participants) ? participants : [],
                             location,
                             description,
                             updatedAt: serverTimestamp?.() || new Date().toISOString()
@@ -1244,6 +1360,39 @@ function fetchHolidaySettingsOnce() {
             resolve(window.__holidaySettingsCache);
         } catch (e) {
             window.__holidaySettingsCache = { weekendIsHoliday: false, holidays: [] };
+            reject(e);
+        }
+    });
+}
+
+// 讀取並快取使用者名單（供陪同參與人員勾選與顯示）
+function fetchUsersOnce() {
+    return new Promise(async (resolve, reject) => {
+        try {
+            if (window.__usersCache) {
+                resolve(window.__usersCache);
+                return;
+            }
+            const fs = window.__fs;
+            const db = window.__db;
+            if (!fs || !db) {
+                window.__usersCache = {};
+                resolve(window.__usersCache);
+                return;
+            }
+            const { collection, getDocs } = fs;
+            const ref = collection(db, 'users');
+            const snap = await getDocs(ref);
+            const map = {};
+            snap.forEach(d => {
+                const data = d.data();
+                const name = data?.displayName || data?.name || data?.account || d.id;
+                map[d.id] = String(name);
+            });
+            window.__usersCache = map;
+            resolve(map);
+        } catch (e) {
+            window.__usersCache = {};
             reject(e);
         }
     });
