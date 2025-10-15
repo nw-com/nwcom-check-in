@@ -931,7 +931,8 @@
                         const clearedKey = `dutyReminderCleared-${isoFriday}-${user.uid}`;
                         const cleared = localStorage.getItem(clearedKey) === '1';
 
-                        const shouldShow = (day === 1 && names.length > 0) || (day === 5 && names.length > 0 && !cleared);
+                        const inWeek = day >= 1 && day <= 5; // 週一到週五
+                        const shouldShow = (inWeek && names.length > 0 && !(day === 5 && cleared));
                         if (shouldShow) {
                             listEl.innerHTML = `
                                 <div class="p-3 bg-yellow-50 border border-yellow-200 rounded-md">

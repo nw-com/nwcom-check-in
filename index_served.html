@@ -772,6 +772,12 @@
                            </div>
                            <div class="text-xs text-gray-500 mt-2">e??a??a?�Dc??a?�a??a??a??c?�a??</div>
                        </div>
+                        <div id="dashboard-notifications" class="bg-white p-4 rounded-lg mb-4 shadow-sm border">
+                           <h3 class="font-bold text-gray-800 mb-2 flex items-center"><i data-lucide="bell" class="w-4 h-4 mr-2"></i>通知</h3>
+                           <div id="dashboard-notifications-list" class="space-y-2 text-gray-700">
+                             <div class="text-gray-500">讀取中...</div>
+                           </div>
+                        </div>
                     </div>
                 `;
                 lucide.createIcons();
@@ -834,6 +840,103 @@
                     openAllUsersStatusModal();
                 });
             }
+
+            // 儀錶板通知（週五值班提醒）
+            (async () => {
+                try {
+                    const fs = window.__fs || {};
+                    const db = window.__db;
+                    const user = window.__auth?.currentUser;
+                    const listEl = document.getElementById('dashboard-notifications-list');
+                    if (!db || !user || !listEl) return;
+
+                    const { doc, getDoc, collection, query, where, onSnapshot, Timestamp } = fs;
+
+                    function formatYMD(date) {
+                        const y = date.getFullYear();
+                        const m = String(date.getMonth() + 1).padStart(2, '0');
+                        const d = String(date.getDate()).padStart(2, '0');
+                        return `${y}-${m}-${d}`;
+                    }
+
+                    function getWeekFriday(date) {
+                        const d = new Date(date);
+                        const day = d.getDay();
+                        const diffToMonday = day === 0 ? -6 : (1 - day);
+                        const monday = new Date(d);
+                        monday.setDate(d.getDate() + diffToMonday);
+                        const friday = new Date(monday);
+                        friday.setDate(monday.getDate() + 4);
+                        return friday;
+                    }
+
+                    async function renderDutyReminder() {
+                        const now = new Date();
+                        const day = now.getDay(); // 0=Sun,1=Mon,...,5=Fri
+                        const friday = getWeekFriday(now);
+                        const isoFriday = formatYMD(friday);
+
+                        const settingsRef = doc(db, 'settings', 'general');
+                        const s = await getDoc(settingsRef);
+                        const roster = s.exists() ? (s.data().fridayDutyRoster || {}) : {};
+                        const names = roster[isoFriday] || [];
+
+                        const clearedKey = `dutyReminderCleared-${isoFriday}-${user.uid}`;
+                        const cleared = localStorage.getItem(clearedKey) === '1';
+
+                        const inWeek = day >= 1 && day <= 5; // 週一至週五都顯示
+                        const shouldShow = (inWeek && names.length > 0 && !(day === 5 && cleared));
+                        if (shouldShow) {
+                            listEl.innerHTML = `
+                                <div class="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                                  <div class="flex items-center justify-between">
+                                    <div class="flex items-center"><i data-lucide="alert-circle" class="w-4 h-4 mr-2 text-yellow-600"></i><span class="font-medium text-yellow-800">本週五值班</span></div>
+                                    <button id="view-calendar" class="text-blue-600 hover:underline text-sm">查看月曆</button>
+                                  </div>
+                                  <div class="mt-2 text-sm text-gray-700">值班人員：${names.join('、')}</div>
+                                  <div class="mt-1 text-xs text-gray-500">星期五（${isoFriday}）值班提醒</div>
+                                </div>`;
+                            const btn = document.getElementById('view-calendar');
+                            btn?.addEventListener('click', () => showPage('calendar', 'overview'));
+                            lucide.createIcons();
+                        } else {
+                            listEl.innerHTML = '<div class="text-gray-500">暫無通知</div>';
+                        }
+
+                        // 僅在週五當天監聽個人打卡以清除提醒
+                        if (day === 5 && names.length > 0 && !cleared) {
+                            const start = new Date(friday.getFullYear(), friday.getMonth(), friday.getDate());
+                            const end = new Date(friday.getFullYear(), friday.getMonth(), friday.getDate(), 23, 59, 59, 999);
+                            const tsStart = Timestamp?.fromDate ? Timestamp.fromDate(start) : start;
+                            const tsEnd = Timestamp?.fromDate ? Timestamp.fromDate(end) : end;
+                            const q = query(
+                                collection(db, 'clockInRecords'),
+                                where('userId', '==', user.uid),
+                                where('timestamp', '>=', tsStart),
+                                where('timestamp', '<=', tsEnd)
+                            );
+                            const unsubDuty = onSnapshot(q, (snap) => {
+                                let clearedNow = false;
+                                snap.forEach(d => {
+                                    const r = d.data();
+                                    if (r.type === '下班' || r.type === '自動下班') {
+                                        clearedNow = true;
+                                    }
+                                });
+                                if (clearedNow) {
+                                    localStorage.setItem(clearedKey, '1');
+                                    listEl.innerHTML = '<div class="text-gray-500">暫無通知</div>';
+                                }
+                            });
+                            state.activeListeners.push(unsubDuty);
+                        }
+                    }
+
+                    renderDutyReminder();
+                } catch (e) {
+                    console.warn('初始化儀錶板通知失敗', e);
+                }
+            })();
                 
                 const usersRef = collection(db, "users");
                 const unsubscribe = onSnapshot(query(usersRef), (querySnapshot) => {
@@ -1020,66 +1123,112 @@
                     }
                     const visibleUsersList = users.filter(user => visibleUsers[user.id] !== false);
                     
-                    // 排序：自訂狀態優先級 + 最近更新時間（新至舊） + 姓名
-                    const statusPriority = (user) => {
-                        const locationText = user.clockInStatus === '外出' && user.outboundLocation ? user.outboundLocation : user.lastLocation;
-                        const display = getStatusDisplayText(user.clockInStatus || '未打卡', locationText, user.dutyType);
-                        let isLeave = (user.clockInStatus === '臨時請假') || (display.includes('請假'));
-                        if (!isLeave) {
-                            const leave = user.leaveStatus || '';
-                            if (leave === 'approved' || leave === 'pending') {
-                                const now = new Date();
-                                const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-                                const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-                                if (user.leaveStartTime && user.leaveEndTime) {
-                                    const leaveStart = user.leaveStartTime.toDate ? user.leaveStartTime.toDate() : new Date(user.leaveStartTime);
-                                    const leaveEnd = user.leaveEndTime.toDate ? user.leaveEndTime.toDate() : new Date(user.leaveEndTime);
-                                    isLeave = leaveStart <= todayEnd && leaveEnd >= todayStart;
+                    (async () => {
+                        const latestMap = {};
+                        try {
+                            await Promise.all(visibleUsersList.map(async (u) => {
+                                try {
+                                    const qLatest = query(collection(db, 'clockInRecords'), where('userId', '==', u.id), orderBy('timestamp', 'desc'), limit(1));
+                                    const latestSnap = await getDocs(qLatest);
+                                    if (!latestSnap.empty) {
+                                        latestMap[u.id] = latestSnap.docs[0].data();
+                                    } else {
+                                        latestMap[u.id] = null;
+                                    }
+                                } catch (e) {
+                                    console.warn('載入使用者最新打卡失敗:', e);
+                                    latestMap[u.id] = null;
                                 }
-                            }
+                            }));
+                        } catch (e) {
+                            console.warn('建立最新打卡對應表失敗:', e);
                         }
 
-                        if (display.includes('上班') && (display.includes('辦公室') || display.includes('在辦公室'))) return 1;
-                        if (display.includes('返回') && (display.includes('辦公室') || display.includes('在辦公室'))) return 2;
-                        if (display.startsWith('外出-')) return 3;
-                        if (display.startsWith('抵達-')) return 4;
-                        if (display.startsWith('離開-')) return 5;
-                        if (isLeave) return 6;
-                        if (display.includes('已下班')) return 7;
-                        return 8;
-                    };
+                        const prioOf = (display, isLeave) => {
+                            if (display.includes('上班') && (display.includes('辦公室') || display.includes('在辦公室'))) return 1;
+                            if (display.includes('返回') && (display.includes('辦公室') || display.includes('在辦公室'))) return 2;
+                            if (display.startsWith('外出-')) return 3;
+                            if (display.startsWith('抵達-')) return 4;
+                            if (display.startsWith('離開-')) return 5;
+                            if (isLeave) return 6;
+                            if (display.includes('已下班')) return 7;
+                            return 8;
+                        };
 
-                    visibleUsersList.sort((a, b) => {
-                        const prA = statusPriority(a);
-                        const prB = statusPriority(b);
-                        if (prA !== prB) return prA - prB;
-                        const tA = a.lastUpdated ? (a.lastUpdated.toDate ? a.lastUpdated.toDate() : new Date(a.lastUpdated)) : new Date(0);
-                        const tB = b.lastUpdated ? (b.lastUpdated.toDate ? b.lastUpdated.toDate() : new Date(b.lastUpdated)) : new Date(0);
-                        if (tA.getTime() !== tB.getTime()) return tB - tA;
-                        return a.name.localeCompare(b.name, 'zh-Hant');
-                    }).forEach(user => {
-                        const locationText = user.clockInStatus === 'a??a?o' && user.outboundLocation ? user.outboundLocation : user.lastLocation;
-                        const statusText = getStatusDisplayText(user.clockInStatus || 'a?aa??a?!', locationText, user.dutyType);
-                        const statusColor = getStatusColor(statusText);
-                        const timeFormatted = '讀取中...';
-                        listEl.innerHTML += `
-                            <div class=\"flex items-center justify-between bg-white p-3 rounded-md shadow-sm border\">
-                                <div class=\"flex items-center\">
-                                    <img src=\"${user.avatarUrl || `https://placehold.co/32x32/EFEFEF/333333?text=${user.name?.charAt(0) || 'U'}`}\" class=\"w-8 h-8 rounded-full mr-3 object-cover\">
-                                    <div>
-                                        <span class=\"font-medium text-gray-700\">${user.name || user.displayName || 'a?aa??a??'}</span>
-                                        <div class=\"flex items-center mt-1\">
-                                            <span class=\"text-sm font-semibold ${statusColor} mr-2\">${statusText}</span>
-                                            <span class=\"text-xs text-gray-500\" id=\"clock-time-${user.id}\">${timeFormatted}</span>
+                        visibleUsersList.sort((a, b) => {
+                            const latestA = latestMap[a.id] || null;
+                            const latestB = latestMap[b.id] || null;
+                            const locA = latestA?.locationName || (a.clockInStatus === '外出' && a.outboundLocation ? a.outboundLocation : a.lastLocation);
+                            const locB = latestB?.locationName || (b.clockInStatus === '外出' && b.outboundLocation ? b.outboundLocation : b.lastLocation);
+                            const displayA = latestA ? getStatusDisplayText(latestA.type || '未知', latestA.locationName || null, latestA.dutyType || null)
+                                                     : getStatusDisplayText(a.clockInStatus || '未打卡', locA, a.dutyType);
+                            const displayB = latestB ? getStatusDisplayText(latestB.type || '未知', latestB.locationName || null, latestB.dutyType || null)
+                                                     : getStatusDisplayText(b.clockInStatus || '未打卡', locB, b.dutyType);
+                            let isLeaveA = (a.clockInStatus === '臨時請假') || (displayA.includes('請假'));
+                            if (!isLeaveA) {
+                                const leaveA = a.leaveStatus || '';
+                                if (leaveA === 'approved' || leaveA === 'pending') {
+                                    const now = new Date();
+                                    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                                    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+                                    if (a.leaveStartTime && a.leaveEndTime) {
+                                        const leaveStartA = a.leaveStartTime.toDate ? a.leaveStartTime.toDate() : new Date(a.leaveStartTime);
+                                        const leaveEndA = a.leaveEndTime.toDate ? a.leaveEndTime.toDate() : new Date(a.leaveEndTime);
+                                        isLeaveA = leaveStartA <= todayEnd && leaveEndA >= todayStart;
+                                    }
+                                }
+                            }
+                            let isLeaveB = (b.clockInStatus === '臨時請假') || (displayB.includes('請假'));
+                            if (!isLeaveB) {
+                                const leaveB = b.leaveStatus || '';
+                                if (leaveB === 'approved' || leaveB === 'pending') {
+                                    const now = new Date();
+                                    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                                    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+                                    if (b.leaveStartTime && b.leaveEndTime) {
+                                        const leaveStartB = b.leaveStartTime.toDate ? b.leaveStartTime.toDate() : new Date(b.leaveStartTime);
+                                        const leaveEndB = b.leaveEndTime.toDate ? b.leaveEndTime.toDate() : new Date(b.leaveEndTime);
+                                        isLeaveB = leaveStartB <= todayEnd && leaveEndB >= todayStart;
+                                    }
+                                }
+                            }
+                            const prA = prioOf(displayA, isLeaveA);
+                            const prB = prioOf(displayB, isLeaveB);
+                            if (prA !== prB) return prA - prB;
+                            const tA = latestA?.timestamp?.toDate?.() ? latestA.timestamp.toDate() :
+                                       (a.lastUpdated ? (a.lastUpdated.toDate ? a.lastUpdated.toDate() : new Date(a.lastUpdated)) : new Date(0));
+                            const tB = latestB?.timestamp?.toDate?.() ? latestB.timestamp.toDate() :
+                                       (b.lastUpdated ? (b.lastUpdated.toDate ? b.lastUpdated.toDate() : new Date(b.lastUpdated)) : new Date(0));
+                            if (tA.getTime() !== tB.getTime()) return tB - tA;
+                            return a.name.localeCompare(b.name, 'zh-Hant');
+                        }).forEach(user => {
+                            const latest = latestMap[user.id] || null;
+                            const locText = latest?.locationName || (user.clockInStatus === '外出' && user.outboundLocation ? user.outboundLocation : user.lastLocation);
+                            const statusText = latest ? getStatusDisplayText(latest.type || '未知', latest.locationName || null, latest.dutyType || null)
+                                                      : getStatusDisplayText(user.clockInStatus || '未打卡', locText, user.dutyType);
+                            const statusColor = getStatusColor(statusText);
+                            const clockInTime = latest?.timestamp?.toDate?.() ? latest.timestamp.toDate() : (latest?.timestamp ? new Date(latest.timestamp) : null);
+                            const timeFormatted = clockInTime ? clockInTime.toLocaleString('zh-TW', {year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'}) : 'N/A';
+                            listEl.innerHTML += `
+                                <div class=\"flex items-center justify-between bg-white p-3 rounded-md shadow-sm border\">
+                                    <div class=\"flex items-center\">
+                                        <img src=\"${user.avatarUrl || `https://placehold.co/32x32/EFEFEF/333333?text=${user.name?.charAt(0) || 'U'`}\" class=\"w-8 h-8 rounded-full mr-3 object-cover\">
+                                        <div>
+                                            <span class=\"font-medium text-gray-700\">${user.name || user.displayName || '未命名'}\</span>
+                                            <div class=\"flex items-center mt-1\">
+                                                <span class=\"text-sm font-semibold ${statusColor} mr-2\">${statusText}</span>
+                                                <span class=\"text-xs text-gray-500\" id=\"clock-time-${user.id}\">${timeFormatted}</span>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                                <div class=\"flex space-x-2\">
-                                    ${user.lastPhotoUrl ? `<button class=\"view-photo-btn p-2 bg-blue-100 rounded-md\" data-photo=\"${user.lastPhotoUrl}\" data-desc=\"${user.lastLocation || ''}\"><i data-lucide=\"image\" class=\"w-6 h-6 text-blue-600\"></i></button>` : ''}
-                                    ${user.lastLocation ? `<button class=\"view-map-btn p-2 bg-green-100 rounded-md\" data-lat=\"${user.lastLocation?.latitude || 0}\" data-lng=\"${user.lastLocation?.longitude || 0}\"><i data-lucide=\"map-pin\" class=\"w-6 h-6 text-green-600\"></i></button>` : ''}
-                                </div>
-                            </div>`;
-                    });
+                                    <div class=\"flex space-x-2\">
+                                        ${user.lastPhotoUrl ? `<button class=\"view-photo-btn p-2 bg-blue-100 rounded-md\" data-photo=\"${user.lastPhotoUrl}\" data-desc=\"${user.lastLocation || ''}\"><i data-lucide=\"image\" class=\"w-6 h-6 text-blue-600\"></i></button>` : ''}
+                                        ${user.lastLocation ? `<button class=\"view-map-btn p-2 bg-green-100 rounded-md\" data-lat=\"${user.lastLocation?.latitude || 0}\" data-lng=\"${user.lastLocation?.longitude || 0}\"><i data-lucide=\"map-pin\" class=\"w-6 h-6 text-green-600\"></i></button>` : ''}
+                                    </div>
+                                </div>`;
+                        });
+                        try { lucide.createIcons(); } catch (e) {}
+                    })();
                     // 更新每位使用者的最新打卡時間
                     try {
                         Promise.all(visibleUsersList.map(async (u) => {
@@ -4271,55 +4420,8 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                             </div>
                         </div>
                         
-                        <div class="bg-white p-4 rounded-md shadow-sm border mb-4">
-                            <h3 class="font-bold text-lg mb-4">e?aa??a�M?c?-a??a?!e�L-aR?</h3>
-                            <div class="space-y-4">
-                                <div class="flex items-center justify-between">
-                                    <label for="enable-auto-clock-out" class="text-gray-700">a??c?�Le?aa??a�M?c?-a??a?!</label>
-                                    <label class="switch">
-                                        <input type="checkbox" id="enable-auto-clock-out">
-                                        <span class="slider round"></span>
-                                    </label>
-                                </div>
-                                <div class="flex items-center justify-between">
-                                    <label for="work-hours" class="text-gray-700">a�P�Da??a??a?�Mi??a�X?a??i??</label>
-                                    <div class="flex items-center space-x-2">
-                                        <input type="number" id="work-hours" min="1" max="24" value="8" class="w-20 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500">
-                                        <span class="text-gray-500 text-sm">a�X?a??</span>
-                                    </div>
-                                </div>
-                                <div class="text-sm text-gray-600 bg-gray-50 p-3 rounded-md">
-                                    <i data-lucide="info" class="w-4 h-4 inline mr-1"></i>
-                                    a??c?�La??i??c3?c�g��a�X?a?�La�M?c?-a??a?!a??c??a??aR?a??a?�Me?aa??a?�Pe!?a�M?c?-a??a?!i??c?�a??e!��c?oc?oa�?a�P2a�M?c?--a?aa??a?!a�?
-                                </div>
-                            </div>
-                        </div>
                         
-                        <div class="bg-white p-4 rounded-md shadow-sm border mb-4" id="admin-overtime-section" style="display: none;">
-                            <h3 class="font-bold text-lg mb-4">cR!c??a?!a??e??</h3>
-                            <div class="space-y-4">
-                                <div class="flex items-center justify-between">
-                                    <div>
-                                        <label class="text-gray-700 font-medium">aa�Fa?�De??a??c?�a??</label>
-                                        <p class="text-sm text-gray-500">aa�Fa?�Da?�a??a?!a�P�Da?��a?|a??e??e??a�P�Da??a??a?�Mc??a??a3?</p>
-                                    </div>
-                                    <div class="flex space-x-2">
-                                        <button id="check-overtime-btn" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 flex items-center">
-                                            <i data-lucide="clock" class="w-4 h-4 mr-2"></i>aa�Fa?�De??a??
-                                        </button>
-                                        <button id="test-overtime-btn" class="bg-orange-600 text-white px-4 py-2 rounded-md hover:bg-orange-700 flex items-center">
-                                            <i data-lucide="test-tube" class="w-4 h-4 mr-2"></i>a�M?ec|e??a??
-                                        </button>
-                                    </div>
-                                </div>
-                                <div id="overtime-results" class="hidden">
-                                    <div class="bg-yellow-50 border border-yellow-200 rounded-md p-3">
-                                        <h4 class="font-medium text-yellow-800 mb-2">e??a??a?!a�P�Da??e!�L</h4>
-                                        <div id="overtime-list" class="space-y-2"></div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                        
                         
                         <div class="bg-white p-4 rounded-md shadow-sm border mb-4">
                             <h3 class="font-bold text-lg mb-4">e!��c?oa?�a??a�M3e??</h3>
@@ -4350,16 +4452,10 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                         const settings = docSnap.data();
                         document.getElementById('show-employee-status').checked = settings.showEmployeeStatus !== false;
                         
-                        // e??a?�De?aa??a�M?c?-a??a?!e�L-aR?
-                        document.getElementById('enable-auto-clock-out').checked = settings.enableAutoClockOut || false;
-                        document.getElementById('work-hours').value = settings.workHours || 8;
-                        
                         // e??a?�Da??c?�Le�?e!��c?oe�L-aR?
                         loadUserDisplaySettings(settings.visibleUsers || {});
                     } else {
                         // a|?a??e�L-aR?a�M?a-?a?�Li??e??a?�De??e�L-a�?i??a?�Le?�Le!��c?oi??
-                        document.getElementById('enable-auto-clock-out').checked = false;
-                        document.getElementById('work-hours').value = 8;
                         loadUserDisplaySettings({});
                     }
                 }).catch(error => {
@@ -4456,8 +4552,7 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                     try {
                         showLoading(true);
                         const showEmployeeStatus = document.getElementById('show-employee-status').checked;
-                        const enableAutoClockOut = document.getElementById('enable-auto-clock-out').checked;
-                        const workHours = parseInt(document.getElementById('work-hours').value) || 8;
+                        
                         
                         // a??e??a??c?�Le�?e!��c?oe�L-aR?
                         const visibleUsers = {};
@@ -4472,8 +4567,6 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                         // a?2a-?a?�X Firebase
                         await setDoc(doc(db, "settings", "general"), {
                             showEmployeeStatus,
-                            enableAutoClockOut,
-                            workHours,
                             visibleUsers,
                             updatedAt: serverTimestamp()
                         }, { merge: true });
@@ -4487,111 +4580,8 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                     }
                 });
                 
-                // aa�Fa?�Dc?�La??a?��a?|c?ocR!c??a?!i??a|?a??a?��a??e!��c?ocR!c??a?!a??e??
-                (window.checkAdminStatus ? window.checkAdminStatus() : Promise.resolve(false)).then(isAdmin => {
-                    if (isAdmin) {
-                        document.getElementById('admin-overtime-section').style.display = 'block';
-                        
-                        // a�P?a??aa�Fa?�De??a??a??e??c??ao?a??c?�Ge??a?�L
-                        document.getElementById('check-overtime-btn').addEventListener('click', async () => {
-                            try {
-                                const btn = document.getElementById('check-overtime-btn');
-                                const originalText = btn.innerHTML;
-                                btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 mr-2 animate-spin"></i>aa�Fa?�Da�M-...';
-                                btn.disabled = true;
-                                
-                                // ea?c?�Laa�Fa?�De??a??c?�a??c??a??a?�M
-                                const overtimeUsers = await checkAllUsersOvertimeStatus();
-                                
-                                // e!��c?oc�g?a??
-                                const resultsDiv = document.getElementById('overtime-results');
-                                const listDiv = document.getElementById('overtime-list');
-                                
-                                if (overtimeUsers && overtimeUsers.length > 0) {
-                                    listDiv.innerHTML = '';
-                                    overtimeUsers.forEach(user => {
-                                        const userDiv = document.createElement('div');
-                                        userDiv.className = 'flex items-center justify-between p-2 bg-white rounded border';
-                                        userDiv.innerHTML = `
-                                            <div>
-                                                <span class="font-medium">${user.displayName}</span>
-                                                <span class="text-sm text-gray-500 ml-2">a�P2a�P�Da?? ${user.workingHours} a�X?a??</span>
-                                            </div>
-                                            <span class="text-xs text-gray-400">${user.clockInTime.toLocaleString()}</span>
-                                        `;
-                                        listDiv.appendChild(userDiv);
-                                    });
-                                    resultsDiv.classList.remove('hidden');
-                                } else {
-                                    listDiv.innerHTML = '<div class="text-center text-gray-600 py-2">c?Ra??a2?a??e??a??c??a?!a�P�D</div>';
-                                    resultsDiv.classList.remove('hidden');
-                                }
-                                
-                            } catch (error) {
-                                console.error('aa�Fa?�De??a??c?�a??a?��a??:', error);
-                                showToast('aa�Fa?�De??a??c?�a??a?��a??i??' + error.message, true);
-                            } finally {
-                                const btn = document.getElementById('check-overtime-btn');
-                                btn.innerHTML = '<i data-lucide="clock" class="w-4 h-4 mr-2"></i>aa�Fa?�De??a??';
-                                btn.disabled = false;
-                                lucide.createIcons();
-                            }
-                         });
-                         
-                         // a�P?a??a�M?ec|e??a??a??e??c??ao?a??c?�Ge??a?�L
-                         document.getElementById('test-overtime-btn').addEventListener('click', async () => {
-                             try {
-                                 const user = auth.currentUser;
-                                 if (!user) {
-                                     showToast('e??a??c??a?�D', true);
-                                     return;
-                                 }
-                                 
-                                 const btn = document.getElementById('test-overtime-btn');
-                                 btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 mr-2 animate-spin"></i>a�M?ec|a�M-...';
-                                 btn.disabled = true;
-                                 
-                                 // a�L!a??e??a??a??a3?i??a?oc??a�M�c-?a�?9a�X?a??a??a�M?c?-a�?c??a??e|?a??a?!c���e??
-                                 const nineHoursAgo = new Date();
-                                 nineHoursAgo.setHours(nineHoursAgo.getHours() - 9);
-                                 const db = window.__db; const { Timestamp, GeoPoint, addDoc, collection, serverTimestamp, setDoc, doc } = window.__fs;
-                                 const ts = Timestamp.fromDate(nineHoursAgo);
-                                 const loc = new GeoPoint(25.0330, 121.5654);
-                                 await addDoc(collection(db, 'clockInRecords'), {
-                                     userId: user.uid,
-                                     type: 'a�M?c?-',
-                                     timestamp: ts,
-                                     location: loc,
-                                     photoUrls: [],
-                                     descriptions: [],
-                                     deviceId: 'test-device'
-                                 });
-                                 // a�X?a??c?�Le�?c?�a??e�L-c?oa�M?c?-i??a??a?��a?�Xa??e�L��a??a??i??
-                                 await setDoc(doc(db, 'users', user.uid), {
-                                     clockInStatus: 'a�M?c?-',
-                                     status: 'a�M?c?-',
-                                     lastUpdated: serverTimestamp()
-                                 }, { merge: true });
-                                 
-                                 showToast('a�P2e�L-aR?a�M?ec|e??a??c?�a??i??9a�X?a??a??a�M?c?-i??i??e??e??a?�Xe??a?�De??e?�Fa�M?ec|e?aa??a�M?c?-a??a?!a??e??');
-                                 
-                                 // 3c��?a??e?aa??e??a?�Xe??a?�De??e?�F
-                                 setTimeout(() => {
-                                     window.location.reload();
-                                 }, 3000);
-                                 
-                             } catch (error) {
-                                 console.error('e�L-aR?a�M?ec|e??a??c?�a??a?��a??:', error);
-                                 showToast('e�L-aR?a�M?ec|e??a??c?�a??a?��a??i??' + error.message, true);
-                             } finally {
-                                 const btn = document.getElementById('test-overtime-btn');
-                                 btn.innerHTML = '<i data-lucide="test-tube" class="w-4 h-4 mr-2"></i>a�M?ec|e??a??';
-                                 btn.disabled = false;
-                                 lucide.createIcons();
-                             }
-                         });
-                     }
-                 });
+                // 移除管理員加班檢查／測試按鈕邏輯，已不再提供
+                // （保留全域 window.checkAdminStatus 定義供其他功能使用）
                 
                 // aa�Fa?�DcR!c??a?!c?�a??c??e??a?ca??a?�M
                 // 確保已存在全域 window.checkAdminStatus，避免重複定義
