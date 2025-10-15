@@ -3076,6 +3076,26 @@
                                     dutyType: null,
                                     isAutomatic: false
                                 });
+                                // 同步更新 users 狀態，讓儀錶板與定位打卡按鈕正確顯示
+                                try {
+                                    const newStatus = r.type; // 可能為：上班/下班/外出/抵達/離開/返回
+                                    const updatePayload = {
+                                        status: newStatus,
+                                        clockInStatus: newStatus,
+                                        lastUpdated: Timestamp?.fromDate ? Timestamp.fromDate(new Date()) : new Date()
+                                    };
+                                    // 核准「上班」補打卡時，更新 lastClockInTime 供排序與顯示
+                                    if (newStatus === '上班') {
+                                        updatePayload.lastClockInTime = Timestamp?.fromDate ? Timestamp.fromDate(ts) : ts;
+                                    }
+                                    // 外出/抵達/離開可更新外出地點文字（若有）
+                                    if (newStatus === '外出' || newStatus === '抵達' || newStatus === '離開') {
+                                        updatePayload.outboundLocation = r.locationName || '';
+                                    }
+                                    await updateDoc(doc(db, 'users', r.userId), updatePayload);
+                                } catch (e) {
+                                    console.warn('更新使用者狀態失敗（已新增打卡紀錄，但 users 狀態未同步）', e);
+                                }
                                 await updateDoc(doc(db, 'retroClockRequests', id), {
                                     status: 'approved',
                                     reviewerId: window.__auth?.currentUser?.uid || null,
