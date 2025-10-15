@@ -81,7 +81,7 @@ function renderCalendarOverview(container) {
             </div>
             
             <div class="bg-white rounded-lg shadow-sm border p-4">
-                <h3 class="text-lg font-bold text-gray-800 mb-3">${markedTitle}</h3>
+                <h3 id="marked-title" class="text-lg font-bold text-gray-800 mb-3">${markedTitle}</h3>
                 <div id="monthly-events" class="space-y-2">
                     <!-- 標註日期的行程與提醒將在這裡顯示 -->
                 </div>
@@ -93,7 +93,13 @@ function renderCalendarOverview(container) {
         .catch(() => {})
         .finally(() => {
             generateCalendar(displayedDate.getFullYear(), displayedDate.getMonth());
-            loadMarkedSchedule(displayedDate.getFullYear(), displayedDate.getMonth());
+            // 初始選取當月中的今天，若非本月則選取本月第一天
+            const year = displayedDate.getFullYear();
+            const month = displayedDate.getMonth();
+            const todayIso = formatYMD(today);
+            const isTodayInMonth = (today.getFullYear() === year && today.getMonth() === month);
+            const initialIso = isTodayInMonth ? todayIso : formatYMD(new Date(year, month, 1));
+            onCalendarDateSelect(initialIso);
         });
     
     // 月份切換事件
@@ -101,14 +107,22 @@ function renderCalendarOverview(container) {
         // 向前一個月（自目前顯示的月份）
         displayedDate.setMonth(displayedDate.getMonth() - 1);
         generateCalendar(displayedDate.getFullYear(), displayedDate.getMonth());
-        loadMarkedSchedule(displayedDate.getFullYear(), displayedDate.getMonth());
+        const y = displayedDate.getFullYear();
+        const m = displayedDate.getMonth();
+        const isTodayInMonth = (today.getFullYear() === y && today.getMonth() === m);
+        const initialIso = isTodayInMonth ? formatYMD(today) : formatYMD(new Date(y, m, 1));
+        onCalendarDateSelect(initialIso);
     });
     
     document.getElementById('next-month').addEventListener('click', () => {
         // 向後一個月（自目前顯示的月份）
         displayedDate.setMonth(displayedDate.getMonth() + 1);
         generateCalendar(displayedDate.getFullYear(), displayedDate.getMonth());
-        loadMarkedSchedule(displayedDate.getFullYear(), displayedDate.getMonth());
+        const y = displayedDate.getFullYear();
+        const m = displayedDate.getMonth();
+        const isTodayInMonth = (today.getFullYear() === y && today.getMonth() === m);
+        const initialIso = isTodayInMonth ? formatYMD(today) : formatYMD(new Date(y, m, 1));
+        onCalendarDateSelect(initialIso);
     });
 }
 
@@ -180,6 +194,9 @@ function generateCalendar(year, month) {
             </div>
         `;
 
+        dayCell.addEventListener('click', () => {
+            onCalendarDateSelect(dayCell.dataset.ymd);
+        });
         calendarGrid.appendChild(dayCell);
     }
 
@@ -187,6 +204,74 @@ function generateCalendar(year, month) {
     applyCalendarStatus(year, month).catch(() => {});
     // 在當月的週五標註值班徽章與人員
     applyFridayDutyBadges(year, month).catch(() => {});
+}
+
+// 點選月曆日期後，更新下方「日期行程表」內容（目前顯示週五值班名單）
+async function onCalendarDateSelect(iso) {
+    try {
+        // 更新標題為所選日期
+        const title = document.getElementById('marked-title');
+        if (title) {
+            const d = new Date(iso);
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            title.textContent = `${mm}-${dd} 日期行程表`;
+        }
+
+        // 高亮選定的日期格（簡單描邊）
+        try {
+            document.querySelectorAll('#calendar-grid [data-ymd]').forEach(el => {
+                el.classList.remove('ring-2','ring-blue-400');
+            });
+            const selected = document.querySelector(`#calendar-grid [data-ymd="${iso}"]`);
+            selected?.classList.add('ring-2','ring-blue-400');
+        } catch (e) {}
+
+        await loadDailyMarkedSchedule(iso);
+    } catch (e) {
+        console.warn('更新選定日期行程表失敗', e);
+    }
+}
+
+// 載入指定日期的標註行程（目前支援週五值班），無則顯示暫無
+async function loadDailyMarkedSchedule(iso) {
+    try {
+        const listEl = document.getElementById('monthly-events');
+        if (!listEl) return;
+        const fs = window.__fs;
+        const db = window.__db;
+        if (!fs || !db) {
+            listEl.innerHTML = '<p class="text-gray-500 text-center py-4">本日暫無標註行程</p>';
+            return;
+        }
+        const { doc, getDoc } = fs;
+        const settingsRef = doc(db, 'settings', 'general');
+        const snap = await getDoc(settingsRef);
+        const roster = snap.exists() ? (snap.data().fridayDutyRoster || {}) : {};
+
+        listEl.innerHTML = '';
+        const names = roster[iso] || [];
+        if (Array.isArray(names) && names.length > 0) {
+            const dt = new Date(iso);
+            const eventDiv = document.createElement('div');
+            eventDiv.className = 'flex items-center justify-between p-3 bg-gray-50 rounded-md';
+            eventDiv.innerHTML = `
+                <div class="flex items-center space-x-3">
+                    <div class="w-3 h-3 rounded-full ${getEventColor('duty')}"></div>
+                    <span class="font-medium">週五值班</span>
+                    <span class="text-sm text-gray-600">${names.join('、')}</span>
+                </div>
+                <span class="text-sm text-gray-500">${dt.getDate()}日</span>
+            `;
+            listEl.appendChild(eventDiv);
+        } else {
+            listEl.innerHTML = '<p class="text-gray-500 text-center py-4">本日暫無標註行程</p>';
+        }
+    } catch (e) {
+        console.warn('載入指定日期行程失敗', e);
+        const listEl = document.getElementById('monthly-events');
+        if (listEl) listEl.innerHTML = '<p class="text-gray-500 text-center py-4">本日暫無標註行程</p>';
+    }
 }
 
 async function applyCalendarStatus(year, month) {
