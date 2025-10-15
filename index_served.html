@@ -897,7 +897,16 @@
                                   <div class="mt-1 text-xs text-gray-500">星期五（${isoFriday}）值班提醒</div>
                                 </div>`;
                             const btn = document.getElementById('view-calendar');
-                            btn?.addEventListener('click', () => showPage('calendar', 'overview'));
+                            btn?.addEventListener('click', () => {
+                                try {
+                                    document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+                                    const calTab = document.querySelector('.tab-btn[data-tab="calendar"]');
+                                    calTab?.classList.add('active');
+                                } catch (e) {
+                                    console.warn('更新分頁選取狀態失敗', e);
+                                }
+                                showPage('calendar', 'overview');
+                            });
                             lucide.createIcons();
                         } else {
                             listEl.innerHTML = '<div class="text-gray-500">暫無通知</div>';
@@ -1042,35 +1051,59 @@
                         }
                     });
 
-                   // e�L?cR?a??e|?aooa?�M
-                   let countWork = 0, countOutbound = 0, countOff = 0, countLeave = 0;
-                    const now = new Date();
-                    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-                    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-                   visibleUsersList.forEach(user => {
-                       const s = user.clockInStatus || '';
-                       const leave = user.leaveStatus || '';
-                       if (s === 'a�M?c?-' || s === 'e??a??') countWork++;
-                       else if (s === 'a??a?o' || s === 'a?�ge??' || s === 'e?�Fe??') countOutbound++;
-                       else if (s === 'a�M?c?-' || s === 'a�P2a�M?c?--a?aa??a?!') countOff++;
-                        
-                        // aa�Fa?�De??a??c?�a??i??e?�La??e??a??a??c??a?ca??a??c??e??a??c?3e??
-                        let isLeave = s === 'e?�La??e??a??';
-                        if (!isLeave && (leave === 'approved' || leave === 'pending')) {
-                            // aa�Fa?�Da?��a?|a??c??a?ca??a??c??e??a??e�L?e??
-                            if (user.leaveStartTime && user.leaveEndTime) {
-                                const leaveStart = user.leaveStartTime.toDate ? user.leaveStartTime.toDate() : new Date(user.leaveStartTime);
-                                const leaveEnd = user.leaveEndTime.toDate ? user.leaveEndTime.toDate() : new Date(user.leaveEndTime);
-                                isLeave = leaveStart <= todayEnd && leaveEnd >= todayStart;
-                            }
-                        }
-                       if (isLeave) countLeave++;
-                   });
-                    if (countWorkEl) countWorkEl.textContent = countWork;
-                    if (countOutboundEl) countOutboundEl.textContent = countOutbound;
-                    if (countOffEl) countOffEl.textContent = countOff;
-                    if (countLeaveEl) countLeaveEl.textContent = countLeave;
-                    if(!myStatusFound && document.getElementById('my-status')){ document.getElementById('my-status').textContent = 'c?!a3?a??a??a?�Lc??c?�a??'; }
+                   // 以最新打卡紀錄計算摘要人數，與彈窗一致
+                   (async () => {
+                       try {
+                           const latestMap = {};
+                           await Promise.all(visibleUsersList.map(async (u) => {
+                               try {
+                                   const qLatest = query(collection(db, 'clockInRecords'), where('userId', '==', u.id), orderBy('timestamp', 'desc'), limit(1));
+                                   const latestSnap = await getDocs(qLatest);
+                                   latestMap[u.id] = latestSnap.empty ? null : latestSnap.docs[0].data();
+                               } catch (e) {
+                                   console.warn('載入使用者最新打卡失敗:', e);
+                                   latestMap[u.id] = null;
+                               }
+                           }));
+
+                           let countWork = 0, countOutbound = 0, countOff = 0, countLeave = 0;
+                           const now = new Date();
+                           const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                           const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+                           visibleUsersList.forEach(u => {
+                               const latest = latestMap[u.id];
+                               const type = latest?.type || u.clockInStatus || '';
+                               const leave = u.leaveStatus || '';
+                               let isLeave = false;
+                               if (latest && (type === '臨時請假' || String(type).includes('請假'))) {
+                                   isLeave = true;
+                               } else if (leave === 'approved' || leave === 'pending') {
+                                   if (u.leaveStartTime && u.leaveEndTime) {
+                                       const leaveStart = u.leaveStartTime.toDate ? u.leaveStartTime.toDate() : new Date(u.leaveStartTime);
+                                       const leaveEnd = u.leaveEndTime.toDate ? u.leaveEndTime.toDate() : new Date(u.leaveEndTime);
+                                       isLeave = leaveStart <= todayEnd && leaveEnd >= todayStart;
+                                   }
+                               }
+                               if (isLeave) {
+                                   countLeave++;
+                                   return;
+                               }
+                               if (type === '上班' || type === '返回') countWork++;
+                               else if (type === '外出' || type === '抵達' || type === '離開') countOutbound++;
+                               else if (type === '下班' || type === '自動下班' || type === '已下班-未打卡') countOff++;
+                           });
+                           if (countWorkEl) countWorkEl.textContent = countWork;
+                           if (countOutboundEl) countOutboundEl.textContent = countOutbound;
+                           if (countOffEl) countOffEl.textContent = countOff;
+                           if (countLeaveEl) countLeaveEl.textContent = countLeave;
+                       } catch (e) {
+                           console.warn('更新儀錶板摘要人數時發生錯誤:', e);
+                       } finally {
+                           if(!myStatusFound && document.getElementById('my-status')){
+                               document.getElementById('my-status').textContent = '無法取得您的狀態';
+                           }
+                       }
+                   })();
                     
                 });
                 state.activeListeners.push(unsubscribe);
