@@ -1208,8 +1208,8 @@
                                     const qLatest = query(collection(db, 'clockInRecords'), where('userId', '==', u.id), orderBy('timestamp', 'desc'), limit(1));
                                     const latestSnap = await getDocs(qLatest);
                                     if (!latestSnap.empty) {
-                                        const ts = latestSnap.docs[0].data().timestamp;
-                                        latestMap[u.id] = ts?.toDate?.() ? ts.toDate() : (ts ? new Date(ts) : null);
+                                        // 儲存整筆最新紀錄資料以便取得 type/locationName/dutyType/timestamp
+                                        latestMap[u.id] = latestSnap.docs[0].data();
                                     } else {
                                         latestMap[u.id] = null;
                                     }
@@ -1317,7 +1317,8 @@
                                     const latestSnap = await getDocs(qLatest);
                                     let dt = null;
                                     if (!latestSnap.empty) {
-                                        const ts = latestSnap.docs[0].data().timestamp;
+                                        const rec = latestSnap.docs[0].data();
+                                        const ts = rec.timestamp;
                                         dt = ts?.toDate?.() ? ts.toDate() : (ts ? new Date(ts) : null);
                                     }
                                     const el = document.querySelector(`#clock-time-${u.id}`);
@@ -2662,6 +2663,17 @@
                         ds.forEach(doc => duties.push({ id: doc.id, ...doc.data() }));
                     } catch(e) { console.warn('讀取特殊勤務失敗', e); }
 
+                    // 讀取週五值班名單（設定），用於判斷本人的值班日
+                    let fridayDutyRoster = {};
+                    try {
+                        const { doc, getDoc } = window.__fs || {};
+                        if (doc && getDoc && db) {
+                            const settingsRef = doc(db, 'settings', 'general');
+                            const settingsSnap = await getDoc(settingsRef);
+                            fridayDutyRoster = settingsSnap.exists() ? (settingsSnap.data().fridayDutyRoster || {}) : {};
+                        }
+                    } catch (e) { console.warn('讀取值班名單失敗', e); }
+
                     // 準備列印容器
                     const old = document.getElementById('monthly-report-container');
                     if (old) old.remove();
@@ -2743,7 +2755,7 @@
                         // 外出次數
                         const outboundCount = records.filter(r => r.type === '外出').length;
 
-                        // 讀取使用者本月上班設定以判斷假日
+                        // 讀取使用者本月上班設定以判斷假日（若為值班日則不標示假日）
                         let indicators = [];
                         try {
                             const ymId = `${year}-${String(monthIndex+1).padStart(2,'0')}`;
@@ -2754,14 +2766,53 @@
                                 const snap = await getDoc(ref);
                                 const days = snap.exists() ? (snap.data().days || []) : [];
                                 const set = new Set(days.map(n => Number(n)));
-                                if (!set.has(d)) indicators.push('假日');
+                                // 值班判定（特殊勤務或在週五值班名單內）
+                                const nextDay = new Date(dayStart); nextDay.setDate(nextDay.getDate()+1);
+                                const isDutyBySpecial = duties.some(di => {
+                                    const s = di.startTime?.toDate?.() || (di.startTime ? new Date(di.startTime) : null);
+                                    const e = di.endTime?.toDate?.() || (di.endTime ? new Date(di.endTime) : null);
+                                    if (!s || !e) return false;
+                                    return s < nextDay && e > dayStart;
+                                });
+                                const myName = state.currentUserData?.name || state.currentUser.displayName || state.currentUser.email || '';
+                                const names = fridayDutyRoster[dateLabel] || [];
+                                const normalize = (s) => (s || '').trim();
+                                const isRosterDuty = Array.isArray(names) && names.some(n => normalize(n) === normalize(myName));
+                                const isDuty = isDutyBySpecial || isRosterDuty;
+                                // 非值班且不在使用者自訂工作日，才標示假日
+                                if (!isDuty && !set.has(d)) indicators.push('假日');
                             } else {
                                 // 後備判斷：週末為假日
-                                if (w === 6 || w === 0) indicators.push('假日');
+                                // 若為值班則不標示假日
+                                const nextDay = new Date(dayStart); nextDay.setDate(nextDay.getDate()+1);
+                                const isDutyBySpecial = duties.some(di => {
+                                    const s = di.startTime?.toDate?.() || (di.startTime ? new Date(di.startTime) : null);
+                                    const e = di.endTime?.toDate?.() || (di.endTime ? new Date(di.endTime) : null);
+                                    if (!s || !e) return false;
+                                    return s < nextDay && e > dayStart;
+                                });
+                                const myName = state.currentUserData?.name || state.currentUser.displayName || state.currentUser.email || '';
+                                const names = fridayDutyRoster[dateLabel] || [];
+                                const normalize = (s) => (s || '').trim();
+                                const isRosterDuty = Array.isArray(names) && names.some(n => normalize(n) === normalize(myName));
+                                const isDuty = isDutyBySpecial || isRosterDuty;
+                                if (!isDuty && (w === 6 || w === 0)) indicators.push('假日');
                             }
                         } catch(e) {
                             // 讀取失敗，維持週末為假日
-                            if (w === 6 || w === 0) indicators.push('假日');
+                            const nextDay = new Date(dayStart); nextDay.setDate(nextDay.getDate()+1);
+                            const isDutyBySpecial = duties.some(di => {
+                                const s = di.startTime?.toDate?.() || (di.startTime ? new Date(di.startTime) : null);
+                                const e = di.endTime?.toDate?.() || (di.endTime ? new Date(di.endTime) : null);
+                                if (!s || !e) return false;
+                                return s < nextDay && e > dayStart;
+                            });
+                            const myName = state.currentUserData?.name || state.currentUser.displayName || state.currentUser.email || '';
+                            const names = fridayDutyRoster[dateLabel] || [];
+                            const normalize = (s) => (s || '').trim();
+                            const isRosterDuty = Array.isArray(names) && names.some(n => normalize(n) === normalize(myName));
+                            const isDuty = isDutyBySpecial || isRosterDuty;
+                            if (!isDuty && (w === 6 || w === 0)) indicators.push('假日');
                         }
                         // 請假日（時間範圍相交）
                         const nextDay = new Date(dayStart); nextDay.setDate(nextDay.getDate()+1);
@@ -2773,13 +2824,18 @@
                         });
                         if (isLeave) indicators.push('請假日');
                         // 值班（有當日特殊勤務）
-                        const isDuty = duties.some(di => {
+                        const isDutyBySpecial = duties.some(di => {
                             const s = di.startTime?.toDate?.() || (di.startTime ? new Date(di.startTime) : null);
                             const e = di.endTime?.toDate?.() || (di.endTime ? new Date(di.endTime) : null);
                             if (!s || !e) return false;
                             return s < nextDay && e > dayStart; // overlap
                         });
-                        if (isDuty) indicators.push('值班');
+                        const myName = state.currentUserData?.name || state.currentUser.displayName || state.currentUser.email || '';
+                        const rosterNames = fridayDutyRoster[dateLabel] || [];
+                        const normalizeName = (s) => (s || '').trim();
+                        const isRosterDuty = Array.isArray(rosterNames) && rosterNames.some(n => normalizeName(n) === normalizeName(myName));
+                        const isDutyFinal = isDutyBySpecial || isRosterDuty;
+                        if (isDutyFinal) indicators.push('值班');
 
                         const tr = document.createElement('tr');
                         tr.innerHTML = `
@@ -4735,29 +4791,7 @@
                             </div>
                         </div>
                         
-                        <div class="bg-white p-4 rounded-md shadow-sm border mb-4">
-                            <h3 class="font-bold text-lg mb-4">自動下班打卡設定</h3>
-                            <div class="space-y-4">
-                                <div class="flex items-center justify-between">
-                                    <label for="enable-auto-clock-out" class="text-gray-700">啟用自動下班打卡</label>
-                                    <label class="switch">
-                                        <input type="checkbox" id="enable-auto-clock-out">
-                                        <span class="slider round"></span>
-                                    </label>
-                                </div>
-                                <div class="flex items-center justify-between">
-                                    <label for="work-hours" class="text-gray-700">工作時數（小時）</label>
-                                    <div class="flex items-center space-x-2">
-                                        <input type="number" id="work-hours" min="1" max="24" value="8" class="w-20 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500">
-                                        <span class="text-gray-500 text-sm">小時</span>
-                                    </div>
-                                </div>
-                                <div class="text-sm text-gray-600 bg-gray-50 p-3 rounded-md">
-                                    <i data-lucide="info" class="w-4 h-4 inline mr-1"></i>
-                                    啟用後，系統將在上班打卡後的指定時數自動執行下班打卡，狀態顯示為「已下班-未打卡」
-                                </div>
-                            </div>
-                        </div>
+                        
                         
                         <div class="bg-white p-4 rounded-md shadow-sm border mb-4" id="admin-overtime-section" style="display: none;">
                             <h3 class="font-bold text-lg mb-4">管理員功能</h3>
@@ -4814,16 +4848,12 @@
                         const settings = docSnap.data();
                         document.getElementById('show-employee-status').checked = settings.showEmployeeStatus !== false;
                         
-                        // 載入自動下班打卡設定
-                        document.getElementById('enable-auto-clock-out').checked = settings.enableAutoClockOut || false;
-                        document.getElementById('work-hours').value = settings.workHours || 8;
+                        
                         
                         // 載入使用者顯示設定
                         loadUserDisplaySettings(settings.visibleUsers || {});
                     } else {
                         // 如果設定不存在，載入預設值（全部顯示）
-                        document.getElementById('enable-auto-clock-out').checked = false;
-                        document.getElementById('work-hours').value = 8;
                         loadUserDisplaySettings({});
                     }
                 }).catch(error => {
@@ -4920,8 +4950,7 @@
                     try {
                         showLoading(true);
                         const showEmployeeStatus = document.getElementById('show-employee-status').checked;
-                        const enableAutoClockOut = document.getElementById('enable-auto-clock-out').checked;
-                        const workHours = parseInt(document.getElementById('work-hours').value) || 8;
+                        
                         
                         // 收集使用者顯示設定
                         const visibleUsers = {};
@@ -4936,8 +4965,7 @@
                         // 儲存到 Firebase
                         await setDoc(doc(db, "settings", "general"), {
                             showEmployeeStatus,
-                            enableAutoClockOut,
-                            workHours,
+                            
                             visibleUsers,
                             updatedAt: serverTimestamp()
                         }, { merge: true });
@@ -4951,111 +4979,7 @@
                     }
                 });
                 
-                // 檢查用戶是否為管理員，如果是則顯示管理員功能
-                (window.checkAdminStatus ? window.checkAdminStatus() : Promise.resolve(false)).then(isAdmin => {
-                    if (isAdmin) {
-                        document.getElementById('admin-overtime-section').style.display = 'block';
-                        
-                        // 添加檢查超時按鈕的事件監聽器
-                        document.getElementById('check-overtime-btn').addEventListener('click', async () => {
-                            try {
-                                const btn = document.getElementById('check-overtime-btn');
-                                const originalText = btn.innerHTML;
-                                btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 mr-2 animate-spin"></i>檢查中...';
-                                btn.disabled = true;
-                                
-                                // 調用檢查超時狀態的函數
-                                const overtimeUsers = await checkAllUsersOvertimeStatus();
-                                
-                                // 顯示結果
-                                const resultsDiv = document.getElementById('overtime-results');
-                                const listDiv = document.getElementById('overtime-list');
-                                
-                                if (overtimeUsers && overtimeUsers.length > 0) {
-                                    listDiv.innerHTML = '';
-                                    overtimeUsers.forEach(user => {
-                                        const userDiv = document.createElement('div');
-                                        userDiv.className = 'flex items-center justify-between p-2 bg-white rounded border';
-                                        userDiv.innerHTML = `
-                                            <div>
-                                                <span class="font-medium">${user.displayName}</span>
-                                                <span class="text-sm text-gray-500 ml-2">已工作 ${user.workingHours} 小時</span>
-                                            </div>
-                                            <span class="text-xs text-gray-400">${user.clockInTime.toLocaleString()}</span>
-                                        `;
-                                        listDiv.appendChild(userDiv);
-                                    });
-                                    resultsDiv.classList.remove('hidden');
-                                } else {
-                                    listDiv.innerHTML = '<div class="text-center text-gray-600 py-2">目前沒有超時的員工</div>';
-                                    resultsDiv.classList.remove('hidden');
-                                }
-                                
-                            } catch (error) {
-                                console.error('檢查超時狀態失敗:', error);
-                                showToast('檢查超時狀態失敗：' + error.message, true);
-                            } finally {
-                                const btn = document.getElementById('check-overtime-btn');
-                                btn.innerHTML = '<i data-lucide="clock" class="w-4 h-4 mr-2"></i>檢查超時';
-                                btn.disabled = false;
-                                lucide.createIcons();
-                            }
-                         });
-                         
-                         // 添加測試超時按鈕的事件監聽器
-                         document.getElementById('test-overtime-btn').addEventListener('click', async () => {
-                             try {
-                                 const user = auth.currentUser;
-                                 if (!user) {
-                                     showToast('請先登入', true);
-                                     return;
-                                 }
-                                 
-                                 const btn = document.getElementById('test-overtime-btn');
-                                 btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 mr-2 animate-spin"></i>測試中...';
-                                 btn.disabled = true;
-                                 
-                                 // 模擬超時情況：建立一筆「9小時前上班」的合規打卡紀錄
-                                 const nineHoursAgo = new Date();
-                                 nineHoursAgo.setHours(nineHoursAgo.getHours() - 9);
-                                 const db = window.__db; const { Timestamp, GeoPoint, addDoc, collection, serverTimestamp, setDoc, doc } = window.__fs;
-                                 const ts = Timestamp.fromDate(nineHoursAgo);
-                                 const loc = new GeoPoint(25.0330, 121.5654);
-                                 await addDoc(collection(db, 'clockInRecords'), {
-                                     userId: user.uid,
-                                     type: '上班',
-                                     timestamp: ts,
-                                     location: loc,
-                                     photoUrls: [],
-                                     descriptions: [],
-                                     deviceId: 'test-device'
-                                 });
-                                 // 將使用者狀態設為上班（僅更新允許欄位）
-                                 await setDoc(doc(db, 'users', user.uid), {
-                                     clockInStatus: '上班',
-                                     status: '上班',
-                                     lastUpdated: serverTimestamp()
-                                 }, { merge: true });
-                                 
-                                 showToast('已設定測試超時狀態（9小時前上班），請重新載入頁面測試自動下班打卡功能');
-                                 
-                                 // 3秒後自動重新載入頁面
-                                 setTimeout(() => {
-                                     window.location.reload();
-                                 }, 3000);
-                                 
-                             } catch (error) {
-                                 console.error('設定測試超時狀態失敗:', error);
-                                 showToast('設定測試超時狀態失敗：' + error.message, true);
-                             } finally {
-                                 const btn = document.getElementById('test-overtime-btn');
-                                 btn.innerHTML = '<i data-lucide="test-tube" class="w-4 h-4 mr-2"></i>測試超時';
-                                 btn.disabled = false;
-                                 lucide.createIcons();
-                             }
-                         });
-                     }
-                 });
+                
                 
                 // 全域函數已定義於檔案頂端，這裡不再重複宣告
             }

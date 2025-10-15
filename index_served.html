@@ -2427,6 +2427,17 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                         ds.forEach(doc => duties.push({ id: doc.id, ...doc.data() }));
                     } catch(e) { console.warn('讀取特殊勤務失敗', e); }
 
+                    // 讀取週五值班名單（設定），用於判斷本人的值班日
+                    let fridayDutyRoster = {};
+                    try {
+                        const { doc, getDoc } = window.__fs || {};
+                        if (doc && getDoc && db) {
+                            const settingsRef = doc(db, 'settings', 'general');
+                            const settingsSnap = await getDoc(settingsRef);
+                            fridayDutyRoster = settingsSnap.exists() ? (settingsSnap.data().fridayDutyRoster || {}) : {};
+                        }
+                    } catch (e) { console.warn('讀取值班名單失敗', e); }
+
                     // 準備列印容器
                     const old = document.getElementById('monthly-report-container');
                     if (old) old.remove();
@@ -2505,20 +2516,28 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
 
                         const indicators = [];
                         const isWeekend = (w === 0 || w === 6);
-                        if (isWeekend) indicators.push('假日');
                         const isLeave = leaves.some(l => {
                             const s = l.startTime?.toDate?.() || (l.startTime ? new Date(l.startTime) : null);
                             const e = l.endTime?.toDate?.() || (l.endTime ? new Date(l.endTime) : null);
                             if (!s || !e) return false;
                             return s <= dayEnd && e >= dayStart; // overlap
                         });
-                        if (isLeave) indicators.push('請假日');
-                        const isDuty = duties.some(di => {
+                        const isDutyBySpecial = duties.some(di => {
                             const s = di.startTime?.toDate?.() || (di.startTime ? new Date(di.startTime) : null);
                             const e = di.endTime?.toDate?.() || (di.endTime ? new Date(di.endTime) : null);
                             if (!s || !e) return false;
                             return s < new Date(year, monthIndex, d+1, 0, 0, 0, 0) && e > dayStart; // overlap
                         });
+                        // 週五值班名單（以本人姓名比對）
+                        const myName = state.currentUserData?.name || state.currentUser.displayName || state.currentUser.email || '';
+                        const names = fridayDutyRoster[dateLabel] || [];
+                        const normalize = (s) => (s || '').trim();
+                        const isRosterDuty = Array.isArray(names) && names.some(n => normalize(n) === normalize(myName));
+                        const isDuty = isDutyBySpecial || isRosterDuty;
+
+                        // 指示欄位：值班優先，不顯示假日
+                        if (!isDuty && isWeekend) indicators.push('假日');
+                        if (isLeave) indicators.push('請假日');
                         if (isDuty) indicators.push('值班');
 
                         const tr = document.createElement('tr');
