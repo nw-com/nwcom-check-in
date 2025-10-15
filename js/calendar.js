@@ -221,6 +221,7 @@ function generateCalendar(year, month) {
 // 點選月曆日期後，更新下方「日期行程表」內容（目前顯示週五值班名單）
 async function onCalendarDateSelect(iso) {
     try {
+        try { window.__selectedCalendarIso = iso; } catch (e) {}
         // 更新標題為所選日期
         const title = document.getElementById('marked-title');
         if (title) {
@@ -268,20 +269,7 @@ async function loadDailyMarkedSchedule(iso) {
             }
         } catch (e) { /* 忽略載入值班錯誤 */ }
 
-        // 月事件（模擬資料）
-        try {
-            const dt = new Date(iso);
-            const y = dt.getFullYear();
-            const m = dt.getMonth();
-            const monthlyEvents = [
-                { date: new Date(y, m, 5), title: '月會', type: 'meeting' },
-                { date: new Date(y, m, 15), title: '員工訓練', type: 'training' },
-                { date: new Date(y, m, 25), title: '績效評估', type: 'evaluation' }
-            ];
-            monthlyEvents.filter(ev => formatYMD(ev.date) === iso).forEach(ev => {
-                items.push({ type: ev.type, title: ev.title, detail: '', date: ev.date });
-            });
-        } catch (e) { /* 忽略載入月事件錯誤 */ }
+        // 已移除假月事件：僅顯示個人行程與通知
 
         // 個人行程（若已載入至全域）
         try {
@@ -474,62 +462,89 @@ function renderCalendarSchedule(container) {
 // 載入個人行程
 function loadPersonalSchedule() {
     const scheduleList = document.getElementById('schedule-list');
-    
-    // 模擬個人行程數據
-    const schedules = [
-        { 
-            id: 1, 
-            title: '客戶會議', 
-            date: new Date(), 
-            time: '10:00', 
-            location: '會議室A',
-            description: '與ABC公司討論合作案'
-        },
-        { 
-            id: 2, 
-            title: '專案檢討', 
-            date: new Date(Date.now() + 86400000), 
-            time: '14:00', 
-            location: '辦公室',
-            description: '檢討本月專案進度'
-        }
-    ];
-    // 同步到全域供其他頁使用（例如日曆每日行程）
-    try { window.__personalSchedules = schedules; } catch (e) {}
-    
-    scheduleList.innerHTML = '';
-    
-    if (schedules.length === 0) {
-        scheduleList.innerHTML = '<p class="text-gray-500 text-center py-8">暫無行程安排</p>';
-        return;
-    }
-    
-    schedules.forEach(schedule => {
-        const scheduleDiv = document.createElement('div');
-        scheduleDiv.className = 'border border-gray-200 rounded-lg p-4 hover:bg-gray-50';
-        scheduleDiv.innerHTML = `
-            <div class="flex items-start justify-between">
-                <div class="flex-1">
-                    <h3 class="font-semibold text-gray-800">${schedule.title}</h3>
-                    <div class="flex items-center space-x-4 mt-2 text-sm text-gray-600">
-                        <span><i data-lucide="calendar" class="w-4 h-4 inline mr-1"></i>${schedule.date.toLocaleDateString('zh-TW')}</span>
-                        <span><i data-lucide="clock" class="w-4 h-4 inline mr-1"></i>${schedule.time}</span>
-                        <span><i data-lucide="map-pin" class="w-4 h-4 inline mr-1"></i>${schedule.location}</span>
+    const auth = window.__auth;
+    const fs = window.__fs;
+    const db = window.__db;
+    if (!scheduleList) return;
+
+    (async () => {
+        try {
+            if (!auth?.currentUser || !fs || !db) {
+                scheduleList.innerHTML = '<p class="text-gray-500 text-center py-8">請先登入</p>';
+                return;
+            }
+            const { collection, getDocs } = fs;
+            const ref = collection(db, 'users', auth.currentUser.uid, 'schedules');
+            const snap = await getDocs(ref);
+            const schedules = [];
+            snap.forEach(d => {
+                const data = d.data();
+                const dateTime = data.dateTime?.toDate?.() ||
+                                  data.date?.toDate?.() ||
+                                  (data.dateTime ? new Date(data.dateTime) : (data.date ? new Date(data.date) : null));
+                const timeStr = (dateTime && typeof dateTime.getHours === 'function')
+                    ? `${String(dateTime.getHours()).padStart(2, '0')}:${String(dateTime.getMinutes()).padStart(2, '0')}`
+                    : (data.time || '');
+                schedules.push({
+                    id: d.id,
+                    title: data.title || '',
+                    date: dateTime,
+                    time: timeStr,
+                    location: data.location || '',
+                    description: data.description || '',
+                    remindersDays: Array.isArray(data.remindersDays) ? data.remindersDays : [2,1]
+                });
+            });
+            schedules.sort((a,b) => (a.date?.getTime?.() || 0) - (b.date?.getTime?.() || 0));
+            try { window.__personalSchedules = schedules; } catch (e) {}
+            try {
+                const prev = Array.isArray(window.__notifications) ? window.__notifications : [];
+                const statusMap = new Map(prev.map(n => [String(n.id), n.status]));
+                const next = computeScheduleNotifications(schedules).map(n => ({
+                    ...n,
+                    status: statusMap.get(String(n.id)) || n.status || 'unread'
+                }));
+                window.__notifications = next;
+            } catch (e) {}
+
+            scheduleList.innerHTML = '';
+            if (schedules.length === 0) {
+                scheduleList.innerHTML = '<p class="text-gray-500 text-center py-8">暫無行程安排</p>';
+                return;
+            }
+            schedules.forEach(schedule => {
+                const scheduleDiv = document.createElement('div');
+                scheduleDiv.className = 'border border-gray-200 rounded-lg p-4 hover:bg-gray-50';
+                const dateText = schedule.date ? schedule.date.toLocaleDateString('zh-TW') : '';
+                scheduleDiv.innerHTML = `
+                    <div class="flex items-start justify-between">
+                        <div class="flex-1">
+                            <h3 class="font-semibold text-gray-800">${schedule.title}</h3>
+                            <div class="flex items-center space-x-4 mt-2 text-sm text-gray-600">
+                                <span><i data-lucide="calendar" class="w-4 h-4 inline mr-1"></i>${dateText}</span>
+                                <span><i data-lucide="clock" class="w-4 h-4 inline mr-1"></i>${schedule.time}</span>
+                                <span><i data-lucide="map-pin" class="w-4 h-4 inline mr-1"></i>${schedule.location}</span>
+                            </div>
+                            <p class="text-gray-600 mt-2">${schedule.description}</p>
+                        </div>
+                        <div class="flex space-x-2">
+                            <button class="text-blue-600 hover:text-blue-800" onclick="editSchedule('${schedule.id}')">
+                                <i data-lucide="edit" class="w-4 h-4"></i>
+                            </button>
+                            <button class="text-red-600 hover:text-red-800" onclick="deleteSchedule('${schedule.id}')">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                        </div>
                     </div>
-                    <p class="text-gray-600 mt-2">${schedule.description}</p>
-                </div>
-                <div class="flex space-x-2">
-                    <button class="text-blue-600 hover:text-blue-800" onclick="editSchedule(${schedule.id})">
-                        <i data-lucide="edit" class="w-4 h-4"></i>
-                    </button>
-                    <button class="text-red-600 hover:text-red-800" onclick="deleteSchedule(${schedule.id})">
-                        <i data-lucide="trash-2" class="w-4 h-4"></i>
-                    </button>
-                </div>
-            </div>
-        `;
-        scheduleList.appendChild(scheduleDiv);
-    });
+                `;
+                scheduleList.appendChild(scheduleDiv);
+            });
+            try { window.lucide?.createIcons?.(); } catch (e) {}
+        } catch (e) {
+            console.warn('載入個人行程失敗', e);
+            scheduleList.innerHTML = '<p class="text-gray-500 text-center py-8">載入行程失敗</p>';
+        }
+    })();
 }
 
 // 訊息通知子分頁
@@ -558,69 +573,51 @@ function renderCalendarNotifications(container) {
 // 載入通知
 function loadNotifications() {
     const notificationsList = document.getElementById('notifications-list');
-    
-    // 模擬通知數據
-    const notifications = [
-        {
-            id: 1,
-            title: '會議提醒',
-            message: '您有一個會議將在30分鐘後開始',
-            time: new Date(Date.now() - 1800000),
-            read: false,
-            type: 'meeting'
-        },
-        {
-            id: 2,
-            title: '打卡提醒',
-            message: '請記得完成今日的打卡',
-            time: new Date(Date.now() - 3600000),
-            read: true,
-            type: 'clock-in'
-        },
-        {
-            id: 3,
-            title: '系統通知',
-            message: '系統將於今晚進行維護',
-            time: new Date(Date.now() - 7200000),
-            read: false,
-            type: 'system'
-        }
-    ];
-    // 同步到全域供其他頁使用（例如日曆每日行程）
-    try { window.__notifications = notifications; } catch (e) {}
-    
+    const fromSchedules = Array.isArray(window.__personalSchedules) ? window.__personalSchedules : [];
+    const existing = Array.isArray(window.__notifications) ? window.__notifications : null;
+    let notifications = existing && existing.length > 0
+        ? existing
+        : computeScheduleNotifications(fromSchedules);
+    // 如果剛重新計算，盡量保留既有已讀狀態
+    if (!existing || existing.length === 0) {
+        const prevMap = new Map((Array.isArray(window.__notifications) ? window.__notifications : []).map(n => [String(n.id), n.status]));
+        notifications = notifications.map(n => ({ ...n, status: prevMap.get(String(n.id)) || n.status || 'unread' }));
+        try { window.__notifications = notifications; } catch (e) {}
+    }
+
     notificationsList.innerHTML = '';
-    
     if (notifications.length === 0) {
         notificationsList.innerHTML = '<p class="text-gray-500 text-center py-8">暫無通知</p>';
         return;
     }
-    
+
     notifications.forEach(notification => {
         const notificationDiv = document.createElement('div');
-        notificationDiv.className = `border border-gray-200 rounded-lg p-4 cursor-pointer hover:bg-gray-50 ${!notification.read ? 'bg-blue-50 border-blue-200' : ''}`;
+        const readClass = notification.status === 'read' ? 'opacity-60' : '';
+        notificationDiv.className = `border border-gray-200 rounded-lg p-4 cursor-pointer hover:bg-gray-50 ${readClass}`;
         notificationDiv.innerHTML = `
             <div class="flex items-start justify-between">
                 <div class="flex-1">
                     <div class="flex items-center space-x-2">
                         <h3 class="font-semibold text-gray-800">${notification.title}</h3>
-                        ${!notification.read ? '<div class="w-2 h-2 bg-blue-600 rounded-full"></div>' : ''}
                     </div>
                     <p class="text-gray-600 mt-1">${notification.message}</p>
                     <span class="text-xs text-gray-500 mt-2">${formatTimeAgo(notification.time)}</span>
                 </div>
                 <div class="flex items-center space-x-2">
                     <div class="w-3 h-3 rounded-full ${getNotificationColor(notification.type)}"></div>
-                    <button class="text-gray-400 hover:text-gray-600" onclick="deleteNotification(${notification.id})">
+                    <button class="text-gray-400 hover:text-gray-600" onclick="deleteNotification('${notification.id}')">
                         <i data-lucide="x" class="w-4 h-4"></i>
                     </button>
                 </div>
             </div>
         `;
-        
+
         notificationDiv.addEventListener('click', () => markNotificationRead(notification.id));
         notificationsList.appendChild(notificationDiv);
     });
+
+    try { window.lucide?.createIcons?.(); } catch (e) {}
 }
 
 // 輔助函數
@@ -641,62 +638,363 @@ function getNotificationColor(type) {
         'meeting': 'bg-blue-500',
         'clock-in': 'bg-green-500',
         'system': 'bg-yellow-500',
+        'reminder': 'bg-purple-500',
         'default': 'bg-gray-500'
     };
     return colors[type] || colors.default;
 }
 
+// 由個人行程產生提醒通知（僅本人的資料）
+function computeScheduleNotifications(schedules) {
+    try {
+        const arr = Array.isArray(schedules) ? schedules : [];
+        const out = [];
+        arr.forEach(s => {
+            const dt = s?.date instanceof Date ? s.date : (s?.date ? new Date(s.date) : null);
+            if (!dt) return;
+            const daysArr = Array.isArray(s.remindersDays) ? s.remindersDays : [2,1];
+            daysArr.forEach(d => {
+                if (typeof d !== 'number') return;
+                const t = new Date(dt.getTime() - d * 86400000);
+                out.push({
+                    id: `sched_${s.id}_${d}`,
+                    title: s.title || '行程提醒',
+                    message: `行程「${s.title || ''}」於 ${formatYMD(dt)} ${s.time || ''} ${s.location || ''}`.trim(),
+                    time: t,
+                    read: false,
+                    type: 'reminder'
+                });
+            });
+        });
+        out.sort((a,b) => a.time - b.time);
+        return out;
+    } catch (e) {
+        console.warn('產生行程提醒通知失敗', e);
+        return [];
+    }
+}
+
 function formatTimeAgo(date) {
     const now = new Date();
-    const diff = now - date;
-    const minutes = Math.floor(diff / 60000);
-    const hours = Math.floor(diff / 3600000);
-    const days = Math.floor(diff / 86400000);
-    
+    const diff = date - now; // 未來為正值
+    const abs = Math.abs(diff);
+    const minutes = Math.floor(abs / 60000);
+    const hours = Math.floor(abs / 3600000);
+    const days = Math.floor(abs / 86400000);
+    const suffix = diff >= 0 ? '後' : '前';
     if (minutes < 60) {
-        return `${minutes}分鐘前`;
+        return `${minutes}分鐘${suffix}`;
     } else if (hours < 24) {
-        return `${hours}小時前`;
+        return `${hours}小時${suffix}`;
     } else {
-        return `${days}天前`;
+        return `${days}天${suffix}`;
     }
 }
 
 // 事件處理函數
 function showAddScheduleModal() {
-    // 實作新增行程的彈窗
-    alert('新增行程功能將在後續版本中實作');
+    try {
+        const overlay = document.createElement('div');
+        overlay.id = 'schedule-modal-overlay';
+        overlay.className = 'fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50';
+        const modal = document.createElement('div');
+        modal.className = 'bg-white rounded-lg shadow-lg w-full max-w-lg';
+        modal.innerHTML = `
+            <div class="p-4 border-b flex items-center justify-between">
+                <h3 class="text-lg font-semibold">新增行程</h3>
+                <button class="text-gray-500 hover:text-gray-700" id="schedule-close">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="p-4 space-y-3">
+                <div>
+                    <label class="block text-sm text-gray-700">標題</label>
+                    <input id="schedule-title" type="text" class="w-full border rounded px-3 py-2" placeholder="輸入標題" />
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-sm text-gray-700">日期</label>
+                        <input id="schedule-date" type="date" class="w-full border rounded px-3 py-2" />
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-700">時間</label>
+                        <input id="schedule-time" type="text" class="w-full border rounded px-3 py-2" placeholder="例如 14:30" />
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-700">地點</label>
+                    <input id="schedule-location" type="text" class="w-full border rounded px-3 py-2" placeholder="輸入地點（可選）" />
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-700">備註</label>
+                    <textarea id="schedule-desc" class="w-full border rounded px-3 py-2" rows="3" placeholder="輸入備註（可選）"></textarea>
+                </div>
+            </div>
+            <div class="p-4 border-t flex justify-end space-x-2">
+                <button id="schedule-cancel" class="px-4 py-2 rounded border">取消</button>
+                <button id="schedule-save" class="px-4 py-2 rounded bg-red-600 text-white hover:bg-red-700">儲存</button>
+            </div>
+        `;
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+        try { window.lucide?.createIcons?.(); } catch (e) {}
+
+        const close = () => { try { overlay.remove(); } catch (e) {} };
+        document.getElementById('schedule-close').onclick = close;
+        document.getElementById('schedule-cancel').onclick = close;
+
+        const today = new Date();
+        document.getElementById('schedule-date').value = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+
+        document.getElementById('schedule-save').onclick = async () => {
+            try {
+                const title = document.getElementById('schedule-title').value.trim();
+                const dateStr = document.getElementById('schedule-date').value;
+                const time = document.getElementById('schedule-time').value.trim();
+                const location = document.getElementById('schedule-location').value.trim();
+                const description = document.getElementById('schedule-desc').value.trim();
+                if (!title) { alert('請輸入標題'); return; }
+                if (!dateStr) { alert('請選擇日期'); return; }
+                const auth = window.__auth; const fs = window.__fs; const db = window.__db;
+                if (!auth?.currentUser || !fs || !db) { alert('請先登入'); return; }
+                const { collection, addDoc, Timestamp, serverTimestamp } = fs;
+                const date = new Date(dateStr);
+                const ref = collection(db, 'users', auth.currentUser.uid, 'schedules');
+                await addDoc(ref, {
+                    title,
+                    date: Timestamp?.fromDate ? Timestamp.fromDate(date) : dateStr,
+                    time,
+                    location,
+                    description,
+                    createdAt: serverTimestamp?.() || new Date().toISOString(),
+                    updatedAt: serverTimestamp?.() || new Date().toISOString()
+                });
+                close();
+                loadPersonalSchedule();
+                // 重新標記月曆彩點
+                try {
+                    const ymText = document.getElementById('current-month-year')?.textContent || '';
+                    const y = parseInt(ymText.split('年')[0]);
+                    const m = parseInt(ymText.split('年')[1]) - 1;
+                    if (!Number.isNaN(y) && !Number.isNaN(m)) {
+                        applyExtraEventMarkers(y, m);
+                    }
+                } catch (e) {}
+                // 若目前有選定日期，刷新右側列表
+                try {
+                    const iso = window.__selectedCalendarIso;
+                    if (iso) onCalendarDateSelect(iso);
+                } catch (e) {}
+            } catch (e) {
+                console.warn('新增行程失敗', e);
+                alert('新增行程失敗');
+            }
+        };
+    } catch (e) {
+        console.warn('開啟新增行程視窗失敗', e);
+        alert('無法開啟新增行程視窗');
+    }
 }
 
 function editSchedule(id) {
-    // 實作編輯行程功能
-    alert(`編輯行程 ${id} 功能將在後續版本中實作`);
+    try {
+        const schedules = Array.isArray(window.__personalSchedules) ? window.__personalSchedules : [];
+        let item = schedules.find(s => s.id === id);
+        const auth = window.__auth; const fs = window.__fs; const db = window.__db;
+        if (!auth?.currentUser || !fs || !db) { alert('請先登入'); return; }
+        const { doc, getDoc } = fs;
+        (async () => {
+            try {
+                if (!item) {
+                    const ref = doc(db, 'users', auth.currentUser.uid, 'schedules', id);
+                    const snap = await getDoc(ref);
+                    if (snap.exists()) {
+                        const data = snap.data();
+                        item = {
+                            id,
+                            title: data.title || '',
+                            date: data.date?.toDate?.() || (data.date ? new Date(data.date) : new Date()),
+                            time: data.time || '',
+                            location: data.location || '',
+                            description: data.description || ''
+                        };
+                    } else {
+                        alert('找不到行程');
+                        return;
+                    }
+                }
+
+                const overlay = document.createElement('div');
+                overlay.id = 'schedule-modal-overlay';
+                overlay.className = 'fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50';
+                const modal = document.createElement('div');
+                modal.className = 'bg-white rounded-lg shadow-lg w-full max-w-lg';
+                const dateValue = `${item.date.getFullYear()}-${String(item.date.getMonth()+1).padStart(2,'0')}-${String(item.date.getDate()).padStart(2,'0')}`;
+                modal.innerHTML = `
+                    <div class="p-4 border-b flex items-center justify-between">
+                        <h3 class="text-lg font-semibold">編輯行程</h3>
+                        <button class="text-gray-500 hover:text-gray-700" id="schedule-close">
+                            <i data-lucide="x" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                    <div class="p-4 space-y-3">
+                        <div>
+                            <label class="block text-sm text-gray-700">標題</label>
+                            <input id="schedule-title" type="text" class="w-full border rounded px-3 py-2" value="${item.title}" />
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-sm text-gray-700">日期</label>
+                                <input id="schedule-date" type="date" class="w-full border rounded px-3 py-2" value="${dateValue}" />
+                            </div>
+                            <div>
+                                <label class="block text-sm text-gray-700">時間</label>
+                                <input id="schedule-time" type="text" class="w-full border rounded px-3 py-2" value="${item.time}" />
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm text-gray-700">地點</label>
+                            <input id="schedule-location" type="text" class="w-full border rounded px-3 py-2" value="${item.location}" />
+                        </div>
+                        <div>
+                            <label class="block text-sm text-gray-700">備註</label>
+                            <textarea id="schedule-desc" class="w-full border rounded px-3 py-2" rows="3">${item.description}</textarea>
+                        </div>
+                    </div>
+                    <div class="p-4 border-t flex justify-end space-x-2">
+                        <button id="schedule-cancel" class="px-4 py-2 rounded border">取消</button>
+                        <button id="schedule-save" class="px-4 py-2 rounded bg-red-600 text-white hover:bg-red-700">儲存</button>
+                    </div>
+                `;
+                overlay.appendChild(modal);
+                document.body.appendChild(overlay);
+                try { window.lucide?.createIcons?.(); } catch (e) {}
+                const close = () => { try { overlay.remove(); } catch (e) {} };
+                document.getElementById('schedule-close').onclick = close;
+                document.getElementById('schedule-cancel').onclick = close;
+
+                document.getElementById('schedule-save').onclick = async () => {
+                    try {
+                        const title = document.getElementById('schedule-title').value.trim();
+                        const dateStr = document.getElementById('schedule-date').value;
+                        const time = document.getElementById('schedule-time').value.trim();
+                        const location = document.getElementById('schedule-location').value.trim();
+                        const description = document.getElementById('schedule-desc').value.trim();
+                        if (!title) { alert('請輸入標題'); return; }
+                        if (!dateStr) { alert('請選擇日期'); return; }
+                        const { doc, updateDoc, Timestamp, serverTimestamp } = fs;
+                        const ref = doc(db, 'users', auth.currentUser.uid, 'schedules', id);
+                        const date = new Date(dateStr);
+                        await updateDoc(ref, {
+                            title,
+                            date: Timestamp?.fromDate ? Timestamp.fromDate(date) : dateStr,
+                            time,
+                            location,
+                            description,
+                            updatedAt: serverTimestamp?.() || new Date().toISOString()
+                        });
+                        close();
+                        loadPersonalSchedule();
+                        // 重新標記月曆彩點
+                        try {
+                            const ymText = document.getElementById('current-month-year')?.textContent || '';
+                            const y = parseInt(ymText.split('年')[0]);
+                            const m = parseInt(ymText.split('年')[1]) - 1;
+                            if (!Number.isNaN(y) && !Number.isNaN(m)) {
+                                applyExtraEventMarkers(y, m);
+                            }
+                        } catch (e) {}
+                        // 若目前有選定日期，刷新右側列表
+                        try {
+                            const iso = window.__selectedCalendarIso;
+                            if (iso) onCalendarDateSelect(iso);
+                        } catch (e) {}
+                    } catch (e) {
+                        console.warn('更新行程失敗', e);
+                        alert('更新行程失敗');
+                    }
+                };
+            } catch (e) {
+                console.warn('載入行程資料失敗', e);
+                alert('載入行程失敗');
+            }
+        })();
+    } catch (e) {
+        console.warn('開啟編輯行程視窗失敗', e);
+        alert('無法開啟編輯視窗');
+    }
 }
 
 function deleteSchedule(id) {
-    // 實作刪除行程功能
-    if (confirm('確定要刪除此行程嗎？')) {
-        alert(`刪除行程 ${id} 功能將在後續版本中實作`);
+    try {
+        if (!confirm('確定要刪除此行程嗎？')) return;
+        const auth = window.__auth; const fs = window.__fs; const db = window.__db;
+        if (!auth?.currentUser || !fs || !db) { alert('請先登入'); return; }
+        const { doc, deleteDoc } = fs;
+        (async () => {
+            try {
+                const ref = doc(db, 'users', auth.currentUser.uid, 'schedules', id);
+                await deleteDoc(ref);
+                loadPersonalSchedule();
+                // 重新標記月曆彩點
+                try {
+                    const ymText = document.getElementById('current-month-year')?.textContent || '';
+                    const y = parseInt(ymText.split('年')[0]);
+                    const m = parseInt(ymText.split('年')[1]) - 1;
+                    if (!Number.isNaN(y) && !Number.isNaN(m)) {
+                        applyExtraEventMarkers(y, m);
+                    }
+                } catch (e) {}
+                // 若目前有選定日期，刷新右側列表
+                try {
+                    const iso = window.__selectedCalendarIso;
+                    if (iso) onCalendarDateSelect(iso);
+                } catch (e) {}
+            } catch (e) {
+                console.warn('刪除行程失敗', e);
+                alert('刪除行程失敗');
+            }
+        })();
+    } catch (e) {
+        console.warn('刪除行程流程發生錯誤', e);
+        alert('刪除行程時發生錯誤');
     }
 }
 
 function markNotificationRead(id) {
-    // 實作標記通知為已讀功能
-    console.log(`標記通知 ${id} 為已讀`);
+    try {
+        const arr = Array.isArray(window.__notifications) ? window.__notifications : [];
+        const idx = arr.findIndex(n => String(n.id) === String(id));
+        if (idx >= 0) {
+            arr[idx] = { ...arr[idx], status: 'read' };
+            window.__notifications = arr;
+            loadNotifications();
+        }
+    } catch (e) {
+        console.warn('標記通知為已讀失敗', e);
+    }
 }
 
 function deleteNotification(id) {
-    // 實作刪除通知功能
-    if (confirm('確定要刪除此通知嗎？')) {
-        console.log(`刪除通知 ${id}`);
+    try {
+        if (!confirm('確定要刪除此通知嗎？')) return;
+        const arr = Array.isArray(window.__notifications) ? window.__notifications : [];
+        const next = arr.filter(n => String(n.id) !== String(id));
+        window.__notifications = next;
+        loadNotifications();
+    } catch (e) {
+        console.warn('刪除通知失敗', e);
     }
 }
 
 function markAllNotificationsRead() {
-    // 實作全部標記為已讀功能
-    if (confirm('確定要將所有通知標記為已讀嗎？')) {
-        console.log('全部通知標記為已讀');
-        loadNotifications(); // 重新載入通知列表
+    try {
+        if (!confirm('確定要將所有通知標記為已讀嗎？')) return;
+        const arr = Array.isArray(window.__notifications) ? window.__notifications : [];
+        window.__notifications = arr.map(n => ({ ...n, status: 'read' }));
+        loadNotifications();
+    } catch (e) {
+        console.warn('全部標記為已讀失敗', e);
     }
 }
 
@@ -749,19 +1047,8 @@ async function applyFridayDutyBadges(year, month) {
 // 額外事件標記：在日期格下加入彩色小點（月事件、個人行程）
 async function applyExtraEventMarkers(year, month) {
     try {
-        // 彙整月事件（模擬）
-        const events = [
-            { date: new Date(year, month, 5), title: '月會', type: 'meeting' },
-            { date: new Date(year, month, 15), title: '員工訓練', type: 'training' },
-            { date: new Date(year, month, 25), title: '績效評估', type: 'evaluation' }
-        ];
+        // 僅彙整個人行程（移除假月事件）
         const markers = new Map(); // iso -> [types]
-        events.forEach(ev => {
-            const iso = formatYMD(ev.date);
-            const arr = markers.get(iso) || [];
-            arr.push(ev.type);
-            markers.set(iso, arr);
-        });
 
         // 彙整個人行程（若有）
         const schedules = Array.isArray(window.__personalSchedules) ? window.__personalSchedules : [];
@@ -775,12 +1062,14 @@ async function applyExtraEventMarkers(year, month) {
             markers.set(iso, arr);
         });
 
-        // 套用於月曆日期格
+        // 套用於月曆日期格（避免重複疊加，先清除現有標記）
         markers.forEach((types, iso) => {
             const cell = document.querySelector(`#calendar-grid [data-ymd="${iso}"]`);
             if (!cell) return;
+            // 移除既有標記
+            Array.from(cell.querySelectorAll('.extra-markers')).forEach(el => el.remove());
             const wrap = document.createElement('div');
-            wrap.className = 'mt-1 flex items-center space-x-1';
+            wrap.className = 'mt-1 flex items-center space-x-1 extra-markers';
             types.slice(0, 4).forEach(t => {
                 const dot = document.createElement('span');
                 dot.className = `inline-block w-2 h-2 rounded-full ${getEventColor(t)}`;

@@ -194,5 +194,35 @@ service cloud.firestore {
         (request.resource.data.otherLocations == null || request.resource.data.otherLocations is list) &&
         (request.resource.data.updatedAt == null || request.resource.data.updatedAt is timestamp);
     }
+
+    // 個人行程（每位使用者自己的 schedules 子集合）：本人 CRUD，其他人不可見
+    match /users/{userId}/schedules/{scheduleId} {
+      // 僅本人可讀寫自己的行程
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null && request.auth.uid == userId &&
+        request.resource.data.keys().hasOnly([
+          'title','date','time','location','description','createdAt','updatedAt','remindersDays'
+        ]) &&
+        request.resource.data.title is string &&
+        (request.resource.data.date is timestamp || request.resource.data.date is string) &&
+        (request.resource.data.time == null || request.resource.data.time is string) &&
+        (request.resource.data.location == null || request.resource.data.location is string) &&
+        (request.resource.data.description == null || request.resource.data.description is string) &&
+        (request.resource.data.remindersDays == null || request.resource.data.remindersDays is list) &&
+        (request.resource.data.createdAt == null || request.resource.data.createdAt is timestamp) &&
+        (request.resource.data.updatedAt == null || request.resource.data.updatedAt is timestamp);
+      allow update: if request.auth != null && request.auth.uid == userId &&
+        request.resource.data.keys().hasOnly([
+          'title','date','time','location','description','updatedAt','remindersDays'
+        ]) &&
+        (request.resource.data.title == null || request.resource.data.title is string) &&
+        (request.resource.data.date == null || request.resource.data.date is timestamp || request.resource.data.date is string) &&
+        (request.resource.data.time == null || request.resource.data.time is string) &&
+        (request.resource.data.location == null || request.resource.data.location is string) &&
+        (request.resource.data.description == null || request.resource.data.description is string) &&
+        (request.resource.data.remindersDays == null || request.resource.data.remindersDays is list) &&
+        (request.resource.data.updatedAt == null || request.resource.data.updatedAt is timestamp);
+      allow delete: if request.auth != null && request.auth.uid == userId;
+    }
   }
 }
