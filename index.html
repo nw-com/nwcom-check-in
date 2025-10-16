@@ -1423,7 +1423,6 @@
                     <div class="h-[50px] flex items-center justify-around border-b border-gray-200 bg-white">
                         <button data-subtab="location" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'location' ? 'active' : ''}">定位打卡</button>
                         <button data-subtab="records" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'records' ? 'active' : ''}">打卡紀錄</button>
-                        <button data-subtab="retro" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'retro' ? 'active' : ''}">補打卡</button>
                         <button data-subtab="leaves" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'leaves' ? 'active' : ''}">請假紀錄</button>
                     </div>
                     <div id="sub-page-content" class="overflow-y-auto" style="height: calc(100% - 50px);"></div>`;
@@ -1433,8 +1432,6 @@
                     renderClockInLocation(subPageContent);
                 } else if (subPage === 'records') {
                     renderClockInRecords(subPageContent);
-                } else if (subPage === 'retro') {
-                    renderRetroClockRequestForm(subPageContent);
                 } else if (subPage === 'leaves') {
                     renderMyLeaveRecords(subPageContent);
                 }
@@ -3003,7 +3000,7 @@
                         <button data-subtab="map" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'map' || !subPage ? 'active' : ''}">人員地圖</button>
                         <button data-subtab="attendance" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'attendance' ? 'active' : ''}">出勤紀錄</button>
                         <button data-subtab="leave" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'leave' ? 'active' : ''}">假單審核</button>
-                        <button data-subtab="retro" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'retro' ? 'active' : ''}">補打申請</button>
+                        <button data-subtab="retro" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'retro' ? 'active' : ''}">修改申請</button>
                     </div>
                     <div id="sub-page-content" class="overflow-y-auto" style="height: calc(100% - 50px);"></div>`;
                 
@@ -3158,7 +3155,7 @@
                     <div class="p-4 h-full">
                         <div class="bg-white rounded-lg shadow-sm border p-4">
                             <div class="flex items-center justify-between mb-3">
-                                <h2 class="text-lg font-bold">補打申請審核</h2>
+                                <h2 class="text-lg font-bold">修改申請審核</h2>
                                 <button id="manual-add-record" class="px-3 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">新增人員打卡紀錄</button>
                             </div>
                             <div class="mb-3 flex items-center gap-2">
@@ -3169,12 +3166,20 @@
                             </div>
                             <div id="retro-requests-list" class="space-y-3"></div>
                         </div>
+                        <div class="bg-white rounded-lg shadow-sm border p-4 mt-4">
+                            <div class="flex items-center justify-between mb-3">
+                                <h2 class="text-lg font-bold">修改紀錄</h2>
+                                <span class="text-sm text-gray-500">顯示『修改申請審核』與『手動新增』所產生的紀錄</span>
+                            </div>
+                            <div id="retro-mod-list" class="space-y-3"></div>
+                        </div>
                     </div>`;
                 try { lucide.createIcons(); } catch(e) {}
-                const { collection, query, where, orderBy, getDocs, addDoc, updateDoc, doc, Timestamp, GeoPoint } = window.__fs; const db = window.__db;
+                const { collection, query, where, orderBy, limit, getDocs, addDoc, updateDoc, doc, Timestamp, GeoPoint } = window.__fs; const db = window.__db;
                 const listEl = document.getElementById('retro-requests-list');
                 const filterDateEl = document.getElementById('retro-filter-date');
                 const filterUserEl = document.getElementById('retro-filter-user');
+                const modListEl = document.getElementById('retro-mod-list');
 
                 // 載入人員下拉
                 try {
@@ -3306,6 +3311,59 @@
                 filterDateEl.addEventListener('change', renderList);
                 filterUserEl.addEventListener('change', renderList);
 
+                // 修改紀錄列表渲染
+                async function renderModList() {
+                    if (!modListEl) return;
+                    modListEl.innerHTML = `<div class="p-4 text-center text-gray-500"><div class="flex items-center justify-center"><i data-lucide="loader" class="w-5 h-5 mr-2 animate-spin"></i>載入修改紀錄...</div></div>`;
+                    try {
+                        const qs = await getDocs(query(collection(db, 'clockInRecords'), orderBy('timestamp','desc'), limit(200)));
+                        const selectedUser = filterUserEl.value || '';
+                        const selectedDate = filterDateEl.value || '';
+                        const items = [];
+                        qs.forEach(docSnap => {
+                            const rec = { id: docSnap.id, ...docSnap.data() };
+                            const deviceId = rec.deviceId || '';
+                            // 僅顯示由審核或手動新增的紀錄
+                            if (!['retro','retro-approval','manual-admin'].includes(deviceId)) return;
+                            const when = rec.timestamp?.toDate?.() ? rec.timestamp.toDate() : (rec.timestamp ? new Date(rec.timestamp) : null);
+                            const dateStr = when ? when.toISOString().split('T')[0] : '';
+                            if (selectedUser && rec.userId !== selectedUser) return;
+                            if (selectedDate && dateStr !== selectedDate) return;
+                            items.push({ ...rec, when });
+                        });
+                        if (items.length === 0) { modListEl.innerHTML = `<p class="text-center text-gray-500 p-4">無符合條件的修改紀錄</p>`; return; }
+                        // 載入使用者名稱映射
+                        const userMap = {};
+                        try {
+                            const us = await getDocs(collection(db, 'users'));
+                            us.forEach(d => userMap[d.id] = d.data().name || d.id);
+                        } catch(e) {}
+                        modListEl.innerHTML = '';
+                        items.forEach(rec => {
+                            const userName = userMap[rec.userId] || rec.userId;
+                            const item = document.createElement('div');
+                            item.className = 'p-3 border rounded-md bg-white flex items-center justify-between';
+                            const locText = rec.locationName ? `地點：${rec.locationName}` : (typeof rec.location === 'string' ? `地點：${rec.location}` : '');
+                            item.innerHTML = `
+                                <div>
+                                    <p class="font-medium text-gray-800">${userName}</p>
+                                    <p class="text-sm text-gray-600">${rec.type} · ${rec.when ? rec.when.toLocaleString('zh-TW') : ''}</p>
+                                    ${locText ? `<p class=\"text-xs text-gray-500\">${locText}</p>` : ''}
+                                    ${rec.descriptions && rec.descriptions.length ? `<p class=\"text-xs text-gray-500\">描述：${rec.descriptions.join('、')}</p>` : ''}
+                                </div>
+                                <span class="text-xs text-gray-500">來源：${rec.deviceId}</span>`;
+                            modListEl.appendChild(item);
+                        });
+                        try { lucide.createIcons(); } catch(e) {}
+                    } catch (e) {
+                        console.error('讀取修改紀錄失敗', e);
+                        modListEl.innerHTML = `<p class="text-center text-gray-500 p-4">讀取失敗</p>`;
+                    }
+                }
+
+                filterDateEl.addEventListener('change', renderModList);
+                filterUserEl.addEventListener('change', renderModList);
+
                 // 手動新增人員打卡紀錄（彈窗）
                 document.getElementById('manual-add-record').addEventListener('click', () => {
                     const backdrop = document.createElement('div');
@@ -3424,6 +3482,9 @@
                 } else {
                     renderTrackingAttendance(subPageContent);
                 }
+
+                // 初次渲染修改紀錄
+                try { renderModList(); } catch(e) {}
                 mainContent.querySelectorAll('.sub-tab-btn').forEach(btn => btn.addEventListener('click', () => showPage('hr', btn.dataset.subtab)));
             }
 

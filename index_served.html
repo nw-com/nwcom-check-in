@@ -1331,7 +1331,6 @@
                         <button data-subtab="location" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'location' ? 'active' : ''}">aR?a??a??a?!</button>
                         <button data-subtab="records" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'records' ? 'active' : ''}">a??a?!c���e??</button>
                         <button data-subtab="leaves" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'leaves' ? 'active' : ''}">e??a??c���e??</button>
-                        <button data-subtab="retro" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'retro' ? 'active' : ''}">補打卡</button>
                     </div>
                     <div id="sub-page-content" class="overflow-y-auto" style="height: calc(100% - 50px);"></div>`;
                 
@@ -1342,8 +1341,6 @@
                     renderClockInRecords(subPageContent);
                 } else if (subPage === 'leaves') {
                     renderMyLeaveRecords(subPageContent);
-                } else if (subPage === 'retro') {
-                    renderRetroClockRequestForm(subPageContent);
                 }
                 
                 mainContent.querySelectorAll('.sub-tab-btn').forEach(btn => btn.addEventListener('click', () => showPage('clock-in', btn.dataset.subtab)));
@@ -2829,7 +2826,7 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                         <button data-subtab="map" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'map' || !subPage ? 'active' : ''}">aooa?!a?�Xa??</button>
                         <button data-subtab="attendance" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'attendance' ? 'active' : ''}">a?oa??c���e??</button>
                         <button data-subtab="leave" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'leave' ? 'active' : ''}">a??a?Ra��ca?�M</button>
-                        <button data-subtab="retro" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'retro' ? 'active' : ''}">補打申請</button>
+                        <button data-subtab="retro" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'retro' ? 'active' : ''}">修改申請</button>
                     </div>
                     <div id="sub-page-content" class="overflow-y-auto" style="height: calc(100% - 50px);"></div>`;
                 
@@ -2984,7 +2981,7 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
             async function renderRetroApprovals(container) {
                 const user = auth.currentUser;
                 if (!user) {
-                    container.innerHTML = `<div class="p-4 text-red-600">請先登入以審核補打卡申請。</div>`;
+                    container.innerHTML = `<div class="p-4 text-red-600">請先登入以審核修改申請。</div>`;
                     return;
                 }
 
@@ -3001,9 +2998,9 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                     return;
                 }
 
-                container.innerHTML = `<div class="p-4">
+                    container.innerHTML = `<div class="p-4">
                     <div class="flex items-center justify-between mb-3">
-                        <div class="text-gray-700">待審核補打卡申請</div>
+                        <div class="text-gray-700">修改申請審核</div>
                         <button id="manual-add-record" class="px-3 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">新增人員打卡紀錄</button>
                     </div>
                     <div class="mb-3 flex items-center gap-2">
@@ -3013,6 +3010,15 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                         </select>
                     </div>
                     <div id="retro-list" class="space-y-3"></div>
+                </div>
+                <div class="p-4">
+                    <div class="bg-white rounded-lg shadow-sm border p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="text-gray-700">修改紀錄</div>
+                            <span class="text-sm text-gray-500">顯示由審核與手動新增之修改紀錄</span>
+                        </div>
+                        <div id="retro-mod-list" class="space-y-3"></div>
+                    </div>
                 </div>`;
 
                 const list = container.querySelector('#retro-list');
@@ -3079,6 +3085,57 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
 
                 filterDateEl.addEventListener('change', renderList);
                 filterUserEl.addEventListener('change', renderList);
+
+                async function renderModList() {
+                    const modEl = container.querySelector('#retro-mod-list');
+                    if (!modEl) return;
+                    modEl.innerHTML = `<div class=\"p-4 text-center text-gray-500\"><div class=\"flex items-center justify-center\"><i data-lucide=\"loader\" class=\"w-5 h-5 mr-2 animate-spin\"></i>載入修改紀錄...</div></div>`;
+                    try {
+                        const qs = await getDocs(query(collection(db, 'clockInRecords'), orderBy('timestamp','desc'), limit(200)));
+                        const selectedUser = filterUserEl.value || '';
+                        const selectedDate = filterDateEl.value || '';
+                        const items = [];
+                        qs.forEach(docSnap => {
+                            const rec = docSnap.data();
+                            const did = rec.deviceId || '';
+                            if (!['retro','retro-approval','manual-admin'].includes(did)) return;
+                            const when = rec.timestamp?.toDate ? rec.timestamp.toDate() : (rec.timestamp ? new Date(rec.timestamp) : null);
+                            const dateStr = when ? when.toISOString().split('T')[0] : '';
+                            if (selectedUser && rec.userId !== selectedUser) return;
+                            if (selectedDate && dateStr !== selectedDate) return;
+                            items.push({ id: docSnap.id, ...rec, when });
+                        });
+                        if (items.length === 0) { modEl.innerHTML = `<div class=\"text-sm text-gray-500\">無符合條件的修改紀錄。</div>`; return; }
+                        // 名稱映射
+                        const userMap = {};
+                        try {
+                            const usSnap = await getDocs(collection(db, 'users'));
+                            usSnap.forEach(d => userMap[d.id] = d.data().name || d.id);
+                        } catch(e) {}
+                        modEl.innerHTML = '';
+                        items.forEach(rec => {
+                            const userName = userMap[rec.userId] || rec.userId;
+                            const row = document.createElement('div');
+                            row.className = 'border rounded p-3 flex items-center justify-between bg-white';
+                            const locText = rec.locationName ? `地點：${rec.locationName}` : (typeof rec.location === 'string' ? `地點：${rec.location}` : '');
+                            row.innerHTML = `
+                                <div>
+                                    <div class=\"text-sm text-gray-700\">使用者：${userName}</div>
+                                    <div class=\"text-sm text-gray-700\">類型：${rec.type}</div>
+                                    <div class=\"text-sm text-gray-700\">時間：${rec.when ? rec.when.toLocaleString('zh-TW') : ''}</div>
+                                    ${locText ? `<div class=\\\"text-xs text-gray-500\\\">${locText}</div>` : ''}
+                                </div>
+                                <span class=\"text-xs text-gray-500\">來源：${rec.deviceId}</span>`;
+                            modEl.appendChild(row);
+                        });
+                    } catch (e) {
+                        console.error('讀取修改紀錄失敗', e);
+                        modEl.innerHTML = `<div class=\"text-sm text-red-600\">讀取失敗</div>`;
+                    }
+                }
+
+                filterDateEl.addEventListener('change', renderModList);
+                filterUserEl.addEventListener('change', renderModList);
 
                 // 核准/駁回
                 list.addEventListener('click', async (e) => {
@@ -3225,6 +3282,7 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
 
                 // 初次渲染
                 await renderList();
+                try { await renderModList(); } catch(e) {}
             }
 
             // aooao?a??e??i??a?oa??a??e!�La�?e??a??a??e!�L
