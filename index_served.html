@@ -2752,9 +2752,11 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                             body { -webkit-print-color-adjust: exact; }
                             body > * { display: none !important; }
                             #monthly-report-container { display: block !important; position: static !important; }
+                            #monthly-report-container > div { display: block !important; height: auto !important; }
                             #monthly-report-container .px-4.py-3.bg-indigo-600 { display: none !important; }
                             #monthly-report-container .p-4.flex-1 { padding: 0 !important; }
-                            #month-report-content { width: 190mm !important; margin: 0 auto !important; }
+                            #month-report-content { width: 190mm !important; margin: 0 auto 0 auto !important; }
+                            #month-report-inner { margin-top: 0 !important; }
                             table { border-collapse: collapse; }
                             th, td { font-size: 11px; line-height: 1.2; padding: 2px 4px; }
                         }
