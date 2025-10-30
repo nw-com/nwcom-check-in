@@ -340,20 +340,40 @@ async function applyCalendarStatus(year, month) {
         const ymId = `${year}-${String(month + 1).padStart(2,'0')}`;
         const ref = doc(db, 'users', user.uid, 'workdays', ymId);
         const snap = await getDoc(ref);
-        const workdays = new Set((snap.exists() ? (snap.data().days || []) : []).map(n => Number(n)));
+        const rawDays = new Set((snap.exists() ? (snap.data().days || []) : []).map(n => Number(n)));
 
-        // 讀取值班名單作為工作日（本月有名單的週五）
+        // 假日優先：過濾出「非假日且週一~週四」的上班日
+        let isHoliday = () => false;
+        try {
+            if (typeof fetchHolidaySettingsOnce === 'function') await fetchHolidaySettingsOnce();
+            const hs = window.__holidaySettingsCache || { weekendIsHoliday: false, holidays: [] };
+            const holidaysSet = new Set(hs.holidays || []);
+            isHoliday = (date) => {
+                const ymd = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+                const weekend = date.getDay() === 0 || date.getDay() === 6;
+                return holidaysSet.has(ymd) || (hs.weekendIsHoliday && weekend);
+            };
+        } catch (e) { /* ignore */ }
+        const workdays = new Set(Array.from(rawDays).filter(d => {
+            const dt = new Date(year, month, d);
+            const w = dt.getDay();
+            return !isHoliday(dt) && (w >= 1 && w <= 4); // 週一~週四
+        }));
+
+        // 讀取「我」的值班名單（本月週五）作為可標示的天
         let dutySet = new Set();
         try {
             const generalRef = doc(db, 'settings', 'general');
             const setSnap = await getDoc(generalRef);
             const roster = setSnap.exists() ? (setSnap.data().fridayDutyRoster || {}) : {};
+            const myUid = user.uid || '';
+            const myName = user.displayName || user.email || '';
             Object.keys(roster).forEach(iso => {
                 const dt = new Date(iso);
-                const names = roster[iso] || [];
-                if (dt.getFullYear() === year && dt.getMonth() === month && Array.isArray(names) && names.length > 0) {
-                    dutySet.add(iso);
-                }
+                const arr = roster[iso] || [];
+                const normalize = (s) => (s || '').trim();
+                const isMine = Array.isArray(arr) && ((myUid && arr.includes(myUid)) || (myName && arr.some(n => normalize(n) === normalize(myName))));
+                if (dt.getFullYear() === year && dt.getMonth() === month && isMine) dutySet.add(iso);
             });
         } catch (e) {
             // 無法載入值班名單時略過

@@ -3929,14 +3929,11 @@
                         const dayEnd = new Date(viewYear, viewMonth, d, 23, 59, 59, 999);
                         const w = dayStart.getDay();
                         const ymd = `${viewYear}-${String(viewMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-                        const defaultIsWorkday = !isHoliday(dayStart) && (w >= 1 && w <= 5);
+                        const defaultIsWorkday = !isHoliday(dayStart) && (w >= 1 && w <= 4); // 週一~週四為上班日；週五不算上班日
                         const existing = daysMap && daysMap[ymd] ? daysMap[ymd] : null;
-                        const startDefault = existing?.start || (defaultIsWorkday ? '09:00' : '');
-                        const endDefault = existing?.end || (defaultIsWorkday ? '17:30' : '');
-
-                        // 只顯示上班日（有預設或覆蓋時間的平日）
-                        const isWorkdayFinal = Boolean(startDefault) || Boolean(endDefault);
-                        if (!isWorkdayFinal) continue;
+                        // 週五一律不依據上班設定顯示為上班日
+                        const startDefault = (w === 5) ? '' : (existing?.start || (defaultIsWorkday ? '09:00' : ''));
+                        const endDefault = (w === 5) ? '' : (existing?.end || (defaultIsWorkday ? '17:30' : ''));
 
                         // 狀態判斷：請假日優先，其次值班日，再次活動支援，否則上班日
                         const isLeave = Array.isArray(leaves) && leaves.some(l => {
@@ -3954,6 +3951,14 @@
                             if (!s || !e) return false;
                             return s <= dayEnd && e >= dayStart; // overlap
                         });
+
+                        // 顯示條件：
+                        // - 假日優先：假日不顯示「上班日」，但若為值班或活動支援，仍可顯示
+                        // - 平日：週一~週四為上班日；週五僅顯示值班或活動支援
+                        const isWeekdayWork = Boolean(startDefault) || Boolean(endDefault); // 僅週一~週四可能為 true
+                        const shouldShow = isRosterDuty || isSpecialDuty || (isWeekdayWork && !isHoliday(dayStart));
+                        if (!shouldShow) continue;
+
                         let statusLabel = '上班日';
                         if (isLeave) statusLabel = '請假日';
                         else if (isRosterDuty) statusLabel = '值班日';
