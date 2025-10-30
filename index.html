@@ -843,7 +843,7 @@
                          <p id="current-time" class="text-lg font-semibold text-gray-700"></p>
                     </div>
                     <div id="community-status-row" class="h-[50px] flex items-center justify-center border-b border-gray-200 bg-white">
-                        <button id="community-status-btn" class="w-full max-w-[1200px] mx-4 bg-blue-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-blue-700 flex items-center justify-center">
+                        <button id="community-status-btn" class="mx-4 bg-red-100 text-red-700 font-semibold py-2 px-4 rounded-md hover:bg-red-200 border border-red-200 flex items-center justify-center shadow-sm">
                             <i data-lucide="activity" class="w-4 h-4 mr-2"></i>社區人員狀況
                         </button>
                     </div>
@@ -3810,13 +3810,29 @@
                 const fetchWorkdays = async (ymKey) => {
                     const db = window.__db; const { doc, getDoc } = window.__fs;
                     let daysMap = {};
+                    const [yearStr, monthStr] = (ymKey || '').split('-');
+                    const makeYmd = (d) => `${yearStr}-${monthStr}-${String(Number(d)).padStart(2,'0')}`;
+                    const applyArrayDays = (arr) => {
+                        if (!Array.isArray(arr)) return;
+                        arr.forEach(n => {
+                            const ymd = makeYmd(n);
+                            // 若該日尚未有設定，套用預設時段，讓班表能顯示為上班日
+                            if (!daysMap[ymd]) {
+                                daysMap[ymd] = { start: '09:00', end: '17:30' };
+                            }
+                        });
+                    };
                     try {
                         // 全域設定：settings/workdays_YYYY-MM
                         const settingsDocSnap = await getDoc(doc(db, 'settings', `workdays_${ymKey}`));
                         if (settingsDocSnap.exists()) {
                             const sd = settingsDocSnap.data();
-                            if (sd && sd.days && typeof sd.days === 'object') {
-                                daysMap = { ...sd.days };
+                            if (sd && sd.days) {
+                                if (typeof sd.days === 'object' && !Array.isArray(sd.days)) {
+                                    daysMap = { ...sd.days };
+                                } else if (Array.isArray(sd.days)) {
+                                    applyArrayDays(sd.days);
+                                }
                             }
                         }
                     } catch (e) { console.warn('讀取全域上班設定失敗', e); }
@@ -3827,8 +3843,13 @@
                             const userDocSnap = await getDoc(doc(db, 'users', user.uid, 'workdays', ymKey));
                             if (userDocSnap.exists()) {
                                 const ud = userDocSnap.data();
-                                if (ud && ud.days && typeof ud.days === 'object') {
-                                    daysMap = { ...daysMap, ...ud.days };
+                                if (ud && ud.days) {
+                                    if (typeof ud.days === 'object' && !Array.isArray(ud.days)) {
+                                        daysMap = { ...daysMap, ...ud.days };
+                                    } else if (Array.isArray(ud.days)) {
+                                        // 陣列代表「上班設定」頁面選取的日期（無時間），轉為預設時段
+                                        applyArrayDays(ud.days);
+                                    }
                                 }
                             }
                         }
