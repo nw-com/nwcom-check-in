@@ -842,7 +842,12 @@
                     <div class="h-[50px] flex items-center justify-center border-b border-gray-200 bg-white">
                          <p id="current-time" class="text-lg font-semibold text-gray-700"></p>
                     </div>
-                    <div class="p-4 overflow-y-auto" style="height: calc(100% - 50px);">
+                    <div id="community-status-row" class="h-[50px] flex items-center justify-center border-b border-gray-200 bg-white">
+                        <button id="community-status-btn" class="w-full max-w-[1200px] mx-4 bg-blue-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-blue-700 flex items-center justify-center">
+                            <i data-lucide="activity" class="w-4 h-4 mr-2"></i>社區人員狀況
+                        </button>
+                    </div>
+                    <div class="p-4 overflow-y-auto" style="height: calc(100% - 100px);">
                         <div class="bg-white p-4 rounded-lg mb-4 shadow-sm border">
                             <h3 class="font-bold text-red-800 mb-2 flex items-center"><i data-lucide="user-circle" class="w-4 h-4 mr-2"></i>我的狀態</h3>
                             <div id="my-status" class="text-gray-600">讀取中...</div>
@@ -871,11 +876,20 @@
                     if(timeEl){ timeEl.textContent = new Date().toLocaleString('zh-TW', { dateStyle: 'long', timeStyle: 'medium' }); }
                 }, 1000);
                 state.activeListeners.push(() => clearInterval(timerInterval));
+
+                // 社區人員狀況按鈕開啟新視窗
+                const communityBtn = document.getElementById('community-status-btn');
+                if (communityBtn) {
+                    communityBtn.addEventListener('click', () => {
+                        try { window.open('https://nw-com.github.io/nw-checkin-all/', '_blank', 'noopener'); } catch(e) {}
+                    });
+                }
                 
                 // 檢查是否顯示員工狀態
                 // 定義默認設置
                 const defaultSettings = {
-                    showEmployeeStatus: true
+                    showEmployeeStatus: true,
+                    communityStatusAllowedUsers: []
                 };
                 
                 // 嘗試從本地存儲獲取設置
@@ -893,6 +907,16 @@
                     const container = document.getElementById('all-users-summary-card');
                     if (container) container.style.display = 'none';
                 }
+
+                // 控制「社區人員狀況」按鈕可見性
+                try {
+                    const rowEl = document.getElementById('community-status-row');
+                    const myId = state.currentUserData?.id;
+                    const allowed = Array.isArray(localSettings.communityStatusAllowedUsers) && myId
+                        ? localSettings.communityStatusAllowedUsers.includes(myId)
+                        : false;
+                    if (rowEl) rowEl.style.display = allowed ? 'block' : 'none';
+                } catch(_) {}
                 
                 // 嘗試從Firebase獲取最新設置，但不阻塞UI
                 try {
@@ -910,6 +934,13 @@
                                     container.style.display = settings.showEmployeeStatus ? 'block' : 'none';
                                 }
                             }
+                            // 更新社區人員狀況按鈕可見性
+                            const rowEl = document.getElementById('community-status-row');
+                            const myId = state.currentUserData?.id;
+                            const allowed = Array.isArray(settings.communityStatusAllowedUsers) && myId
+                                ? settings.communityStatusAllowedUsers.includes(myId)
+                                : false;
+                            if (rowEl) rowEl.style.display = allowed ? 'block' : 'none';
                     }
                 }).catch(error => {
                     console.warn("Could not fetch latest settings, using local settings instead:", error);
@@ -5165,6 +5196,21 @@
                             </div>
                         </div>
                         
+                        <div class="bg-white p-4 rounded-md shadow-sm border mb-4">
+                            <h3 class="font-bold text-lg mb-4">「社區人員狀況」按鈕可見人員</h3>
+                            <p class="text-sm text-gray-600 mb-4">勾選可在儀表板看到「社區人員狀況」按鈕的帳號</p>
+                            <div id="community-status-settings" class="space-y-2">
+                                <div class="flex items-center justify-between p-2 border-b">
+                                    <label class="text-gray-700 font-medium">帳號名稱</label>
+                                    <label class="text-gray-700 font-medium">可見</label>
+                                </div>
+                                <div class="flex justify-center items-center py-4">
+                                    <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-red-600"></div>
+                                    <span class="ml-2 text-gray-600">載入中...</span>
+                                </div>
+                            </div>
+                        </div>
+                        
                         <button id="save-general-settings" class="w-full bg-red-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-red-700 mb-4 flex items-center justify-center">
                             <i data-lucide="save" class="w-4 h-4 mr-2"></i>儲存設定
                         </button>
@@ -5183,15 +5229,19 @@
                         
                         // 載入使用者顯示設定
                         loadUserDisplaySettings(settings.visibleUsers || {});
+                        // 載入「社區人員狀況」按鈕可見名單
+                        loadCommunityStatusAllowedUsers(Array.isArray(settings.communityStatusAllowedUsers) ? settings.communityStatusAllowedUsers : []);
                     } else {
                         // 如果設定不存在，載入預設值（全部顯示）
                         loadUserDisplaySettings({});
+                        loadCommunityStatusAllowedUsers([]);
                     }
                 }).catch(error => {
                     console.error("Error getting general settings:", error);
                     showToast("無法讀取設定", true);
                     // 發生錯誤時，仍然載入使用者列表
                     loadUserDisplaySettings({});
+                    loadCommunityStatusAllowedUsers([]);
                 });
                 
                 // 載入使用者列表並設定顯示狀態
@@ -5276,6 +5326,71 @@
                     });
                 }
                 
+                // 載入「社區人員狀況」按鈕可見人員
+                function loadCommunityStatusAllowedUsers(allowedUserIds) {
+                    const container = document.getElementById('community-status-settings');
+                    const usersRef = collection(db, "users");
+                    getDocs(usersRef).then((querySnapshot) => {
+                        container.innerHTML = `
+                            <div class="flex items-center justify-between p-2 border-b">
+                                <label class="text-gray-700 font-medium">帳號名稱</label>
+                                <label class="text-gray-700 font-medium">可見</label>
+                            </div>
+                        `;
+
+                        const selectAllDiv = document.createElement('div');
+                        selectAllDiv.className = 'flex items-center justify-between p-2 border-b bg-gray-50';
+                        selectAllDiv.innerHTML = `
+                            <label for="select-all-community" class="text-gray-700 font-medium">全選/取消全選</label>
+                            <label class="switch">
+                                <input type="checkbox" id="select-all-community">
+                                <span class="slider round"></span>
+                            </label>
+                        `;
+                        container.appendChild(selectAllDiv);
+
+                        const selectAllCheckbox = document.getElementById('select-all-community');
+                        const userCheckboxes = [];
+
+                        querySnapshot.forEach((doc) => {
+                            const userData = doc.data();
+                            const userId = doc.id;
+                            const isAllowed = Array.isArray(allowedUserIds) ? allowedUserIds.includes(userId) : false;
+                            const row = document.createElement('div');
+                            row.className = 'flex items-center justify-between p-2 border-b';
+                            row.innerHTML = `
+                                <label for="community-${userId}" class="text-gray-700">${userData.name || userData.email || '未命名使用者'}</label>
+                                <label class="switch">
+                                    <input type="checkbox" id="community-${userId}" data-user-id="${userId}" class="community-btn-visible-checkbox" ${isAllowed ? 'checked' : ''}>
+                                    <span class="slider round"></span>
+                                </label>
+                            `;
+                            container.appendChild(row);
+                            userCheckboxes.push(row.querySelector(`#community-${userId}`));
+                        });
+
+                        selectAllCheckbox.checked = userCheckboxes.length > 0 && userCheckboxes.every(cb => cb.checked);
+                        selectAllCheckbox.addEventListener('change', () => {
+                            const isChecked = selectAllCheckbox.checked;
+                            userCheckboxes.forEach(cb => { cb.checked = isChecked; });
+                        });
+
+                        userCheckboxes.forEach(cb => {
+                            cb.addEventListener('change', () => {
+                                selectAllCheckbox.checked = userCheckboxes.every(cb => cb.checked);
+                            });
+                        });
+                    }).catch(error => {
+                        console.error('Error getting users for community status settings:', error);
+                        container.innerHTML = `
+                            <div class="p-4 text-center text-red-600">
+                                <p>無法載入名單</p>
+                                <p class="text-sm">${error.message}</p>
+                            </div>
+                        `;
+                    });
+                }
+                
                 // 儲存設定
                 document.getElementById('save-general-settings').addEventListener('click', async () => {
                     try {
@@ -5293,11 +5408,17 @@
                             }
                         });
                         
+                        // 收集「社區人員狀況」按鈕可見名單
+                        const communityStatusAllowedUsers = Array.from(document.querySelectorAll('.community-btn-visible-checkbox'))
+                            .filter(cb => cb.checked)
+                            .map(cb => cb.dataset.userId);
+                        
                         // 儲存到 Firebase
                         await setDoc(doc(db, "settings", "general"), {
                             showEmployeeStatus,
                             
                             visibleUsers,
+                            communityStatusAllowedUsers,
                             updatedAt: serverTimestamp()
                         }, { merge: true });
                         
