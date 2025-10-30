@@ -400,6 +400,41 @@ async function applyCalendarStatus(year, month) {
             map.set(iso, obj);
         });
 
+        // 讀取本使用者的請假單（核准或審核中），用於月曆橘底標示
+        let leaveRanges = [];
+        try {
+            const leavesRef = collection(db, 'leaves');
+            // 僅過濾使用者與狀態，其餘於客端判斷與本月是否相交
+            const lq = query(
+                leavesRef,
+                where('userId', '==', user.uid),
+                // Firestore in 查詢：核准或審核中皆視為請假
+                where('status', 'in', ['approved', 'pending'])
+            );
+            const lSnap = await getDocs(lq);
+            const monthStart = new Date(year, month, 1, 0, 0, 0, 0);
+            const monthEnd = new Date(year, month + 1, 0, 23, 59, 59, 999);
+            lSnap.forEach(docSnap => {
+                const lv = docSnap.data() || {};
+                const s = lv.leaveStartTime?.toDate?.() || (lv.leaveStartTime ? new Date(lv.leaveStartTime) : null);
+                const e = lv.leaveEndTime?.toDate?.() || (lv.leaveEndTime ? new Date(lv.leaveEndTime) : null);
+                if (!s || !e) return;
+                // 僅保留與本月有交集的請假範圍
+                if (e >= monthStart && s <= monthEnd) {
+                    leaveRanges.push({ start: s, end: e });
+                }
+            });
+        } catch (e) {
+            // 若請假載入失敗，不影響其他標色
+        }
+
+        const isLeaveDay = (dateObj) => {
+            if (!leaveRanges.length) return false;
+            const dayStart = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate(), 0, 0, 0, 0);
+            const dayEnd = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate(), 23, 59, 59, 999);
+            return leaveRanges.some(r => r.end >= dayStart && r.start <= dayEnd);
+        };
+
         // 套用標色
         const cells = document.querySelectorAll('#calendar-grid [data-ymd]');
         cells.forEach(cell => {
@@ -419,6 +454,12 @@ async function applyCalendarStatus(year, month) {
             if (status && (status.start !== status.end)) {
                 cell.classList.remove('bg-gray-200','bg-blue-100','border-blue-300','bg-green-100','border-green-300');
                 cell.classList.add('bg-red-100','border-red-300');
+                return;
+            }
+            // 請假日優先於一般上班/值班的淺藍色
+            if (isLeaveDay(dt)) {
+                cell.classList.remove('bg-gray-200','bg-blue-100','border-blue-300','bg-green-100','border-green-300','bg-red-100','border-red-300');
+                cell.classList.add('bg-orange-100','border-orange-300');
                 return;
             }
             if (workdays.has(d) || dutySet.has(iso)) {
@@ -1758,7 +1799,8 @@ async function applyFridayDutyBadges(year, month) {
             const cell = document.querySelector(`#calendar-grid [data-ymd="${iso}"]`);
             if (!cell) return;
             // 值班日視同上班日：未完成打卡與非異常，套用淺藍底
-            if (!cell.classList.contains('bg-green-100') && !cell.classList.contains('bg-red-100')) {
+            // 但若為請假日（橘底）則不覆蓋
+            if (!cell.classList.contains('bg-green-100') && !cell.classList.contains('bg-red-100') && !cell.classList.contains('bg-orange-100')) {
                 cell.classList.remove('bg-gray-200');
                 cell.classList.add('bg-blue-100','border-blue-300');
             }

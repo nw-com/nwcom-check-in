@@ -2145,22 +2145,15 @@
                                     <input type="text" id="other-reason" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500" placeholder="請輸入請假事由">
                                 </div>
                                 
-                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div class="grid grid-cols-1 gap-4">
                                     <div class="form-group">
-                                        <label for="leave-start-date" class="block text-sm font-medium text-gray-700 mb-1">開始日期</label>
-                                        <input type="date" id="leave-start-date" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500" value="${todayStr}">
+                                        <label for="leave-start-dt" class="block text-sm font-medium text-gray-700 mb-1">開始時間</label>
+                                        <input type="datetime-local" id="leave-start-dt" step="600" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500" value="${(function(){const now=new Date();const y=now.getFullYear();const m=String(now.getMonth()+1).padStart(2,'0');const d=String(now.getDate()).padStart(2,'0');return `${y}-${m}-${d}T09:00`;})()}">
                                     </div>
                                     <div class="form-group">
-                                        <label for="leave-start-hour" class="block text-sm font-medium text-gray-700 mb-1">開始小時</label>
-                                        <input type="number" id="leave-start-hour" min="0" max="23" step="1" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500" value="${currentHour}">
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="leave-end-date" class="block text-sm font-medium text-gray-700 mb-1">結束日期</label>
-                                        <input type="date" id="leave-end-date" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500" value="${todayStr}">
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="leave-end-hour" class="block text-sm font-medium text-gray-700 mb-1">結束小時</label>
-                                        <input type="number" id="leave-end-hour" min="0" max="23" step="1" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500" value="${defaultEndHour}">
+                                        <label for="leave-end-dt" class="block text-sm font-medium text-gray-700 mb-1">結束時間</label>
+                                        <input type="datetime-local" id="leave-end-dt" step="600" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500" value="${(function(){const now=new Date();const y=now.getFullYear();const m=String(now.getMonth()+1).padStart(2,'0');const d=String(now.getDate()).padStart(2,'0');return `${y}-${m}-${d}T17:00`;})()}">
+                                        <p class="text-xs text-gray-500 mt-1">時間格式：YYYY-MM-DD  hh:mm（每 10 分鐘一格）</p>
                                     </div>
                                 </div>
                                 
@@ -2213,20 +2206,22 @@
                         }
                         reason = otherReason;
                     }
-                    // 取得日期與小時，組合為時間
-                    const startDateStr = document.getElementById('leave-start-date').value;
-                    const endDateStr = document.getElementById('leave-end-date').value;
-                    const startHour = parseInt(document.getElementById('leave-start-hour').value, 10);
-                    const endHour = parseInt(document.getElementById('leave-end-hour').value, 10);
+                    // 取得開始/結束「日期時間」，每 10 分鐘一格
+                    const startVal = (document.getElementById('leave-start-dt').value || '').trim();
+                    const endVal = (document.getElementById('leave-end-dt').value || '').trim();
 
-                    if (!startDateStr || !endDateStr || isNaN(startHour) || isNaN(endHour)) {
-                        showToast('請選擇有效的日期與小時', true);
+                    if (!startVal || !endVal || !startVal.includes('T') || !endVal.includes('T')) {
+                        showToast('請選擇有效的開始與結束時間', true);
                         return;
                     }
-                    const startTime = new Date(`${startDateStr}T00:00:00`);
-                    startTime.setHours(startHour, 0, 0, 0);
-                    const endTime = new Date(`${endDateStr}T00:00:00`);
-                    endTime.setHours(endHour, 0, 0, 0);
+                    const parseLocalDT = (s) => {
+                        const [datePart, timePart] = s.split('T');
+                        const [yy, mm, dd] = datePart.split('-').map(n => parseInt(n, 10));
+                        const [HH, MM] = timePart.split(':').map(n => parseInt(n, 10));
+                        return new Date(yy, (mm || 1) - 1, dd || 1, HH || 0, MM || 0, 0);
+                    };
+                    const startTime = parseLocalDT(startVal);
+                    const endTime = parseLocalDT(endVal);
                     
                     if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
                         showToast('請選擇有效的時間', true);
@@ -2243,7 +2238,7 @@
                         
                         const db = window.__db; const { addDoc, collection, serverTimestamp, Timestamp, updateDoc, doc } = window.__fs; const user = window.__auth?.currentUser;
                         if (!user) throw new Error('尚未登入');
-                        // 創建請假記錄（以小時為單位）
+                        // 創建請假記錄（合併日期+時間），並寫入相容欄位
                         await addDoc(collection(db, 'leaves'), {
                             userId: user.uid,
                             userName: state.currentUserData?.name || '',
@@ -2251,6 +2246,8 @@
                             reasonType: reasonType,
                             startTime: Timestamp.fromDate(startTime),
                             endTime: Timestamp.fromDate(endTime),
+                            leaveStartTime: Timestamp.fromDate(startTime),
+                            leaveEndTime: Timestamp.fromDate(endTime),
                             status: 'pending',
                             createdAt: serverTimestamp()
                         });
@@ -3965,6 +3962,9 @@
                         else if (isSpecialDuty) statusLabel = '活動支援';
 
                         const isFuture = dayStart > endOfToday;
+                        // 值班日一律顯示 09:00~17:30（即便週五不是預設上班日）
+                        const startDisp = isRosterDuty ? '09:00' : (startDefault || '');
+                        const endDisp = isRosterDuty ? '17:30' : (endDefault || '');
                         const actionHtml = isFuture
                             ? `--`
                             : `<button class="open-day-records px-2 py-1 bg-indigo-600 text-white rounded text-xs" data-date="${ymd}">查看當日打卡紀錄</button>`;
@@ -3973,8 +3973,8 @@
                         tr.innerHTML = `
                             <td class="border px-2 py-1 text-center">${String(d).padStart(2,'0')}</td>
                             <td class="border px-2 py-1 text-center">${weekdayZh[w]}</td>
-                            <td class="border px-2 py-1 text-center">${startDefault || '--:--'}</td>
-                            <td class="border px-2 py-1 text-center">${endDefault || '--:--'}</td>
+                            <td class="border px-2 py-1 text-center">${startDisp || '--:--'}</td>
+                            <td class="border px-2 py-1 text-center">${endDisp || '--:--'}</td>
                             <td class="border px-2 py-1 text-center">${statusLabel}</td>
                             <td class="border px-2 py-1 text-center">${actionHtml}</td>
                         `;
