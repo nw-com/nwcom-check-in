@@ -936,7 +936,17 @@
                         const settingsRef = doc(db, 'settings', 'general');
                         const s = await getDoc(settingsRef);
                         const roster = s.exists() ? (s.data().fridayDutyRoster || {}) : {};
-                        const names = roster[isoFriday] || [];
+                        const ids = roster[isoFriday] || [];
+                        // 將 UID 轉為姓名顯示（相容舊資料：若為姓名，則照原字串顯示）
+                        let nameMap = {};
+                        try {
+                            const snapUsers = await getDocs(collection(db, 'users'));
+                            snapUsers.forEach(d => {
+                                const data = d.data();
+                                nameMap[d.id] = data?.displayName || data?.name || data?.email || d.id;
+                            });
+                        } catch (e) {}
+                        const names = Array.isArray(ids) ? ids.map(v => nameMap[v] || v) : [];
 
                         const clearedKey = `dutyReminderCleared-${isoFriday}-${user.uid}`;
                         const cleared = localStorage.getItem(clearedKey) === '1';
@@ -2776,11 +2786,12 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                             if (!s || !e) return false;
                             return s < new Date(year, monthIndex, d+1, 0, 0, 0, 0) && e > dayStart; // overlap
                         });
-                        // 週五值班名單（以本人姓名比對）
+                        // 週五值班名單（以 UID 優先，兼容姓名比對）
+                        const myUid = state.currentUser?.uid;
                         const myName = state.currentUserData?.name || state.currentUser.displayName || state.currentUser.email || '';
-                        const names = fridayDutyRoster[dateLabel] || [];
+                        const arr = fridayDutyRoster[dateLabel] || [];
                         const normalize = (s) => (s || '').trim();
-                        const isRosterDuty = Array.isArray(names) && names.some(n => normalize(n) === normalize(myName));
+                        const isRosterDuty = Array.isArray(arr) && ((myUid && arr.includes(myUid)) || arr.some(n => normalize(n) === normalize(myName)));
                         const isDuty = isDutyBySpecial || isRosterDuty;
 
                         // 指示欄位：值班優先，不顯示假日
@@ -3657,6 +3668,7 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                     const weekdayZh = ['日','一','二','三','四','五','六'];
                     const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
                     bodyEl.innerHTML = '';
+                    const myUid = state.currentUser?.uid;
                     const myName = state.currentUserData?.name || state.currentUser.displayName || state.currentUser.email || '';
                     for (let d = 1; d <= daysInMonth; d++) {
                         const dayStart = new Date(viewYear, viewMonth, d, 0, 0, 0, 0);
@@ -3673,9 +3685,9 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                         if (!isWorkdayFinal) continue;
 
                         // 狀態判斷：值班日優先，其次活動支援，否則上班日
-                        const names = fridayDutyRoster[ymd] || [];
+                        const arr = fridayDutyRoster[ymd] || [];
                         const normalize = (s) => (s || '').trim();
-                        const isRosterDuty = Array.isArray(names) && names.some(n => normalize(n) === normalize(myName));
+                        const isRosterDuty = Array.isArray(arr) && ((myUid && arr.includes(myUid)) || arr.some(n => normalize(n) === normalize(myName)));
                         const isSpecialDuty = duties.some(di => {
                             const s = di.startTime?.toDate?.() || (di.startTime ? new Date(di.startTime) : null);
                             const e = di.endTime?.toDate?.() || (di.endTime ? new Date(di.endTime) : null);

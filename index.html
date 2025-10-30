@@ -842,12 +842,7 @@
                     <div class="h-[50px] flex items-center justify-center border-b border-gray-200 bg-white">
                          <p id="current-time" class="text-lg font-semibold text-gray-700"></p>
                     </div>
-                    <div id="community-status-row" class="h-[50px] flex items-center justify-center border-b border-gray-200 bg-white">
-                        <button id="community-status-btn" class="mx-4 bg-red-100 text-red-700 font-semibold py-2 px-4 rounded-md hover:bg-red-200 border border-red-200 flex items-center justify-center shadow-sm">
-                            <i data-lucide="activity" class="w-4 h-4 mr-2"></i>社區人員狀況
-                        </button>
-                    </div>
-                    <div class="p-4 overflow-y-auto" style="height: calc(100% - 100px);">
+                    <div class="p-4 overflow-y-auto" style="height: calc(100% - 50px);">
                         <div class="bg-white p-4 rounded-lg mb-4 shadow-sm border">
                             <h3 class="font-bold text-red-800 mb-2 flex items-center"><i data-lucide="user-circle" class="w-4 h-4 mr-2"></i>我的狀態</h3>
                             <div id="my-status" class="text-gray-600">讀取中...</div>
@@ -862,8 +857,19 @@
                            </div>
                            <div class="text-xs text-gray-500 mt-2">點擊查看所有同仁狀態</div>
                        </div>
+                        <div id="community-status-row" class="mb-4">
+                            <button id="community-status-btn" class="w-full bg-red-100 text-red-700 font-semibold py-2 px-4 rounded-md hover:bg-red-200 border border-red-200 flex items-center justify-center shadow-sm">
+                                <i data-lucide="activity" class="w-4 h-4 mr-2"></i>社區人員狀況
+                            </button>
+                        </div>
                         <div id="dashboard-notifications" class="bg-white p-4 rounded-lg mb-4 shadow-sm border">
                            <h3 class="font-bold text-gray-800 mb-2 flex items-center"><i data-lucide="bell" class="w-4 h-4 mr-2"></i>通知</h3>
+                           <div id="pinned-notifications" class="space-y-2 mb-2">
+                              <a href="https://docs.google.com/document/d/1qdb2aouFOgkP5WY9XqkAhenJe--yyN5V/edit" target="_blank" rel="noopener" class="block p-3 rounded-md border bg-blue-50 border-blue-200 text-blue-800 hover:bg-blue-100">
+                                <span class="font-medium">【公司總部】勤務打卡系統使用規範</span>
+                                <span class="ml-2 text-xs align-middle bg-blue-200 text-blue-800 px-1.5 py-0.5 rounded">置頂</span>
+                              </a>
+                           </div>
                            <div id="dashboard-notifications-list" class="space-y-2 text-gray-700">
                              <div class="text-gray-500">讀取中...</div>
                            </div>
@@ -996,7 +1002,17 @@
                         const settingsRef = doc(db, 'settings', 'general');
                         const s = await getDoc(settingsRef);
                         const roster = s.exists() ? (s.data().fridayDutyRoster || {}) : {};
-                        const names = roster[isoFriday] || [];
+                        const ids = roster[isoFriday] || [];
+                        // 將 UID 轉為姓名顯示
+                        let nameMap = {};
+                        try {
+                            const snap = await getDocs(collection(db, 'users'));
+                            snap.forEach(d => {
+                                const data = d.data();
+                                nameMap[d.id] = data?.displayName || data?.name || data?.email || d.id;
+                            });
+                        } catch(e) {}
+                        const names = Array.isArray(ids) ? ids.map(id => nameMap[id] || id) : [];
 
                         const clearedKey = `dutyReminderCleared-${isoFriday}-${user.uid}`;
                         const cleared = localStorage.getItem(clearedKey) === '1';
@@ -2890,10 +2906,11 @@
                                     if (!s || !e) return false;
                                     return s < nextDay && e > dayStart;
                                 });
+                                const myUid = state.currentUser.uid;
                                 const myName = state.currentUserData?.name || state.currentUser.displayName || state.currentUser.email || '';
-                                const names = fridayDutyRoster[dateLabel] || [];
+                                const arr = fridayDutyRoster[dateLabel] || [];
                                 const normalize = (s) => (s || '').trim();
-                                const isRosterDuty = Array.isArray(names) && names.some(n => normalize(n) === normalize(myName));
+                                const isRosterDuty = Array.isArray(arr) && (arr.includes(myUid) || arr.some(n => normalize(n) === normalize(myName)));
                                 const isDuty = isDutyBySpecial || isRosterDuty;
                                 // 非值班且不在使用者自訂工作日，才標示假日
                                 if (!isDuty && !set.has(d)) indicators.push('假日');
@@ -2907,15 +2924,16 @@
                                     if (!s || !e) return false;
                                     return s < nextDay && e > dayStart;
                                 });
+                                const myUid = state.currentUser.uid;
                                 const myName = state.currentUserData?.name || state.currentUser.displayName || state.currentUser.email || '';
-                                const names = fridayDutyRoster[dateLabel] || [];
+                                const arr = fridayDutyRoster[dateLabel] || [];
                                 const normalize = (s) => (s || '').trim();
-                                const isRosterDuty = Array.isArray(names) && names.some(n => normalize(n) === normalize(myName));
+                                const isRosterDuty = Array.isArray(arr) && (arr.includes(myUid) || arr.some(n => normalize(n) === normalize(myName)));
                                 const isDuty = isDutyBySpecial || isRosterDuty;
                                 if (!isDuty && (w === 6 || w === 0)) indicators.push('假日');
                             }
                         } catch(e) {
-                            // 讀取失敗，維持週末為假日
+                            // 讀取失敗，維持週末為假日，但仍嘗試以 UID/姓名判斷值班
                             const nextDay = new Date(dayStart); nextDay.setDate(nextDay.getDate()+1);
                             const isDutyBySpecial = duties.some(di => {
                                 const s = di.startTime?.toDate?.() || (di.startTime ? new Date(di.startTime) : null);
@@ -2923,10 +2941,11 @@
                                 if (!s || !e) return false;
                                 return s < nextDay && e > dayStart;
                             });
+                            const myUid = state.currentUser?.uid;
                             const myName = state.currentUserData?.name || state.currentUser.displayName || state.currentUser.email || '';
-                            const names = fridayDutyRoster[dateLabel] || [];
+                            const arr = fridayDutyRoster[dateLabel] || [];
                             const normalize = (s) => (s || '').trim();
-                            const isRosterDuty = Array.isArray(names) && names.some(n => normalize(n) === normalize(myName));
+                            const isRosterDuty = Array.isArray(arr) && ((myUid && arr.includes(myUid)) || arr.some(n => normalize(n) === normalize(myName)));
                             const isDuty = isDutyBySpecial || isRosterDuty;
                             if (!isDuty && (w === 6 || w === 0)) indicators.push('假日');
                         }
@@ -2946,10 +2965,11 @@
                             if (!s || !e) return false;
                             return s < nextDay && e > dayStart; // overlap
                         });
-                        const myName = state.currentUserData?.name || state.currentUser.displayName || state.currentUser.email || '';
-                        const rosterNames = fridayDutyRoster[dateLabel] || [];
-                        const normalizeName = (s) => (s || '').trim();
-                        const isRosterDuty = Array.isArray(rosterNames) && rosterNames.some(n => normalizeName(n) === normalizeName(myName));
+                            const myUid = state.currentUser.uid;
+                            const myName = state.currentUserData?.name || state.currentUser.displayName || state.currentUser.email || '';
+                            const rosterNames = fridayDutyRoster[dateLabel] || [];
+                            const normalizeName = (s) => (s || '').trim();
+                            const isRosterDuty = Array.isArray(rosterNames) && (rosterNames.includes(myUid) || rosterNames.some(n => normalizeName(n) === normalizeName(myName)));
                         const isDutyFinal = isDutyBySpecial || isRosterDuty;
                         if (isDutyFinal) indicators.push('值班');
 
@@ -3890,6 +3910,7 @@
                     const weekdayZh = ['日','一','二','三','四','五','六'];
                     const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
                     bodyEl.innerHTML = '';
+                    const myUid = state.currentUser?.uid;
                     const myName = state.currentUserData?.name || state.currentUser.displayName || state.currentUser.email || '';
                     for (let d = 1; d <= daysInMonth; d++) {
                         const dayStart = new Date(viewYear, viewMonth, d, 0, 0, 0, 0);
@@ -3906,9 +3927,9 @@
                         if (!isWorkdayFinal) continue;
 
                         // 狀態判斷：值班日優先，其次活動支援，否則上班日
-                        const names = fridayDutyRoster[ymd] || [];
+                        const arr = fridayDutyRoster[ymd] || [];
                         const normalize = (s) => (s || '').trim();
-                        const isRosterDuty = Array.isArray(names) && names.some(n => normalize(n) === normalize(myName));
+                        const isRosterDuty = Array.isArray(arr) && (arr.includes(myUid) || arr.some(n => normalize(n) === normalize(myName)));
                         const isSpecialDuty = duties.some(di => {
                             const s = di.startTime?.toDate?.() || (di.startTime ? new Date(di.startTime) : null);
                             const e = di.endTime?.toDate?.() || (di.endTime ? new Date(di.endTime) : null);
@@ -5829,26 +5850,34 @@
                     lucide.createIcons();
                 } catch(e) { console.warn('插入週五值班人員區塊失敗', e); }
 
-                // 供值班名單選擇使用：所有使用者姓名
-                let allUserNames = [];
+                // 供值班名單選擇使用：所有使用者（UID 與姓名）
+                let allUsers = [];
+                let uidToName = {};
+                let nameToUid = {};
 
-                async function loadAllUserNames() {
+                async function loadAllUserNames() { // 保留舊函式名，實際回傳 UID/姓名
                     try {
                         if (typeof getDocs !== 'function' || typeof collection !== 'function') {
-                            allUserNames = [];
+                            allUsers = []; uidToName = {}; nameToUid = {};
                             return;
                         }
                         const snap = await getDocs(collection(db, 'users'));
-                        const namesSet = new Set();
+                        const usersArr = [];
+                        const u2n = {}; const n2u = {};
                         snap.forEach(docu => {
                             const data = docu.data();
-                            const name = (data.displayName || data.name || data.email || docu.id || '').toString().trim();
-                            if (name) namesSet.add(name);
+                            const uid = docu.id;
+                            const name = (data.displayName || data.name || data.email || uid || '').toString().trim();
+                            if (!name) return;
+                            usersArr.push({ id: uid, name });
+                            u2n[uid] = name;
+                            n2u[name] = uid;
                         });
-                        allUserNames = Array.from(namesSet).sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+                        usersArr.sort((a,b) => a.name.localeCompare(b.name, 'zh-Hant'));
+                        allUsers = usersArr; uidToName = u2n; nameToUid = n2u;
                     } catch (e) {
                         console.warn('讀取所有帳號姓名失敗', e);
-                        allUserNames = [];
+                        allUsers = []; uidToName = {}; nameToUid = {};
                     }
                 }
 
@@ -5868,14 +5897,14 @@
                     return fridays;
                 }
 
-                // 將名單渲染成每週多選下拉列
+                // 將名單渲染成每週多選下拉列（值為 UID、顯示姓名）
                 function renderFridayRosterList(rosterMap) {
                     const listEl = document.getElementById('friday-roster-list');
                     if (!listEl) return;
                     const fridays = getFridaysInMonth(targetYear, targetMonth);
                     listEl.innerHTML = '';
                     fridays.forEach((iso) => {
-                        const presetArr = (rosterMap[iso] || []);
+                        const presetArr = (rosterMap[iso] || []); // 應為 UID 陣列（已於載入時轉換）
                         const row = document.createElement('div');
                         row.className = 'space-y-1';
                         const label = document.createElement('label');
@@ -5886,11 +5915,11 @@
                         select.multiple = true;
                         select.setAttribute('data-iso', iso);
                         // 建立選項
-                        (allUserNames || []).forEach(name => {
+                        (allUsers || []).forEach(u => {
                             const opt = document.createElement('option');
-                            opt.value = name;
-                            opt.textContent = name;
-                            if (presetArr.includes(name)) opt.selected = true;
+                            opt.value = u.id; // UID
+                            opt.textContent = u.name; // 顯示姓名
+                            if (presetArr.includes(u.id)) opt.selected = true;
                             select.appendChild(opt);
                         });
                         row.appendChild(label);
@@ -5904,7 +5933,11 @@
                     const fridays = getFridaysInMonth(targetYear, targetMonth);
                     const items = fridays
                         .filter(iso => (rosterMap[iso] || []).length > 0)
-                        .map(iso => `${iso}：${(rosterMap[iso] || []).join('、')}`);
+                        .map(iso => {
+                            const ids = (rosterMap[iso] || []);
+                            const names = ids.map(id => uidToName[id] || id);
+                            return `${iso}：${names.join('、')}`;
+                        });
                     return items.length ? items.join('；') : '';
                 }
 
@@ -5915,25 +5948,36 @@
                         const snap = await getDoc(settingsRef);
                         const roster = snap.exists() ? (snap.data().fridayDutyRoster || {}) : {};
 
+                        // 先載入所有使用者名單（取得 UID/name 對照）
+                        if (!allUsers || allUsers.length === 0) {
+                            await loadAllUserNames();
+                        }
+
+                        // 將舊資料（姓名陣列）轉為 UID 陣列
+                        const convertToUidArr = (arr) => {
+                            const a = Array.isArray(arr) ? arr : [];
+                            const ids = a.map(v => nameToUid[v] || v).filter(Boolean);
+                            // 去重
+                            return Array.from(new Set(ids));
+                        };
+
                         // 自動帶入名單：若本月未填，嘗試沿用上個月同週次的名單
                         const thisFridays = getFridaysInMonth(targetYear, targetMonth);
                         const prevDate = new Date(targetYear, targetMonth - 1, 1);
                         const prevFridays = getFridaysInMonth(prevDate.getFullYear(), prevDate.getMonth());
-                        const renderMap = { ...roster };
+                        const renderMap = {};
+                        // 以轉換後的 UID 陣列建立渲染資料
+                        Object.keys(roster).forEach(k => { renderMap[k] = convertToUidArr(roster[k]); });
                         for (let i = 0; i < thisFridays.length; i++) {
                             const iso = thisFridays[i];
                             const prevIso = prevFridays[i];
                             const hasThis = Array.isArray(renderMap[iso]) && renderMap[iso].length > 0;
-                            const hasPrev = prevIso && Array.isArray(roster[prevIso]) && roster[prevIso].length > 0;
+                            const hasPrev = prevIso && Array.isArray(roster[prevIso]) && convertToUidArr(roster[prevIso]).length > 0;
                             if (!hasThis && hasPrev) {
-                                renderMap[iso] = roster[prevIso];
+                                renderMap[iso] = convertToUidArr(roster[prevIso]);
                             }
                         }
 
-                        // 先載入所有使用者姓名，再渲染多選清單
-                        if (!allUserNames || allUserNames.length === 0) {
-                            await loadAllUserNames();
-                        }
                         renderFridayRosterList(renderMap);
                         const display = document.getElementById('friday-duty-display');
                         if (display) display.textContent = summarizeRosterDisplay(renderMap);
@@ -5961,8 +6005,8 @@
                             const updated = { ...current };
                             fridays.forEach(iso => {
                                 const select = document.querySelector(`#friday-roster-list select[data-iso="${iso}"]`);
-                                const names = Array.from(select?.selectedOptions || []).map(o => o.value);
-                                updated[iso] = names;
+                                const ids = Array.from(select?.selectedOptions || []).map(o => o.value); // 存 UID
+                                updated[iso] = ids;
                             });
                             await setDoc(settingsRef, { fridayDutyRoster: updated, updatedAt: serverTimestamp() }, { merge: true });
                             const display = document.getElementById('friday-duty-display');
