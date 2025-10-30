@@ -262,16 +262,19 @@ async function loadDailyMarkedSchedule(iso) {
         const db = window.__db;
         const items = [];
 
-        // 週五值班（settings.general.fridayDutyRoster）
+        // 週五值班（settings.general.fridayDutyRoster）僅顯示個人
         try {
             if (fs && db) {
+                const auth = window.__auth;
+                const usersMap = await fetchUsersOnce().catch(() => ({}));
+                const myName = auth?.currentUser ? (usersMap[auth.currentUser.uid] || auth.currentUser.displayName || auth.currentUser.email || '') : '';
                 const { doc, getDoc } = fs;
                 const settingsRef = doc(db, 'settings', 'general');
                 const snap = await getDoc(settingsRef);
                 const roster = snap.exists() ? (snap.data().fridayDutyRoster || {}) : {};
                 const names = roster[iso] || [];
-                if (Array.isArray(names) && names.length > 0) {
-                    items.push({ type: 'duty', title: '週五值班', detail: names.join('、'), date: new Date(iso) });
+                if (myName && Array.isArray(names) && names.includes(myName)) {
+                    items.push({ type: 'duty', title: '週五值班', detail: '（我）', date: new Date(iso) });
                 }
             }
         } catch (e) { /* 忽略載入值班錯誤 */ }
@@ -1712,6 +1715,9 @@ async function applyFridayDutyBadges(year, month) {
         const settingsRef = doc(db, 'settings', 'general');
         const snap = await getDoc(settingsRef);
         const roster = snap.exists() ? (snap.data().fridayDutyRoster || {}) : {};
+        const auth = window.__auth;
+        const usersMap = await fetchUsersOnce().catch(() => ({}));
+        const myName = auth?.currentUser ? (usersMap[auth.currentUser.uid] || auth.currentUser.displayName || auth.currentUser.email || '') : '';
 
         // 逐一把本月有名單的週五加上徽章
         Object.keys(roster).forEach(iso => {
@@ -1719,6 +1725,7 @@ async function applyFridayDutyBadges(year, month) {
             if (dt.getFullYear() !== year || dt.getMonth() !== month) return;
             const names = roster[iso] || [];
             if (!Array.isArray(names) || names.length === 0) return;
+            if (!myName || !names.includes(myName)) return; // 僅顯示本人
             const cell = document.querySelector(`#calendar-grid [data-ymd="${iso}"]`);
             if (!cell) return;
             // 值班日視同上班日：未完成打卡與非異常，套用淺藍底
@@ -1726,12 +1733,14 @@ async function applyFridayDutyBadges(year, month) {
                 cell.classList.remove('bg-gray-200');
                 cell.classList.add('bg-blue-100','border-blue-300');
             }
+            // 移除舊徽章避免重複疊加
+            Array.from(cell.querySelectorAll('.duty-badge-wrap')).forEach(el => el.remove());
             const badgeWrap = document.createElement('div');
-            badgeWrap.className = 'mt-1';
+            badgeWrap.className = 'mt-1 duty-badge-wrap';
             const badge = document.createElement('span');
             badge.className = 'inline-flex items-center px-2 py-0.5 rounded-full text-[10px] bg-yellow-100 text-yellow-800 border border-yellow-300';
             badge.textContent = '值班';
-            badge.title = names.join('、');
+            badge.title = '您本日值班';
             badgeWrap.appendChild(badge);
             cell.appendChild(badgeWrap);
         });
@@ -1795,6 +1804,9 @@ async function loadMarkedSchedule(year, month) {
         const settingsRef = doc(db, 'settings', 'general');
         const snap = await getDoc(settingsRef);
         const roster = snap.exists() ? (snap.data().fridayDutyRoster || {}) : {};
+        const auth = window.__auth;
+        const usersMap = await fetchUsersOnce().catch(() => ({}));
+        const myName = auth?.currentUser ? (usersMap[auth.currentUser.uid] || auth.currentUser.displayName || auth.currentUser.email || '') : '';
 
         const events = [];
         Object.keys(roster).forEach(iso => {
@@ -1802,7 +1814,8 @@ async function loadMarkedSchedule(year, month) {
             if (dt.getFullYear() !== year || dt.getMonth() !== month) return;
             const names = roster[iso] || [];
             if (!Array.isArray(names) || names.length === 0) return;
-            events.push({ date: dt, title: '週五值班', type: 'duty', names });
+            if (!myName || !names.includes(myName)) return; // 僅顯示個人
+            events.push({ date: dt, title: '週五值班', type: 'duty', names: ['我'] });
         });
 
         events.sort((a, b) => a.date - b.date);
@@ -1820,7 +1833,7 @@ async function loadMarkedSchedule(year, month) {
                 <div class="flex items-center space-x-3">
                     <div class="w-3 h-3 rounded-full ${getEventColor(event.type)}"></div>
                     <span class="font-medium">${event.title}</span>
-                    <span class="text-sm text-gray-600">${event.names.join('、')}</span>
+                    <span class="text-sm text-gray-600">${Array.isArray(event.names) ? event.names.join('、') : ''}</span>
                 </div>
                 <span class="text-sm text-gray-500">${event.date.getDate()}日</span>
             `;
