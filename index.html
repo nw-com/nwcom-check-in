@@ -2153,7 +2153,7 @@
                                     <div class="form-group">
                                         <label for="leave-end-dt" class="block text-sm font-medium text-gray-700 mb-1">結束時間</label>
                                         <input type="datetime-local" id="leave-end-dt" step="600" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500" value="${(function(){const now=new Date();const y=now.getFullYear();const m=String(now.getMonth()+1).padStart(2,'0');const d=String(now.getDate()).padStart(2,'0');return `${y}-${m}-${d}T17:30`;})()}">
-                                        <p class="text-xs text-gray-500 mt-1">時間格式：YYYY-MM-DD  hh:mm（每 10 分鐘一格）</p>
+                                        <p class="text-xs text-gray-500 mt-1">時間格式：YYYY-MM-DD hh:mm（24 小時制；若顯示上午/下午，請選擇正確時段或輸入 17:00 表示下午 5:00）</p>
                                     </div>
                                     <div class="text-xs text-gray-600" id="workhours-hint">當日上班時間：09:00 ~ 17:30</div>
                                 </div>
@@ -2215,14 +2215,38 @@
                         showToast('請選擇有效的開始與結束時間', true);
                         return;
                     }
-                    const parseLocalDT = (s) => {
-                        const [datePart, timePart] = s.split('T');
+                    const parseFlexibleLocalDT = (s) => {
+                        const str = (s || '').trim();
+                        if (!str) return new Date(NaN);
+                        // 標準 datetime-local：YYYY-MM-DDTHH:mm
+                        if (str.includes('T')) {
+                            const [datePart, timePart] = str.split('T');
+                            const [yy, mm, dd] = datePart.split('-').map(n => parseInt(n, 10));
+                            const [HH, MM] = timePart.split(':').map(n => parseInt(n, 10));
+                            return new Date(yy, (mm || 1) - 1, dd || 1, HH || 0, MM || 0, 0);
+                        }
+                        // 彈性解析：允許 YYYY-MM-DD/YY-MM-DD 或 YYYY/MM/DD，並帶有 上午/下午 HH:mm
+                        // 例如：2025-10-30 下午 05:00 或 2025/10/30 上午 11:10
+                        const ampmMatch = str.match(/(上午|下午)/);
+                        const hasPM = ampmMatch?.[1] === '下午';
+                        const norm = str.replace(/[年\/]/g, '-').replace(/\s+/g, ' ').trim();
+                        // 移除 上午/下午 標記再解析時間
+                        const cleaned = norm.replace(/\s*(上午|下午)\s*/g, ' ');
+                        const parts = cleaned.split(' ');
+                        const datePart = parts[0] || '';
+                        const timePart = parts[1] || '';
                         const [yy, mm, dd] = datePart.split('-').map(n => parseInt(n, 10));
-                        const [HH, MM] = timePart.split(':').map(n => parseInt(n, 10));
-                        return new Date(yy, (mm || 1) - 1, dd || 1, HH || 0, MM || 0, 0);
+                        let [h, m] = timePart.split(':').map(n => parseInt(n, 10));
+                        if (isNaN(h)) h = 0; if (isNaN(m)) m = 0;
+                        // 12->24 轉換規則
+                        if (ampmMatch) {
+                            if (hasPM && h < 12) h += 12;           // 下午 1..11 -> 13..23
+                            if (!hasPM && h === 12) h = 0;          // 上午 12 -> 00:00
+                        }
+                        return new Date(yy, (mm || 1) - 1, dd || 1, h, m, 0, 0);
                     };
-                    const startTime = parseLocalDT(startVal);
-                    const endTime = parseLocalDT(endVal);
+                    const startTime = parseFlexibleLocalDT(startVal);
+                    const endTime = parseFlexibleLocalDT(endVal);
                     
                     if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
                         showToast('請選擇有效的時間', true);
