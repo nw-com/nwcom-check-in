@@ -4325,233 +4325,160 @@
             }
             
             function renderTrackingAttendance(container) {
+                const today = new Date();
+                const defaultMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
                 container.innerHTML = `
                     <div class="p-4 space-y-4">
                         <div class="flex flex-wrap items-center gap-4 mb-4">
                             <div class="flex items-center space-x-2">
-                                <label for="user-select" class="text-sm font-medium">選擇人員:</label>
-                                <select id="user-select" class="border border-gray-300 rounded-md px-2 py-1">
+                                <label for="monthly-user-select" class="text-sm font-medium">選擇人員:</label>
+                                <select id="monthly-user-select" class="border border-gray-300 rounded-md px-2 py-1">
                                     <option value="all">全部人員</option>
                                     <!-- 人員選項將動態添加 -->
                                 </select>
                             </div>
                             <div class="flex items-center space-x-2">
-                                <label for="record-date" class="text-sm font-medium">選擇日期:</label>
-                                <input type="date" id="record-date" value="${new Date().toISOString().split('T')[0]}" class="border border-gray-300 rounded-md px-2 py-1">
+                                <label for="monthly-month" class="text-sm font-medium">選擇月份:</label>
+                                <input type="month" id="monthly-month" value="${defaultMonth}" class="border border-gray-300 rounded-md px-2 py-1">
                             </div>
                         </div>
-                        <div id="attendance-records-list" class="space-y-3">
-                            <div class="text-center p-4 text-gray-500">正在讀取紀錄...</div>
+                        <div class="bg-white rounded-lg shadow overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200 text-sm">
+                                <thead class="bg-gray-50" id="attendance-monthly-thead"></thead>
+                                <tbody id="attendance-monthly-tbody" class="bg-white divide-y divide-gray-200">
+                                    <tr><td colspan="32" class="px-6 py-4 text-center text-gray-500">
+                                        <div class="flex items-center justify-center">
+                                            <i data-lucide="loader" class="w-5 h-5 mr-2 animate-spin"></i>
+                                            載入中...
+                                        </div>
+                                    </td></tr>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 `;
-                
-                // 載入所有用戶
+                try { lucide.createIcons(); } catch(e) {}
+
                 const usersRef = collection(db, "users");
-                const userSelect = document.getElementById('user-select');
-                
-                getDocs(usersRef).then((querySnapshot) => {
+                const userSelect = document.getElementById('monthly-user-select');
+                const monthInput = document.getElementById('monthly-month');
+                const theadEl = document.getElementById('attendance-monthly-thead');
+                const tbodyEl = document.getElementById('attendance-monthly-tbody');
+
+                let usersArr = [];
+                let usersMap = {};
+
+                const fmtHM = (d) => `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+
+                const renderHeader = (daysInMonth) => {
+                    const cols = ['<tr><th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">人員</th>'];
+                    for (let i = 1; i <= daysInMonth; i++) {
+                        cols.push(`<th class="px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">${String(i).padStart(2,'0')}</th>`);
+                    }
+                    cols.push('<th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">出勤日數</th>');
+                    cols.push('</tr>');
+                    theadEl.innerHTML = cols.join('');
+                };
+
+                const loadMonthlyReport = async () => {
+                    const ymStr = monthInput.value || defaultMonth;
+                    const [yStr, mStr] = ymStr.split('-');
+                    const year = Number(yStr);
+                    const month = Number(mStr) - 1; // 0-based
+                    const startOfMonth = new Date(year, month, 1, 0, 0, 0, 0);
+                    const endOfMonth = new Date(year, month + 1, 0, 23, 59, 59, 999);
+                    const daysInMonth = new Date(year, month + 1, 0).getDate();
+                    renderHeader(daysInMonth);
+
+                    const selectedUserId = userSelect.value;
+                    const recordsRef = collection(db, "clockInRecords");
+                    const { Timestamp } = window.__fs || {};
+                    const startTS = Timestamp?.fromDate ? Timestamp.fromDate(startOfMonth) : startOfMonth;
+                    const endTS = Timestamp?.fromDate ? Timestamp.fromDate(endOfMonth) : endOfMonth;
+                    let q;
+                    if (selectedUserId === 'all') {
+                        q = query(recordsRef, where("timestamp", ">=", startTS), where("timestamp", "<=", endTS));
+                    } else {
+                        q = query(recordsRef, where("userId", "==", selectedUserId), where("timestamp", ">=", startTS), where("timestamp", "<=", endTS));
+                    }
+
+                    tbodyEl.innerHTML = `<tr><td colspan="32" class="px-6 py-4 text-center text-gray-500"><div class="flex items-center justify-center"><i data-lucide="loader" class="w-5 h-5 mr-2 animate-spin"></i>載入中...</div></td></tr>`;
+
+                    try {
+                        const snap = await getDocs(q);
+                        const byUser = new Map(); // userId -> { days: Map<day, {start:Date|null, end:Date|null}> }
+                        snap.forEach(d => {
+                            const r = d.data();
+                            const uid = r.userId;
+                            const dt = r.timestamp?.toDate?.() || (r.timestamp ? new Date(r.timestamp) : null);
+                            if (!uid || !dt) return;
+                            const day = dt.getDate();
+                            const entry = byUser.get(uid) || { days: new Map() };
+                            const dayObj = entry.days.get(day) || { start: null, end: null };
+                            if (r.type === '上班') {
+                                if (!dayObj.start || dt < dayObj.start) dayObj.start = dt;
+                            }
+                            if (r.type === '下班' || r.type === '自動下班') {
+                                if (!dayObj.end || dt > dayObj.end) dayObj.end = dt;
+                            }
+                            entry.days.set(day, dayObj);
+                            byUser.set(uid, entry);
+                        });
+
+                        const buildRow = (user) => {
+                            const uid = user.id;
+                            const entry = byUser.get(uid) || { days: new Map() };
+                            let attendDays = 0;
+                            const tds = [`<td class="px-3 py-2 whitespace-nowrap text-sm text-gray-800">${user.name || usersMap[uid] || '未知用戶'}</td>`];
+                            for (let i = 1; i <= daysInMonth; i++) {
+                                const dObj = entry.days.get(i) || { start: null, end: null };
+                                const hasStart = !!dObj.start;
+                                const hasEnd = !!dObj.end;
+                                const cls = hasStart && hasEnd ? 'bg-green-50' : (hasStart || hasEnd ? 'bg-yellow-50' : '');
+                                let text = '--';
+                                if (hasStart && hasEnd) text = `${fmtHM(dObj.start)}~${fmtHM(dObj.end)}`;
+                                else if (hasStart) text = `${fmtHM(dObj.start)}`;
+                                else if (hasEnd) text = `${fmtHM(dObj.end)}`;
+                                if (hasStart || hasEnd) attendDays++;
+                                tds.push(`<td class="px-2 py-1 text-center text-xs ${cls}">${text}</td>`);
+                            }
+                            tds.push(`<td class="px-3 py-2 text-center text-sm">${attendDays}</td>`);
+                            return `<tr>${tds.join('')}</tr>`;
+                        };
+
+                        const rows = [];
+                        if (selectedUserId === 'all') {
+                            // 顯示所有人員（即使該月無紀錄也顯示）
+                            const sorted = [...usersArr].sort((a,b) => a.name.localeCompare(b.name, 'zh-Hant'));
+                            sorted.forEach(u => rows.push(buildRow(u)));
+                        } else {
+                            const user = usersArr.find(u => u.id === selectedUserId);
+                            if (user) rows.push(buildRow(user));
+                        }
+                        tbodyEl.innerHTML = rows.length ? rows.join('') : `<tr><td colspan="${daysInMonth + 2}" class="px-6 py-4 text-center text-gray-500">無資料</td></tr>`;
+                        try { lucide.createIcons(); } catch(e) {}
+                    } catch (err) {
+                        console.error('讀取月報表失敗', err);
+                        tbodyEl.innerHTML = `<tr><td colspan="32" class="px-6 py-4 text-center text-red-500">讀取紀錄失敗。</td></tr>`;
+                    }
+                };
+
+                getDocs(usersRef).then((qs) => {
                     const users = [];
-                    querySnapshot.forEach(doc => {
-                        users.push({ id: doc.id, ...doc.data() });
-                    });
-                    
+                    qs.forEach(doc => { users.push({ id: doc.id, ...doc.data() }); });
+                    usersArr = users;
+                    usersMap = users.reduce((acc, u) => { acc[u.id] = u.name; return acc; }, {});
                     users.sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant')).forEach(user => {
                         const option = document.createElement('option');
                         option.value = user.id;
                         option.textContent = user.name;
                         userSelect.appendChild(option);
                     });
-                    
-                    // 初始載入記錄
-                    loadAttendanceRecords();
+                    loadMonthlyReport();
                 });
-                
-                const dateInput = document.getElementById('record-date');
-                userSelect.addEventListener('change', loadAttendanceRecords);
-                dateInput.addEventListener('change', loadAttendanceRecords);
-                
-                function loadAttendanceRecords() {
-                    const selectedDate = new Date(dateInput.value);
-                    const startOfDay = new Date(selectedDate);
-                    startOfDay.setHours(0, 0, 0, 0);
-                    const endOfDay = new Date(selectedDate);
-                    endOfDay.setHours(23, 59, 59, 999);
-                    const selectedUserId = userSelect.value;
-                    
-                    const recordsRef = collection(db, "clockInRecords");
-                    let q;
-                    const { Timestamp } = window.__fs || {};
-                    const startTS = Timestamp?.fromDate ? Timestamp.fromDate(startOfDay) : startOfDay;
-                    const endTS = Timestamp?.fromDate ? Timestamp.fromDate(endOfDay) : endOfDay;
-                    
-                    if (selectedUserId === 'all') {
-                        q = query(recordsRef, 
-                            where("timestamp", ">=", startTS),
-                            where("timestamp", "<=", endTS)
-                        );
-                    } else {
-                        q = query(recordsRef, 
-                            where("userId", "==", selectedUserId),
-                            where("timestamp", ">=", startTS),
-                            where("timestamp", "<=", endTS)
-                        );
-                    }
-                    
-                    const recordsList = document.getElementById('attendance-records-list');
-                    recordsList.innerHTML = `<div class="text-center p-4 text-gray-500">正在讀取紀錄...</div>`;
-                    
-                    getDocs(q).then((querySnapshot) => {
-                        if (querySnapshot.empty) {
-                            recordsList.innerHTML = `<p class="text-center text-gray-500 p-4">無打卡紀錄</p>`;
-                            return;
-                        }
-                        
-                        const records = [];
-                        querySnapshot.forEach(doc => {
-                            records.push({ id: doc.id, ...doc.data() });
-                        });
-                        
-                        // 獲取所有用戶資料，用於顯示名稱
-                        getDocs(usersRef).then((usersSnapshot) => {
-                            const usersMap = {};
-                            usersSnapshot.forEach(doc => {
-                                usersMap[doc.id] = doc.data().name;
-                            });
-                            
-                            recordsList.innerHTML = '';
-                            records.sort((a, b) => {
-                                const timeA = a.timestamp?.toDate?.() || new Date(0);
-                                const timeB = b.timestamp?.toDate?.() || new Date(0);
-                                return timeB - timeA;
-                            }).forEach(record => {
-                                const time = record.timestamp?.toDate?.() || new Date();
-                                const userName = usersMap[record.userId] || '未知用戶';
-                                
-                                const card = document.createElement('div');
-                                card.className = 'bg-white p-4 rounded-lg shadow border border-gray-200';
-                                card.innerHTML = `
-                                    <div class="flex justify-between items-start">
-                                        <div>
-                                            <div class="font-semibold">${userName}</div>
-                                            <div class="text-sm text-gray-500">${time.toLocaleString('zh-TW')}</div>
-                                            <div class="mt-1 flex items-center">
-                                                <span class="px-2 py-0.5 rounded text-sm ${getStatusBgColor(getStatusDisplayText(record.type || '未知', record.locationName || null, record.dutyType || null))}">${getStatusDisplayText(record.type || '未知', record.locationName || null, record.dutyType || null)}</span>
-                        ${record.location && typeof record.location.latitude === 'number' && typeof record.location.longitude === 'number' ? `<span class="ml-2 text-sm text-gray-500">${record.location.latitude.toFixed(6)}, ${record.location.longitude.toFixed(6)}</span>` : ''}
-                                            </div>
-                                            <div class="mt-1 text-xs text-gray-500">裝置ID: ${record.deviceId || '未知'}</div>
-                                        </div>
-                                        <div class="flex space-x-2 items-start"></div>
-                                    </div>
-                                    <div class="mt-2 flex space-x-2 overflow-x-auto items-center">
-                                        ${record.photoUrls && record.photoUrls.length > 0 ? `
-                                            <button class="photo-btn bg-blue-500 text-white px-2 py-1 rounded text-sm" 
-                                                data-photos='${encodeURIComponent(JSON.stringify(record.photoUrls || []))}' 
-                                                data-descriptions='${encodeURIComponent(JSON.stringify(record.descriptions || []))}'>
-                                                <i data-lucide="image"></i> 照片 (${record.photoUrls.length})
-                                            </button>
-                                        ` : ''}
-                                        ${record.location ? `
-                                            <button class="map-btn bg-green-500 text-white px-2 py-1 rounded text-sm" 
-                                                data-lat="${record.location.latitude}" 
-                                                data-lng="${record.location.longitude}">
-                                                <i data-lucide="map-pin"></i> 地圖
-                                            </button>
-                                        ` : ''}
-                                        <!-- Admin controls: edit/delete -->
-                                        <span class="admin-controls hidden" data-record-id="${record.id}" data-record='${encodeURIComponent(JSON.stringify({
-                                            id: record.id,
-                                            type: record.type,
-                                            timeISO: (record.timestamp?.toDate?.() || new Date()).toISOString(),
-                                            lat: record.location?.latitude ?? null,
-                                            lng: record.location?.longitude ?? null,
-                                            locationName: record.locationName || '',
-                                            dutyType: record.dutyType || ''
-                                        }))}'>
-                                            <button class="edit-record-btn bg-yellow-500 text-white px-2 py-1 rounded text-sm">
-                                                <i data-lucide="pencil"></i> 編輯
-                                            </button>
-                                            <button class="delete-record-btn bg-red-600 text-white px-2 py-1 rounded text-sm">
-                                                <i data-lucide="trash-2"></i> 刪除
-                                            </button>
-                                        </span>
-                                    </div>
-                                `;
-                                recordsList.appendChild(card);
-                            });
-                            
-                            lucide.createIcons();
-                            
-                            // 添加地圖和照片按鈕的事件監聽器
-                            document.querySelectorAll('.map-btn').forEach(btn => {
-                                btn.addEventListener('click', (e) => {
-                                    const lat = parseFloat(e.currentTarget.dataset.lat);
-                                    const lng = parseFloat(e.currentTarget.dataset.lng);
-                                    if(lat && lng) openMapModal(lat, lng);
-                                    else showToast("無位置資訊可顯示", true);
-                                });
-                            });
-                            
-                            document.querySelectorAll('.photo-btn').forEach(btn => {
-                                btn.addEventListener('click', (e) => {
-                                    const photos = JSON.parse(decodeURIComponent(e.currentTarget.dataset.photos || '%5B%5D'));
-                                    const descriptions = JSON.parse(decodeURIComponent(e.currentTarget.dataset.descriptions || '%5B%5D'));
-                                    openPhotoModal(photos, descriptions);
-                                });
-                            });
 
-                            // 顯示並綁定管理員控制按鈕
-                            (window.checkAdminStatus ? window.checkAdminStatus() : Promise.resolve(false)).then(isAdmin => {
-                                if (!isAdmin) return;
-                                recordsList.querySelectorAll('.admin-controls').forEach(ctrl => ctrl.classList.remove('hidden'));
-                                recordsList.querySelectorAll('.edit-record-btn').forEach(btn => {
-                                    btn.addEventListener('click', (e) => {
-                                        try {
-                                            const parent = e.currentTarget.closest('.admin-controls');
-                                            const recordData = JSON.parse(decodeURIComponent(parent.dataset.record || '%7B%7D'));
-                                            openEditRecordModal(recordData);
-                                        } catch (err) {
-                                            console.error('openEditRecordModal parse error', err);
-                                            showToast('載入紀錄失敗', true);
-                                        }
-                                    });
-                                });
-                                recordsList.querySelectorAll('.delete-record-btn').forEach(btn => {
-                                    btn.addEventListener('click', async (e) => {
-                                        try {
-                                            const parent = e.currentTarget.closest('.admin-controls');
-                                            const recordId = parent.dataset.recordId;
-                                            if (!recordId) return;
-                                            const ok = confirm('確定要刪除此出勤紀錄？此操作無法復原。');
-                                            if (!ok) return;
-                                            const { doc, deleteDoc } = window.__fs;
-                                            const db = window.__db;
-                                            await deleteDoc(doc(db, 'clockInRecords', recordId));
-                                            showToast('刪除成功');
-                                            loadAttendanceRecords();
-                                        } catch (err) {
-                                            console.error('delete clockInRecord error', err);
-                                            showToast('刪除失敗：請檢查權限', true);
-                                        }
-                                    });
-                                });
-                            });
-                        });
-                    }).catch(error => {
-                        console.error("Error fetching records:", error);
-                        recordsList.innerHTML = `<div class="text-center text-red-500 p-4">讀取紀錄失敗。</div>`;
-                    });
-                }
-                
-                function getStatusBgColor(typeOrText) {
-                    const s = String(typeOrText || '').toLowerCase();
-                    if (s.includes('上班') || s.includes('返回') || s.includes('在辦')) return 'bg-green-100 text-green-800';
-                    if (s.includes('下班')) return 'bg-red-100 text-red-800';
-                    if (s.includes('外出') || s.includes('抵達') || s.includes('離開')) return 'bg-blue-100 text-blue-800';
-                    if (s.includes('請假')) return 'bg-orange-100 text-orange-800';
-                    if (s.includes('特殊勤務')) return 'bg-indigo-100 text-indigo-800';
-                    return 'bg-gray-100 text-gray-800';
-                }
+                userSelect.addEventListener('change', loadMonthlyReport);
+                monthInput.addEventListener('change', loadMonthlyReport);
             }
             
             function renderTrackingLeave(container) {
