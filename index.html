@@ -4341,9 +4341,17 @@
                                 <label for="monthly-month" class="text-sm font-medium">選擇月份:</label>
                                 <input type="month" id="monthly-month" value="${defaultMonth}" class="border border-gray-300 rounded-md px-2 py-1">
                             </div>
+                            <div class="flex items-center space-x-2 ml-auto">
+                                <button id="btn-print-monthly" class="bg-gray-700 text-white px-3 py-1 rounded flex items-center">
+                                    <i data-lucide="printer" class="w-4 h-4 mr-1"></i> 列印
+                                </button>
+                                <button id="btn-export-excel" class="bg-blue-600 text-white px-3 py-1 rounded flex items-center">
+                                    <i data-lucide="download" class="w-4 h-4 mr-1"></i> 匯出Excel
+                                </button>
+                            </div>
                         </div>
                         <div class="bg-white rounded-lg shadow overflow-x-auto">
-                            <table class="min-w-full divide-y divide-gray-200 text-sm">
+                            <table id="attendance-monthly-table" class="min-w-full divide-y divide-gray-200 text-sm">
                                 <thead class="bg-gray-50" id="attendance-monthly-thead"></thead>
                                 <tbody id="attendance-monthly-tbody" class="bg-white divide-y divide-gray-200">
                                     <tr><td colspan="32" class="px-6 py-4 text-center text-gray-500">
@@ -4479,6 +4487,97 @@
 
                 userSelect.addEventListener('change', loadMonthlyReport);
                 monthInput.addEventListener('change', loadMonthlyReport);
+
+                // 匯出 Excel（優先 XLSX，失敗回退 CSV）與列印
+                const btnPrint = document.getElementById('btn-print-monthly');
+                const btnExport = document.getElementById('btn-export-excel');
+                btnPrint.addEventListener('click', printMonthlyReport);
+                btnExport.addEventListener('click', exportMonthlyToExcel);
+
+                function getSelectedUserLabel() {
+                    const sel = document.getElementById('monthly-user-select');
+                    const opt = sel.options[sel.selectedIndex];
+                    return opt ? opt.textContent : '全部人員';
+                }
+
+                async function ensureXLSX() {
+                    if (window.XLSX) return true;
+                    return new Promise((resolve) => {
+                        const s = document.createElement('script');
+                        s.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+                        s.onload = () => resolve(true);
+                        s.onerror = () => resolve(false);
+                        document.head.appendChild(s);
+                    });
+                }
+
+                function tableToCSV(table) {
+                    let csv = '';
+                    const rows = table.querySelectorAll('tr');
+                    rows.forEach(row => {
+                        const cells = row.querySelectorAll('th,td');
+                        const values = Array.from(cells).map(cell => '"' + (cell.innerText || '').replace(/"/g, '""') + '"');
+                        csv += values.join(',') + '\r\n';
+                    });
+                    return csv;
+                }
+
+                async function exportMonthlyToExcel() {
+                    try {
+                        const ok = await ensureXLSX();
+                        const ymStr = monthInput.value || defaultMonth;
+                        const userLabel = getSelectedUserLabel();
+                        const filename = `出勤月報表_${ymStr}_${userLabel}.xlsx`;
+                        const table = document.getElementById('attendance-monthly-table');
+                        if (ok && window.XLSX && window.XLSX.utils && window.XLSX.writeFile) {
+                            const wb = XLSX.utils.table_to_book(table, { sheet: '月報表' });
+                            XLSX.writeFile(wb, filename);
+                        } else {
+                            const csv = tableToCSV(table);
+                            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                            const a = document.createElement('a');
+                            a.href = URL.createObjectURL(blob);
+                            a.download = `出勤月報表_${ymStr}_${userLabel}.csv`;
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                        }
+                    } catch (err) {
+                        console.error('exportMonthlyToExcel error', err);
+                        showToast && showToast('匯出失敗', true);
+                    }
+                }
+
+                function printMonthlyReport() {
+                    try {
+                        const ymStr = monthInput.value || defaultMonth;
+                        const userLabel = getSelectedUserLabel();
+                        const table = document.getElementById('attendance-monthly-table');
+                        const html = `<!doctype html><html><head><meta charset="utf-8"><title>出勤月報表</title>
+                        <style>
+                            @page { size: A4 landscape; margin: 12mm; }
+                            body { font-family: system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif; color: #111; }
+                            h1 { font-size: 16px; margin-bottom: 8px; }
+                            table { width: 100%; border-collapse: collapse; }
+                            thead th { background: #f9fafb; }
+                            th, td { border: 1px solid #d1d5db; padding: 4px 6px; font-size: 12px; }
+                            .text-center { text-align: center; }
+                        </style>
+                        </head><body>
+                        <h1>出勤月報表：${ymStr}（${userLabel}）</h1>
+                        ${table.outerHTML}
+                        </body></html>`;
+                        const w = window.open('', '_blank');
+                        w.document.open();
+                        w.document.write(html);
+                        w.document.close();
+                        w.focus();
+                        w.print();
+                    } catch (err) {
+                        console.error('printMonthlyReport error', err);
+                        showToast && showToast('列印失敗', true);
+                    }
+                }
             }
             
             function renderTrackingLeave(container) {
