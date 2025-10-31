@@ -4116,6 +4116,9 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                         cols.push(`<th class="px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">${String(i).padStart(2,'0')}</th>`);
                     }
                     cols.push('<th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">出勤日數</th>');
+                    cols.push('<th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">總工時(小時)</th>');
+                    cols.push('<th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">請假日數</th>');
+                    cols.push('<th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">特殊勤務日數</th>');
                     cols.push('</tr>');
                     theadEl.innerHTML = cols.join('');
                 };
@@ -4165,10 +4168,82 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                             byUser.set(uid, entry);
                         });
 
+                        // 計算落在本月的日期集合（請假、特殊勤務）
+                        const dayNumbersInRange = (start, end) => {
+                            if (!start || !end) return [];
+                            const cs = new Date(Math.max(start.getTime(), startOfMonth.getTime()));
+                            const ce = new Date(Math.min(end.getTime(), endOfMonth.getTime()));
+                            cs.setHours(12,0,0,0); ce.setHours(12,0,0,0);
+                            const out = [];
+                            for (let d = new Date(cs); d <= ce; d.setDate(d.getDate() + 1)) {
+                                out.push(d.getDate());
+                            }
+                            return out;
+                        };
+
+                        // 讀取請假（僅計入已核准）
+                        const leaveDaySetMap = new Map(); // userId -> Set(dayNumbers)
+                        try {
+                            const leavesRef = collection(db, 'leaves');
+                            let qLeaves;
+                            if (selectedUserId === 'all') {
+                                qLeaves = query(leavesRef, where('status','==','approved'));
+                            } else {
+                                qLeaves = query(leavesRef, where('status','==','approved'), where('userId','==', selectedUserId));
+                            }
+                            const leavesSnap = await getDocs(qLeaves);
+                            leavesSnap.forEach(doc => {
+                                const lv = doc.data();
+                                const uid = lv.userId || lv.uid || (lv.user && lv.user.id);
+                                if (!uid) return;
+                                const s = (lv.startTime && lv.startTime.toDate?.()) || (lv.startTime ? new Date(lv.startTime) : (lv.leaveStartTime && lv.leaveStartTime.toDate?.()) || (lv.leaveStartTime ? new Date(lv.leaveStartTime) : null));
+                                const e = (lv.endTime && lv.endTime.toDate?.()) || (lv.endTime ? new Date(lv.endTime) : (lv.leaveEndTime && lv.leaveEndTime.toDate?.()) || (lv.leaveEndTime ? new Date(lv.leaveEndTime) : null));
+                                if (!s || !e) return;
+                                const days = dayNumbersInRange(s, e);
+                                if (!days.length) return;
+                                const set = leaveDaySetMap.get(uid) || new Set();
+                                days.forEach(n => set.add(n));
+                                leaveDaySetMap.set(uid, set);
+                            });
+                        } catch (e) { /* ignore leave load errors */ }
+
+                        // 讀取特殊勤務（跨月以 startTime 或 endTime 落在本月即計入）
+                        const specialDutyDaySetMap = new Map(); // userId -> Set(dayNumbers)
+                        try {
+                            const sdRef = collection(db, 'specialDuties');
+                            const startTS2 = Timestamp?.fromDate ? Timestamp.fromDate(startOfMonth) : startOfMonth;
+                            const endTS2 = Timestamp?.fromDate ? Timestamp.fromDate(endOfMonth) : endOfMonth;
+                            let q1, q2;
+                            if (selectedUserId === 'all') {
+                                q1 = query(sdRef, where('startTime','>=', startTS2), where('startTime','<=', endTS2));
+                                q2 = query(sdRef, where('endTime','>=', startTS2), where('endTime','<=', endTS2));
+                            } else {
+                                q1 = query(sdRef, where('userId','==', selectedUserId), where('startTime','>=', startTS2), where('startTime','<=', endTS2));
+                                q2 = query(sdRef, where('userId','==', selectedUserId), where('endTime','>=', startTS2), where('endTime','<=', endTS2));
+                            }
+                            const sdDocs = new Map();
+                            for (const qq of [q1, q2]) {
+                                const sSnap = await getDocs(qq);
+                                sSnap.forEach(doc => { sdDocs.set(doc.id, doc.data()); });
+                            }
+                            sdDocs.forEach(sd => {
+                                const uid = sd.userId;
+                                const s = sd.startTime?.toDate?.() || (sd.startTime ? new Date(sd.startTime) : null);
+                                const e = sd.endTime?.toDate?.() || (sd.endTime ? new Date(sd.endTime) : null);
+                                if (!uid || !s || !e) return;
+                                const days = dayNumbersInRange(s, e);
+                                if (!days.length) return;
+                                const set = specialDutyDaySetMap.get(uid) || new Set();
+                                days.forEach(n => set.add(n));
+                                specialDutyDaySetMap.set(uid, set);
+                            });
+                        } catch (e) { /* ignore special duty load errors */ }
+
                         const buildRow = (user) => {
                             const uid = user.id;
                             const entry = byUser.get(uid) || { days: new Map() };
                             let attendDays = 0;
+                            let totalMinutes = 0;
                             const tds = [`<td class="px-3 py-2 whitespace-nowrap text-sm text-gray-800">${user.name || usersMap[uid] || '未知用戶'}</td>`];
                             for (let i = 1; i <= daysInMonth; i++) {
                                 const dObj = entry.days.get(i) || { start: null, end: null };
@@ -4180,9 +4255,16 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                                 else if (hasStart) text = `${fmtHM(dObj.start)}`;
                                 else if (hasEnd) text = `${fmtHM(dObj.end)}`;
                                 if (hasStart || hasEnd) attendDays++;
+                                if (hasStart && hasEnd) totalMinutes += Math.max(0, (dObj.end - dObj.start) / 60000);
                                 tds.push(`<td class="px-2 py-1 text-center text-xs ${cls}">${text}</td>`);
                             }
+                            const totalHours = (totalMinutes / 60).toFixed(2);
+                            const leaveDays = (leaveDaySetMap.get(uid)?.size) || 0;
+                            const dutyDays = (specialDutyDaySetMap.get(uid)?.size) || 0;
                             tds.push(`<td class="px-3 py-2 text-center text-sm">${attendDays}</td>`);
+                            tds.push(`<td class="px-3 py-2 text-center text-sm">${totalHours}</td>`);
+                            tds.push(`<td class="px-3 py-2 text-center text-sm">${leaveDays}</td>`);
+                            tds.push(`<td class="px-3 py-2 text-center text-sm">${dutyDays}</td>`);
                             return `<tr>${tds.join('')}</tr>`;
                         };
 
@@ -4194,7 +4276,7 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                             const user = usersArr.find(u => u.id === selectedUserId);
                             if (user) rows.push(buildRow(user));
                         }
-                        tbodyEl.innerHTML = rows.length ? rows.join('') : `<tr><td colspan="${daysInMonth + 2}" class="px-6 py-4 text-center text-gray-500">無資料</td></tr>`;
+                        tbodyEl.innerHTML = rows.length ? rows.join('') : `<tr><td colspan="${daysInMonth + 5}" class="px-6 py-4 text-center text-gray-500">無資料</td></tr>`;
                         try { lucide.createIcons(); } catch(e) {}
                     } catch (err) {
                         console.error('讀取月報表失敗', err);
