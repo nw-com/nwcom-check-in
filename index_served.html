@@ -2048,10 +2048,11 @@
                                     </div>
                                     <div class="form-group">
                                         <label for="leave-end-dt" class="block text-sm font-medium text-gray-700 mb-1">結束時間</label>
-                                        <input type="datetime-local" id="leave-end-dt" step="600" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500" value="${(function(){const now=new Date();const y=now.getFullYear();const m=String(now.getMonth()+1).padStart(2,'0');const d=String(now.getDate()).padStart(2,'0');return `${y}-${m}-${d}T17:00`;})()}">
+                                        <input type="datetime-local" id="leave-end-dt" step="600" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500" value="${(function(){const now=new Date();const y=now.getFullYear();const m=String(now.getMonth()+1).padStart(2,'0');const d=String(now.getDate()).padStart(2,'0');return `${y}-${m}-${d}T17:30`;})()}">
                                         <p class="text-xs text-gray-500 mt-1">時間格式：YYYY-MM-DD  hh:mm（每 10 分鐘一格）</p>
                                     </div>
                                 </div>
+                                <div class="text-xs text-gray-600" id="workhours-hint">當日上班時間：09:00 ~ 17:30</div>
                                 
                                 <div class="flex justify-end space-x-2 pt-2">
                                     <button type="button" id="leave-cancel-btn" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300">a??a??</button>
@@ -2086,6 +2087,64 @@
                 document.getElementById('leave-cancel-btn').addEventListener('click', () => {
                     document.body.removeChild(modal);
                 });
+
+                // 動態顯示當日上班時間（週一~週四為上班日；週五依值班名單；假日顯示非上班日）
+                const workhoursHintEl = document.getElementById('workhours-hint');
+                const parseLocalDateOnly = (s) => {
+                    if (!s || !s.includes('T')) return new Date();
+                    const [datePart] = s.split('T');
+                    const [yy, mm, dd] = datePart.split('-').map(n => parseInt(n, 10));
+                    return new Date(yy, (mm || 1) - 1, dd || 1);
+                };
+                async function updateWorkhoursHint() {
+                    try {
+                        const startVal = (document.getElementById('leave-start-dt').value || '').trim();
+                        const dt = parseLocalDateOnly(startVal);
+                        const year = dt.getFullYear();
+                        const month = dt.getMonth();
+                        const day = dt.getDate();
+                        const dow = dt.getDay();
+                        let isHolidayFlag = false;
+                        try {
+                            if (typeof fetchHolidaySettingsOnce === 'function') await fetchHolidaySettingsOnce();
+                            const hs = window.__holidaySettingsCache || { weekendIsHoliday: false, holidays: [] };
+                            const iso = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+                            const weekend = dow === 0 || dow === 6;
+                            const holidaysSet = new Set(hs.holidays || []);
+                            isHolidayFlag = holidaysSet.has(iso) || (hs.weekendIsHoliday && weekend);
+                        } catch (e) { /* ignore */ }
+
+                        const hourText = '09:00 ~ 17:30';
+                        let label = '非上班日';
+                        let isWork = false;
+                        if (!isHolidayFlag && dow >= 1 && dow <= 4) {
+                            isWork = true; label = '上班日';
+                        } else if (!isHolidayFlag && dow === 5) {
+                            try {
+                                const fs = window.__fs; const db = window.__db;
+                                if (fs && db) {
+                                    const { doc, getDoc } = fs;
+                                    const settingsRef = doc(db, 'settings', 'general');
+                                    const snap = await getDoc(settingsRef);
+                                    const roster = snap.exists() ? (snap.data().fridayDutyRoster || {}) : {};
+                                    const auth = window.__auth;
+                                    const myUid = auth?.currentUser?.uid || '';
+                                    const myName = auth?.currentUser?.displayName || auth?.currentUser?.email || '';
+                                    const iso = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+                                    const arr = roster[iso] || [];
+                                    const normalize = (s) => (s || '').trim();
+                                    isWork = Array.isArray(arr) && ((myUid && arr.includes(myUid)) || (myName && arr.some(n => normalize(n) === normalize(myName))));
+                                    if (isWork) label = '值班日';
+                                }
+                            } catch (e) { /* ignore */ }
+                        }
+                        workhoursHintEl.textContent = isWork ? `當日上班時間：${hourText}（${label}）` : `當日上班時間：非上班日`;
+                    } catch (e) {
+                        workhoursHintEl.textContent = '當日上班時間：09:00 ~ 17:30';
+                    }
+                }
+                document.getElementById('leave-start-dt').addEventListener('change', updateWorkhoursHint);
+                updateWorkhoursHint();
                 
                 // e!�La?Ra??ao?ao?a??
                 document.getElementById('leave-form').addEventListener('submit', async (e) => {
