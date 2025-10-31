@@ -4635,19 +4635,32 @@
                         const ymStr = monthInput.value || defaultMonth;
                         const userLabel = getSelectedUserLabel();
                         const table = document.getElementById('attendance-monthly-table');
+                        // 依月份天數動態縮放，目標為列印時「一欄寬」
+                        const [yStr, mStr] = (ymStr || '').split('-');
+                        const year = Number(yStr);
+                        const monthNum = Number(mStr); // 1-based
+                        const daysInMonth = new Date(year, monthNum, 0).getDate();
+                        const extraCols = 5; // 人員 + 出勤 + 總工時 + 請假 + 特殊勤務
+                        const targetBase = 31; // 以 31 天為基準
+                        let scale = targetBase / (daysInMonth + extraCols);
+                        scale = Math.max(0.55, Math.min(0.95, scale));
                         const html = `<!doctype html><html><head><meta charset="utf-8"><title>出勤月報表</title>
                         <style>
-                            @page { size: A4 landscape; margin: 12mm; }
+                            @page { size: A4 landscape; margin: 10mm; }
+                            * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
                             body { font-family: system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif; color: #111; }
-                            h1 { font-size: 16px; margin-bottom: 8px; }
-                            table { width: 100%; border-collapse: collapse; }
+                            h1 { font-size: 14px; margin-bottom: 6px; }
+                            table { width: 100%; border-collapse: collapse; table-layout: fixed; }
                             thead th { background: #f9fafb; }
-                            th, td { border: 1px solid #d1d5db; padding: 4px 6px; font-size: 12px; }
-                            .text-center { text-align: center; }
+                            th, td { border: 1px solid #d1d5db; padding: 2px 3px; font-size: 10px; }
+                            th:first-child, td:first-child { text-align: left; }
+                            th:not(:first-child), td:not(:first-child) { text-align: center; white-space: nowrap; }
+                            tr { page-break-inside: avoid; }
+                            #print-wrap { transform: scale(${scale}); transform-origin: top left; width: calc(100% / ${scale}); }
                         </style>
                         </head><body>
                         <h1>出勤月報表：${ymStr}（${userLabel}）</h1>
-                        ${table.outerHTML}
+                        <div id="print-wrap">${table.outerHTML}</div>
                         </body></html>`;
                         const w = window.open('', '_blank');
                         w.document.open();
