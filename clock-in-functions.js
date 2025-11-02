@@ -27,34 +27,6 @@ const showToast = (typeof window.showToast === 'function')
 // 確保全域亦可使用
 window.showToast = showToast;
 
-// 建立 showLoading 本地別名並全域掛載（避免模組作用域下未解析）
-const showLoading = (typeof window.showLoading === 'function')
-    ? window.showLoading
-    : function(show) {
-        try {
-            const el = document.getElementById('loading-screen');
-            if (el) {
-                el.classList.toggle('hide', !show);
-            } else {
-                let overlay = document.getElementById('global-loading-overlay');
-                if (!overlay) {
-                    overlay = document.createElement('div');
-                    overlay.id = 'global-loading-overlay';
-                    overlay.className = 'fixed inset-0 bg-black bg-opacity-40 z-50 flex items-center justify-center';
-                    const box = document.createElement('div');
-                    box.className = 'bg-white rounded-md shadow p-4 text-gray-700';
-                    box.textContent = '處理中...';
-                    overlay.appendChild(box);
-                    overlay.style.display = 'none';
-                    document.body.appendChild(overlay);
-                }
-                overlay.style.display = show ? 'flex' : 'none';
-            }
-        } catch (_) {}
-    };
-// 確保全域亦可使用
-window.showLoading = showLoading;
-
 // 設置打卡狀態屬性
 if (typeof state.clockInStatus === 'undefined') {
     state.clockInStatus = 'none';
@@ -188,113 +160,47 @@ function updateStatusDisplay() {
 // 更新儀表板狀態
 function updateDashboardStatus() {
     const dashboardStatusElement = document.getElementById('my-status');
-    if (!dashboardStatusElement) return;
-
-    (async () => {
-        const { collection, query, where, orderBy, limit, getDocs, doc, getDoc } = window.__fs;
-        const userId = window.__auth?.currentUser?.uid || state.currentUser?.uid;
-        if (!userId) {
-            const statusText = '尚未打卡';
-            const statusColor = getStatusColor(statusText);
-            dashboardStatusElement.innerHTML = `
-                <div class="flex items-center justify-between">
-                    <span class="font-semibold text-lg ${statusColor}">${statusText}</span>
-                </div>`;
-            return;
-        }
-
-        // 優先使用：userId + timestamp desc 的查詢（需要複合索引）
-        try {
-            const q = query(
-                collection(window.__db, 'clockInRecords'),
-                where('userId', '==', userId),
-                orderBy('timestamp', 'desc'),
-                limit(1)
-            );
-            const snap = await getDocs(q);
-            if (!snap.empty) {
-                const r = snap.docs[0].data();
-                const statusText = getStatusDisplayText(r.type || '未知', r.locationName || null, r.dutyType || null);
-                const statusColor = getStatusColor(statusText);
-                const ts = r.timestamp && r.timestamp.toDate ? r.timestamp.toDate() : (r.timestamp ? new Date(r.timestamp) : null);
-                dashboardStatusElement.innerHTML = `
-                    <div class="flex items-center justify-between">
-                        <span class="font-semibold text-lg ${statusColor}">${statusText}</span>
-                    </div>
-                    <div class="text-sm text-gray-500 mt-1">
-                        ${ts ? '打卡 ' + ts.toLocaleString('zh-TW', {year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false}) : ''}
-                    </div>`;
-                return;
+    if (dashboardStatusElement) {
+        (async () => {
+            try {
+                const { collection, query, where, orderBy, limit, getDocs } = window.__fs;
+                const userId = window.__auth?.currentUser?.uid || state.currentUser?.uid;
+                if (!userId) {
+                    dashboardStatusElement.textContent = '尚未打卡';
+                    return;
+                }
+                const q = query(
+                    collection(window.__db, 'clockInRecords'),
+                    where('userId', '==', userId),
+                    orderBy('timestamp', 'desc'),
+                    limit(1)
+                );
+                const snap = await getDocs(q);
+                if (!snap.empty) {
+                    const r = snap.docs[0].data();
+                    const statusText = getStatusDisplayText(r.type || '未知', r.locationName || null, r.dutyType || null);
+                    const statusColor = getStatusColor(statusText);
+                    const ts = r.timestamp && r.timestamp.toDate ? r.timestamp.toDate() : (r.timestamp ? new Date(r.timestamp) : null);
+                    dashboardStatusElement.innerHTML = `
+                        <div class="flex items-center justify-between">
+                            <span class="font-semibold text-lg ${statusColor}">${statusText}</span>
+                        </div>
+                        <div class="text-sm text-gray-500 mt-1">
+                            ${ts ? '打卡 ' + ts.toLocaleString('zh-TW', {year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit'}) : ''}
+                        </div>`;
+                } else {
+                    const statusText = '尚未打卡';
+                    const statusColor = getStatusColor(statusText);
+                    dashboardStatusElement.innerHTML = `
+                        <div class="flex items-center justify-between">
+                            <span class="font-semibold text-lg ${statusColor}">${statusText}</span>
+                        </div>`;
+                }
+            } catch (e) {
+                console.error('讀取最新打卡紀錄失敗:', e);
             }
-        } catch (e) {
-            // 若因缺少索引或權限導致失敗，記錄但不中斷流程
-            const expectedCodes = ['permission-denied','failed-precondition','invalid-argument'];
-            const logFn = expectedCodes.includes(e?.code) ? console.warn : console.error;
-            logFn('讀取最新打卡紀錄（複合索引）失敗:', e?.code, e?.message || e);
-        }
-
-        // 備援：只按 timestamp desc 抓取最近 N 筆，再用 userId 篩選
-        try {
-            const fallbackQ = query(
-                collection(window.__db, 'clockInRecords'),
-                orderBy('timestamp', 'desc'),
-                limit(200)
-            );
-            const fallbackSnap = await getDocs(fallbackQ);
-            const myDoc = fallbackSnap.docs.find(d => (d.data()?.userId === userId));
-            if (myDoc) {
-                const r = myDoc.data();
-                const statusText = getStatusDisplayText(r.type || '未知', r.locationName || null, r.dutyType || null);
-                const statusColor = getStatusColor(statusText);
-                const ts = r.timestamp && r.timestamp.toDate ? r.timestamp.toDate() : (r.timestamp ? new Date(r.timestamp) : null);
-                dashboardStatusElement.innerHTML = `
-                    <div class="flex items-center justify-between">
-                        <span class="font-semibold text-lg ${statusColor}">${statusText}</span>
-                    </div>
-                    <div class="text-sm text-gray-500 mt-1">
-                        ${ts ? '打卡 ' + ts.toLocaleString('zh-TW', {year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false}) : ''}
-                    </div>`;
-                return;
-            }
-        } catch (e) {
-            const expectedCodes = ['permission-denied','invalid-argument'];
-            const logFn = expectedCodes.includes(e?.code) ? console.warn : console.error;
-            logFn('備援查詢最新打卡紀錄失敗:', e?.code, e?.message || e);
-        }
-
-        // 最終回退：讀取 users 文件中的狀態欄位
-        try {
-            const userRef = doc(window.__db, 'users', userId);
-            const userDoc = await getDoc(userRef);
-            if (userDoc.exists() && userDoc.data().clockInStatus) {
-                const u = userDoc.data();
-                const statusText = getStatusDisplayText(u.clockInStatus, u.outboundLocation || null, u.dutyType || null);
-                const statusColor = getStatusColor(statusText);
-                const ts = u.lastUpdated && u.lastUpdated.toDate ? u.lastUpdated.toDate() : (u.lastUpdated ? new Date(u.lastUpdated) : null);
-                dashboardStatusElement.innerHTML = `
-                    <div class="flex items-center justify-between">
-                        <span class="font-semibold text-lg ${statusColor}">${statusText}</span>
-                    </div>
-                    <div class="text-sm text-gray-500 mt-1">
-                        ${ts ? '狀態更新 ' + ts.toLocaleString('zh-TW', {year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit', hour12: false}) : ''}
-                    </div>`;
-            } else {
-                const statusText = '尚未打卡';
-                const statusColor = getStatusColor(statusText);
-                dashboardStatusElement.innerHTML = `
-                    <div class="flex items-center justify-between">
-                        <span class="font-semibold text-lg ${statusColor}">${statusText}</span>
-                    </div>`;
-            }
-        } catch (e) {
-            const statusText = '尚未打卡';
-            const statusColor = getStatusColor(statusText);
-            dashboardStatusElement.innerHTML = `
-                <div class="flex items-center justify-between">
-                    <span class="font-semibold text-lg ${statusColor}">${statusText}</span>
-                </div>`;
-        }
-    })();
+        })();
+    }
 }
 
 // 初始化打卡按鈕狀態
@@ -417,34 +323,24 @@ function updateButtonStatus() {
         }
     };
 
-    // 上班/下班兩個獨立按鈕動態設定器
+    // 上班/下班單一切換按鈕動態設定器
     const setWorkToggleButton = (nextType, label, bgClass) => {
-        const startBtn = document.getElementById('work-start-btn');
-        const endBtn = document.getElementById('work-end-btn');
-        if (!startBtn || !endBtn) return;
-        // 重置樣式
-        [startBtn, endBtn].forEach(btn => {
-            btn.classList.remove('bg-gray-300','cursor-not-allowed','disabled','bg-green-500','hover:bg-green-600','bg-red-500','hover:bg-red-600');
-        });
-
-        // 設定文字與型別
-        startBtn.dataset.type = '上班';
-        startBtn.textContent = '上班打卡';
-        endBtn.dataset.type = '下班';
-        endBtn.textContent = '下班打卡';
-
-        if (nextType === '上班') {
-            // 啟用上班、禁用下班
-            startBtn.disabled = false;
-            startBtn.classList.add('bg-green-500','hover:bg-green-600');
-            endBtn.disabled = true;
-            endBtn.classList.add('bg-gray-300','cursor-not-allowed','disabled');
-        } else if (nextType === '下班') {
-            // 啟用下班、禁用上班
-            endBtn.disabled = false;
-            endBtn.classList.add('bg-red-500','hover:bg-red-600');
-            startBtn.disabled = true;
-            startBtn.classList.add('bg-gray-300','cursor-not-allowed','disabled');
+        const toggleBtn = document.getElementById('work-toggle-btn');
+        if (!toggleBtn) return;
+        toggleBtn.dataset.type = nextType;
+        toggleBtn.textContent = label;
+        toggleBtn.disabled = false;
+        toggleBtn.classList.remove('bg-gray-300', 'cursor-not-allowed', 'disabled',
+                                   'bg-green-500', 'hover:bg-green-600',
+                                   'bg-red-500', 'hover:bg-red-600');
+        if (bgClass) {
+            toggleBtn.classList.add(bgClass);
+            // 加上對應 hover 類
+            if (bgClass === 'bg-green-500') {
+                toggleBtn.classList.add('hover:bg-green-600');
+            } else if (bgClass === 'bg-red-500') {
+                toggleBtn.classList.add('hover:bg-red-600');
+            }
         }
     };
     
@@ -472,21 +368,26 @@ function updateButtonStatus() {
         case '外出':
             // 外出中：抵達可動作（藍系），下班不可動作（灰），返回不可動作（灰）
             setOutboundCycleButton('抵達', '抵達打卡', 'bg-blue-500');
-            const endBtn1 = document.getElementById('work-end-btn');
-            if (endBtn1) {
-                endBtn1.disabled = true;
-                endBtn1.classList.remove('bg-red-500','hover:bg-red-600');
-                endBtn1.classList.add('bg-gray-300','cursor-not-allowed','disabled');
+            // 禁用下班按鈕：設為灰色不可動作
+            const toggleBtn1 = document.getElementById('work-toggle-btn');
+            if (toggleBtn1) {
+                toggleBtn1.dataset.type = '下班';
+                toggleBtn1.textContent = '下班打卡';
+                toggleBtn1.disabled = true;
+                toggleBtn1.classList.remove('bg-red-500', 'hover:bg-red-600', 'bg-green-500', 'hover:bg-green-600');
+                toggleBtn1.classList.add('bg-gray-300', 'cursor-not-allowed', 'disabled');
             }
             break;
         case '抵達':
             // 抵達中：離開可動作（藍系），下班不可動作（灰），返回不可動作（灰）
             setOutboundCycleButton('離開', '離開打卡', 'bg-blue-500');
-            const endBtn2 = document.getElementById('work-end-btn');
-            if (endBtn2) {
-                endBtn2.disabled = true;
-                endBtn2.classList.remove('bg-red-500','hover:bg-red-600');
-                endBtn2.classList.add('bg-gray-300','cursor-not-allowed','disabled');
+            const toggleBtn2 = document.getElementById('work-toggle-btn');
+            if (toggleBtn2) {
+                toggleBtn2.dataset.type = '下班';
+                toggleBtn2.textContent = '下班打卡';
+                toggleBtn2.disabled = true;
+                toggleBtn2.classList.remove('bg-red-500', 'hover:bg-red-600', 'bg-green-500', 'hover:bg-green-600');
+                toggleBtn2.classList.add('bg-gray-300', 'cursor-not-allowed', 'disabled');
             }
             break;
         case '離開':
@@ -522,7 +423,6 @@ function updateButtonStatus() {
     
     // 更新狀態顯示
     updateStatusDisplay();
-    try { updateMyScheduleButtons(); } catch (_) {}
 }
 
 // 啟用指定按鈕
@@ -717,111 +617,273 @@ function createLocationInputModal() {
 }
 
 // 臨時請假彈窗
-function openTempLeaveModal(el) {
-    // 背景
+function openTempLeaveModal() {
+    // 創建彈窗背景
     const backdrop = document.createElement('div');
     backdrop.id = 'modal-backdrop';
     backdrop.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
-
-    // 彈窗
+    
+    // 創建彈窗
     const modal = document.createElement('div');
     modal.id = 'temp-leave-modal';
-    modal.className = 'fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg p-6 w-[90%] max-w-md z-50';
-
-    // 標題
+    modal.className = 'bg-white rounded-lg p-6 w-[90%] max-w-md';
+    
+    // 彈窗標題
     const title = document.createElement('h3');
     title.className = 'text-lg font-bold mb-4 text-center';
-    title.textContent = '請假申請';
-
-    // 顯示班表請假時間（只顯示，不可編輯）
-    const timeLabel = document.createElement('div');
-    timeLabel.className = 'text-sm font-medium text-gray-700 mb-1';
-    timeLabel.textContent = '請假時間';
-
-    const timeValue = document.createElement('div');
-    timeValue.className = 'text-gray-900 mb-4';
-
-    const iso = el?.dataset?.date || new Date().toISOString().slice(0, 10);
-    const startStr = el?.dataset?.start || '';
-    const endStr = el?.dataset?.end || '';
-    const endIso = el?.dataset?.enddateiso || '';
-
-    const startDt = startStr ? new Date(`${iso}T${startStr}:00`) : new Date();
-    const effectiveEndIso = endIso || iso;
-    const endDt = endStr ? new Date(`${effectiveEndIso}T${endStr}:00`) : new Date(startDt.getTime() + 2 * 60 * 60 * 1000);
-
-    const fmt = (dt) => {
-        const yyyy = dt.getFullYear();
-        const mm = String(dt.getMonth() + 1).padStart(2, '0');
-        const dd = String(dt.getDate()).padStart(2, '0');
-        let h = dt.getHours();
-        const m = String(dt.getMinutes()).padStart(2, '0');
-        const ampm = h < 12 ? '上午' : '下午';
-        h = h % 12 || 12;
-        return `${yyyy}/${mm}/${dd} ${ampm} ${String(h).padStart(2, '0')}:${m}`;
-    };
-    const hours = Math.max(0, (endDt - startDt) / (1000 * 60 * 60));
-    timeValue.textContent = `${fmt(startDt)} ~ ${fmt(endDt)}（約 ${hours.toFixed(1)} 小時）`;
-
-    // 請假事由（唯一可輸入）
+            title.textContent = '請假申請';
+    
+    // 創建請假事由選擇
     const reasonLabel = document.createElement('label');
     reasonLabel.className = 'block text-sm font-medium text-gray-700 mb-1';
     reasonLabel.textContent = '請假事由';
+    
+    const reasonSelect = document.createElement('select');
+    reasonSelect.id = 'leave-reason-select';
+    reasonSelect.className = 'w-full border border-gray-300 rounded-md p-2 mb-4';
+    
+    // 添加選項
+    const options = ['病假', '事假', '其他'];
+    options.forEach(option => {
+        const optionElement = document.createElement('option');
+        optionElement.value = option;
+        optionElement.textContent = option;
+        reasonSelect.appendChild(optionElement);
+    });
+    
+    // 創建其他原因輸入框（當選擇"其他"時顯示）
+    const otherReasonInput = document.createElement('input');
+    otherReasonInput.id = 'other-leave-reason';
+    otherReasonInput.type = 'text';
+    otherReasonInput.className = 'w-full border border-gray-300 rounded-md p-2 mb-4 hidden';
+    otherReasonInput.placeholder = '請輸入請假原因';
+    
+    // 添加選擇變更事件
+    reasonSelect.addEventListener('change', () => {
+        if (reasonSelect.value === '其他') {
+            otherReasonInput.classList.remove('hidden');
+        } else {
+            otherReasonInput.classList.add('hidden');
+        }
+    });
+    
+    // 請假類型（整日/按小時）
+    const typeLabel = document.createElement('label');
+    typeLabel.className = 'block text-sm font-medium text-gray-700 mb-1';
+    typeLabel.textContent = '請假類型';
 
-    const reasonInput = document.createElement('input');
-    reasonInput.type = 'text';
-    reasonInput.placeholder = '例如：身體不適';
-    reasonInput.className = 'w-full border border-gray-300 rounded-md p-2 mb-4';
+    const typeContainer = document.createElement('div');
+    typeContainer.className = 'flex items-center space-x-6 mb-2';
+
+    const hourlyLabel = document.createElement('label');
+    hourlyLabel.className = 'flex items-center space-x-2';
+    const hourlyInput = document.createElement('input');
+    hourlyInput.type = 'radio';
+    hourlyInput.name = 'leave-type';
+    hourlyInput.value = 'hourly';
+    hourlyInput.checked = true;
+    const hourlyText = document.createElement('span');
+    hourlyText.textContent = '按小時';
+    hourlyLabel.appendChild(hourlyInput);
+    hourlyLabel.appendChild(hourlyText);
+
+    const fullDayLabel = document.createElement('label');
+    fullDayLabel.className = 'flex items-center space-x-2';
+    const fullDayInput = document.createElement('input');
+    fullDayInput.type = 'radio';
+    fullDayInput.name = 'leave-type';
+    fullDayInput.value = 'full_day';
+    const fullDayText = document.createElement('span');
+    fullDayText.textContent = '整日';
+    fullDayLabel.appendChild(fullDayInput);
+    fullDayLabel.appendChild(fullDayText);
+
+    typeContainer.appendChild(hourlyLabel);
+    typeContainer.appendChild(fullDayLabel);
+
+    // 創建日期時間區間（按小時）
+    const startDateLabel = document.createElement('label');
+    startDateLabel.className = 'block text-sm font-medium text-gray-700 mb-1';
+    startDateLabel.textContent = '開始時間';
+
+    const startDateInput = document.createElement('input');
+    startDateInput.id = 'leave-start-time';
+    startDateInput.type = 'datetime-local';
+    startDateInput.className = 'w-full border border-gray-300 rounded-md p-2 mb-4';
+    startDateInput.step = '3600'; // 設置步進為3600秒，即1小時
+    
+    // 設置預設值為當前時間（分鐘設為0）
+    const now = new Date();
+    now.setMinutes(0); // 將分鐘設為0
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hours = String(now.getHours()).padStart(2, '0');
+    startDateInput.value = `${year}-${month}-${day}T${hours}:00`;
+    
+    const endDateLabel = document.createElement('label');
+    endDateLabel.className = 'block text-sm font-medium text-gray-700 mb-1';
+    endDateLabel.textContent = '結束時間';
+    
+    const endDateInput = document.createElement('input');
+    endDateInput.id = 'leave-end-time';
+    endDateInput.type = 'datetime-local';
+    endDateInput.className = 'w-full border border-gray-300 rounded-md p-2 mb-4';
+    endDateInput.step = '3600'; // 設置步進為3600秒，即1小時
+    
+    // 設置預設值為當前時間加8小時，分鐘設為0
+    const endTime = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+    endTime.setMinutes(0); // 將分鐘設為0
+    const endYear = endTime.getFullYear();
+    const endMonth = String(endTime.getMonth() + 1).padStart(2, '0');
+    const endDay = String(endTime.getDate()).padStart(2, '0');
+    const endHours = String(endTime.getHours()).padStart(2, '0');
+    endDateInput.value = `${endYear}-${endMonth}-${endDay}T${endHours}:00`;
+    
+    // 整日日期區間（整日）
+    const startDayLabel = document.createElement('label');
+    startDayLabel.className = 'block text-sm font-medium text-gray-700 mb-1 hidden';
+    startDayLabel.textContent = '開始日期';
+
+    const startDayInput = document.createElement('input');
+    startDayInput.id = 'leave-start-day';
+    startDayInput.type = 'date';
+    startDayInput.className = 'w-full border border-gray-300 rounded-md p-2 mb-4 hidden';
+
+    const endDayLabel = document.createElement('label');
+    endDayLabel.className = 'block text-sm font-medium text-gray-700 mb-1 hidden';
+    endDayLabel.textContent = '結束日期';
+
+    const endDayInput = document.createElement('input');
+    endDayInput.id = 'leave-end-day';
+    endDayInput.type = 'date';
+    endDayInput.className = 'w-full border border-gray-300 rounded-md p-2 mb-4 hidden';
+
+    const nowDayYear = now.getFullYear();
+    const nowDayMonth = String(now.getMonth() + 1).padStart(2, '0');
+    const nowDayDate = String(now.getDate()).padStart(2, '0');
+    const todayStr = `${nowDayYear}-${nowDayMonth}-${nowDayDate}`;
+    startDayInput.value = todayStr;
+    endDayInput.value = todayStr;
+
+    // 切換顯示邏輯
+    function updateLeaveTypeVisibility() {
+      const isFullDay = fullDayInput.checked;
+      startDateLabel.classList.toggle('hidden', isFullDay);
+      startDateInput.classList.toggle('hidden', isFullDay);
+      endDateLabel.classList.toggle('hidden', isFullDay);
+      endDateInput.classList.toggle('hidden', isFullDay);
+
+      startDayLabel.classList.toggle('hidden', !isFullDay);
+      startDayInput.classList.toggle('hidden', !isFullDay);
+      endDayLabel.classList.toggle('hidden', !isFullDay);
+      endDayInput.classList.toggle('hidden', !isFullDay);
+    }
+    hourlyInput.addEventListener('change', updateLeaveTypeVisibility);
+    fullDayInput.addEventListener('change', updateLeaveTypeVisibility);
+    updateLeaveTypeVisibility();
 
     // 按鈕容器
     const buttonContainer = document.createElement('div');
     buttonContainer.className = 'flex justify-end space-x-2';
-
-    // 取消
+    
+    // 取消按鈕
     const cancelButton = document.createElement('button');
     cancelButton.className = 'px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400';
     cancelButton.textContent = '取消';
     cancelButton.addEventListener('click', closeAllModals);
-
-    // 確認
+    
+    // 確認按鈕
     const confirmButton = document.createElement('button');
     confirmButton.className = 'px-4 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600';
     confirmButton.textContent = '確認請假';
     confirmButton.addEventListener('click', async () => {
-        const reason = reasonInput.value.trim();
-        if (!reason) {
-            showToast('請輸入請假事由', true);
+        // 獲取請假事由
+        let reason = reasonSelect.value;
+        if (reason === '其他') {
+            reason = otherReasonInput.value.trim();
+            if (!reason) {
+                showToast('請輸入請假原因', true);
+                return;
+            }
+        }
+        
+        // 請假類型
+        const selectedType = document.querySelector('input[name="leave-type"]:checked')?.value || 'hourly';
+
+        // 獲取時間區間
+        let startTime;
+        let endTime;
+        if (selectedType === 'full_day') {
+            const startDayVal = startDayInput.value;
+            const endDayVal = endDayInput.value;
+            if (!startDayVal || !endDayVal) {
+                showToast('請選擇開始與結束日期', true);
+                return;
+            }
+            startTime = new Date(`${startDayVal}T00:00:00`);
+            endTime = new Date(`${endDayVal}T23:59:59`);
+        } else {
+            startTime = new Date(startDateInput.value);
+            endTime = new Date(endDateInput.value);
+        }
+        
+        // 驗證時間
+        if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
+            showToast('請輸入有效的時間', true);
             return;
         }
+        
+        if (startTime >= endTime) {
+            showToast('結束時間必須晚於開始時間', true);
+            return;
+        }
+        
         try {
             showLoading(true);
+            
+            // 獲取當前用戶
             const user = window.__auth?.currentUser;
             if (!user) {
                 showToast('請先登入', true);
                 showLoading(false);
                 return;
             }
-
-            const { addDoc, collection, updateDoc, doc, serverTimestamp, Timestamp } = window.__fs;
-            await addDoc(collection(window.__db, 'leaves'), {
+            
+            // 創建請假記錄
+            const { addDoc, collection, updateDoc, doc, Timestamp, serverTimestamp } = window.__fs;
+            const leaveData = {
                 userId: user.uid,
-                userName: (state.currentUserData?.name || user?.displayName || user?.email || ''),
-                reason,
-                startTime: Timestamp.fromDate(startDt),
-                endTime: Timestamp.fromDate(endDt),
-                status: 'pending',
+                userName: state.currentUser.displayName || user.email,
+                reason: reason,
+                startTime: Timestamp.fromDate(startTime),
+                endTime: Timestamp.fromDate(endTime),
+                leaveType: selectedType,
+                status: 'pending', // 待審核
                 createdAt: serverTimestamp()
-            });
-
+            };
+            
+            // 保存到 Firestore
+            const leaveRef = await addDoc(collection(window.__db, 'leaves'), leaveData);
+            console.log('請假記錄已創建:', leaveRef.id);
+            
+            // 更新用戶狀態
             await updateDoc(doc(window.__db, 'users', user.uid), {
-                status: '請假中',
-                leaveStatus: 'pending',
-                lastUpdated: serverTimestamp()
+                clockInStatus: '臨時請假',
+                leaveReason: reason,
+                leaveStartTime: Timestamp.fromDate(startTime),
+                leaveEndTime: Timestamp.fromDate(endTime)
             });
-
+            console.log('用戶狀態已更新為請假申請');
+            
+            // 更新本地狀態
+            state.clockInStatus = '臨時請假';
+            
+            // 更新狀態顯示
             updateStatusDisplay();
             updateButtonStatus();
-            showToast('請假申請已提交，等待審核');
+            
+            showToast('請假申請已提交');
             closeAllModals();
         } catch (error) {
             console.error('提交請假申請失敗:', error);
@@ -830,22 +892,29 @@ function openTempLeaveModal(el) {
             showLoading(false);
         }
     });
-
-    // 組裝
+    
+    // 組裝彈窗
     buttonContainer.appendChild(cancelButton);
     buttonContainer.appendChild(confirmButton);
     modal.appendChild(title);
-    modal.appendChild(timeLabel);
-    modal.appendChild(timeValue);
     modal.appendChild(reasonLabel);
-    modal.appendChild(reasonInput);
+    modal.appendChild(reasonSelect);
+    modal.appendChild(otherReasonInput);
+    modal.appendChild(typeLabel);
+    modal.appendChild(typeContainer);
+    modal.appendChild(startDateLabel);
+    modal.appendChild(startDateInput);
+    modal.appendChild(endDateLabel);
+    modal.appendChild(endDateInput);
+    modal.appendChild(startDayLabel);
+    modal.appendChild(startDayInput);
+    modal.appendChild(endDayLabel);
+    modal.appendChild(endDayInput);
     modal.appendChild(buttonContainer);
-
-    // 加到頁面
+    
+    // 添加到頁面
     document.body.appendChild(backdrop);
     document.body.appendChild(modal);
-
-    reasonInput.focus();
 }
 
 // 特殊勤務彈窗
@@ -858,7 +927,7 @@ function openSpecialDutyModal() {
     // 創建彈窗
     const modal = document.createElement('div');
     modal.id = 'special-duty-modal';
-    modal.className = 'fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg p-6 w-[90%] max-w-md z-50';
+    modal.className = 'bg-white rounded-lg p-6 w-[90%] max-w-md';
     
     // 彈窗標題
     const title = document.createElement('h3');
@@ -872,7 +941,6 @@ function openSpecialDutyModal() {
     
     const dutySelect = document.createElement('select');
     dutySelect.id = 'duty-type-select';
-    dutySelect.autofocus = true;
     dutySelect.className = 'w-full border border-gray-300 rounded-md p-2 mb-4';
     
     // 添加選項
@@ -1010,7 +1078,7 @@ function openSpecialDutyModal() {
             const { addDoc, collection, updateDoc, doc, Timestamp, serverTimestamp } = window.__fs;
             const dutyData = {
                 userId: user.uid,
-                userName: (state.currentUserData?.name || user?.displayName || user?.email || ''),
+                userName: state.currentUser.displayName || user.email,
                 dutyType: dutyType,
                 location: location,
                 startTime: Timestamp.fromDate(startTime),
@@ -1022,18 +1090,18 @@ function openSpecialDutyModal() {
             const dutyRef = await addDoc(collection(window.__db, 'specialDuties'), dutyData);
             console.log('特殊勤務記錄已創建:', dutyRef.id);
             
-            // 更新用戶狀態（僅寫入 Firestore 規則允許的欄位）
+            // 更新用戶狀態
             await updateDoc(doc(window.__db, 'users', user.uid), {
                 clockInStatus: '特殊勤務',
-                status: '特殊勤務',
                 dutyType: dutyType,
-                lastUpdated: serverTimestamp()
+                dutyLocation: location,
+                dutyStartTime: Timestamp.fromDate(startTime),
+                dutyEndTime: Timestamp.fromDate(endTime)
             });
             console.log('用戶狀態已更新為特殊勤務');
             
             // 更新本地狀態
             state.clockInStatus = '特殊勤務';
-            state.dutyType = dutyType;
             
             // 更新狀態顯示
             updateStatusDisplay();
@@ -1067,9 +1135,6 @@ function openSpecialDutyModal() {
     // 添加到頁面
     document.body.appendChild(backdrop);
     document.body.appendChild(modal);
-
-    // 讓使用者能立即輸入
-    dutySelect.focus();
 }
 
 // 關閉所有彈窗
@@ -1100,8 +1165,6 @@ function closeAllModals() {
 }
 
 // 自動下班打卡相關變數
-// 自動下班功能全域開關（設定為 false 以完全停用）
-const AUTO_CLOCK_OUT_ENABLED = false;
 let autoClockOutTimer = null;
 let autoClockOutSettings = {
     enabled: false,
@@ -1112,15 +1175,6 @@ let autoClockOutSettings = {
 // 載入自動下班打卡設定
 async function loadAutoClockOutSettings() {
     try {
-        // 全域停用：直接回傳已停用設定，並略過遠端讀取
-        if (!AUTO_CLOCK_OUT_ENABLED) {
-            autoClockOutSettings.enabled = false;
-            autoClockOutSettings.workHours = 8;
-            autoClockOutSettings.loaded = true;
-            console.log('自動下班已停用：略過設定載入');
-            return autoClockOutSettings;
-        }
-
         const user = window.__auth?.currentUser;
         // 未登入時不讀取遠端設定，使用預設值
         if (!user) {
@@ -1179,11 +1233,6 @@ function startAutoClockOutTimer() {
         clearTimeout(autoClockOutTimer);
         autoClockOutTimer = null;
     }
-    // 全域停用：不啟動計時器
-    if (!AUTO_CLOCK_OUT_ENABLED) {
-        console.log('自動下班已停用：不啟動計時器');
-        return;
-    }
     
     // 如果未啟用自動下班打卡，則不啟動計時器
     if (!autoClockOutSettings.enabled) {
@@ -1208,12 +1257,6 @@ function startAutoClockOutTimer() {
 // 執行自動下班打卡
 async function performAutoClockOut() {
     try {
-        // 全域停用：不建立自動下班紀錄
-        if (!AUTO_CLOCK_OUT_ENABLED) {
-            console.log('自動下班已停用：不建立自動下班紀錄');
-            return;
-        }
-
         const user = window.__auth?.currentUser;
         if (!user) {
             console.error('用戶未登入，無法執行自動下班打卡');
@@ -1298,11 +1341,6 @@ function stopAutoClockOutTimer() {
 // 檢查當前用戶是否已超時並需要自動下班打卡
 async function checkAndHandleOvertimeClockOut() {
     try {
-        // 全域停用：直接跳過檢查
-        if (!AUTO_CLOCK_OUT_ENABLED) {
-            return;
-        }
-
         const user = window.__auth?.currentUser;
         if (!user) {
             console.log('用戶未登入，無法檢查超時狀態');
@@ -1389,12 +1427,6 @@ async function checkAndHandleOvertimeClockOut() {
 // 檢查所有用戶的超時狀態（管理員功能）
 async function checkAllUsersOvertimeStatus() {
     try {
-        // 全域停用：跳過全員超時檢查
-        if (!AUTO_CLOCK_OUT_ENABLED) {
-            console.log('自動下班已停用：跳過全員超時檢查');
-            return [];
-        }
-
         // 載入自動下班打卡設定
         await loadAutoClockOutSettings();
         
@@ -1511,6 +1543,6 @@ window.checkAllUsersOvertimeStatus = checkAllUsersOvertimeStatus;
 // 添加事件監聽器
 document.addEventListener('DOMContentLoaded', function() {
     // 僅在定位打卡子頁面渲染後，由該頁面呼叫 initClockInButtonStatus。
-    // 自動下班已停用：不載入相關設定
-    // setTimeout(loadAutoClockOutSettings, 1000);
+    // 保留設定載入，可供自動下班邏輯使用（例如上班打卡後啟動計時器）。
+    setTimeout(loadAutoClockOutSettings, 1000);
 });
