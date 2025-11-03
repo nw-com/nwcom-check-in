@@ -4514,7 +4514,7 @@
                     btn.addEventListener('click', (e) => {
                         const photos = JSON.parse(decodeURIComponent(e.currentTarget.dataset.photos || '%5B%5D'));
                         const descriptions = JSON.parse(decodeURIComponent(e.currentTarget.dataset.descriptions || '%5B%5D'));
-                        openPhotoGalleryModal(photos, descriptions);
+                        openPhotoModal(photos, descriptions);
                     });
                 });
 
@@ -4557,6 +4557,17 @@
                         });
                     });
                 });
+            }
+
+            // 狀態文字對應底色（每日卡片列表用）
+            function getStatusBgColor(typeOrText) {
+                const s = String(typeOrText || '').toLowerCase();
+                if (s.includes('上班') || s.includes('返回') || s.includes('在辦')) return 'bg-green-100 text-green-800';
+                if (s.includes('下班')) return 'bg-red-100 text-red-800';
+                if (s.includes('外出') || s.includes('抵達') || s.includes('離開')) return 'bg-blue-100 text-blue-800';
+                if (s.includes('請假')) return 'bg-orange-100 text-orange-800';
+                if (s.includes('特殊勤務')) return 'bg-indigo-100 text-indigo-800';
+                return 'bg-gray-100 text-gray-800';
             }
 
             // 讀取初階主管可見用戶設定
