@@ -391,8 +391,8 @@ function updateButtonStatus() {
             }
             break;
         case '離開':
-            // 離開後：外出循環顯示返回（藍），下班可動作（紅），返回可動作（深綠）
-            setOutboundCycleButton('返回', '返回打卡', 'bg-blue-500');
+            // 離開後：外出循環回到外出（藍），下班可動作（紅），返回可動作（深綠）
+            setOutboundCycleButton('外出', '外出打卡', 'bg-blue-500');
             setWorkToggleButton('下班', '下班打卡', 'bg-red-500');
             if (returnBtn) {
                 returnBtn.disabled = false;

@@ -5,6 +5,14 @@ service cloud.firestore {
     function isAdmin() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
+    // 補打申請審核角色：管理員、人事、高階主管
+    function isReviewer() {
+      return (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'hr' ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'manager'
+      );
+    }
     // 全域預設：允許所有已登入用戶讀取，但不允許任意寫入
     // 具體集合的寫入權限在下方細則中分別定義
     match /{document=**} {
@@ -42,7 +50,7 @@ service cloud.firestore {
     match /clockInRecords/{recordId} {
       // 本人可建立；管理員可代建。並限制欄位與型別以提高安全性
       allow create: if (
-        request.auth.uid == request.resource.data.userId || isAdmin()
+        request.auth.uid == request.resource.data.userId || isReviewer()
       ) &&
       request.resource.data.keys().hasOnly([
         'userId','type','timestamp','location','photoUrls','descriptions','deviceId','locationName','dutyType','isAutomatic'
@@ -112,6 +120,42 @@ service cloud.firestore {
       allow update: if get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
       allow delete: if false;
     }
+
+    // 補打卡申請：使用者提交，管理員審核
+    match /retroClockRequests/{requestId} {
+      // 本人可提交申請；限制欄位與型別
+      allow create: if request.auth != null &&
+        request.auth.uid == request.resource.data.userId &&
+        request.resource.data.keys().hasOnly([
+          'userId','type','reason','locationName','requestedAt','targetTime','status'
+        ]) &&
+        request.resource.data.type in ['上班','下班','外出','抵達','離開'] &&
+        (request.resource.data.reason == null || request.resource.data.reason is string) &&
+        (request.resource.data.locationName == null || request.resource.data.locationName is string) &&
+        request.resource.data.requestedAt is timestamp &&
+        request.resource.data.targetTime is timestamp &&
+        request.resource.data.status == 'pending';
+
+      // 任何登入者可讀（供管理員審核、一般使用者查看自己的申請狀態）
+      allow read: if request.auth != null;
+
+      // 管理員、人事、高階主管可審核並更新狀態；限制可更新欄位與型別
+      allow update: if isReviewer() &&
+        request.resource.data.keys().hasOnly([
+          'userId','type','reason','locationName','requestedAt','targetTime','status','reviewerId','reviewedAt'
+        ]) &&
+        request.resource.data.type in ['上班','下班','外出','抵達','離開'] &&
+        (request.resource.data.reason == null || request.resource.data.reason is string) &&
+        (request.resource.data.locationName == null || request.resource.data.locationName is string) &&
+        request.resource.data.requestedAt is timestamp &&
+        request.resource.data.targetTime is timestamp &&
+        request.resource.data.status in ['approved','rejected','pending'] &&
+        (request.resource.data.reviewerId == null || request.resource.data.reviewerId is string) &&
+        (request.resource.data.reviewedAt == null || request.resource.data.reviewedAt is timestamp);
+
+      // 禁止刪除
+      allow delete: if false;
+    }
     
     // 允許讀取所有人員狀態資訊（用於人員地圖和追蹤功能）
     match /userStatus/{userId} {
@@ -149,6 +193,45 @@ service cloud.firestore {
         (request.resource.data.markAbnormalLocation == null || request.resource.data.markAbnormalLocation is bool) &&
         (request.resource.data.otherLocations == null || request.resource.data.otherLocations is list) &&
         (request.resource.data.updatedAt == null || request.resource.data.updatedAt is timestamp);
+    }
+
+    // 個人行程（每位使用者自己的 schedules 子集合）：本人 CRUD，其他人不可見
+    match /users/{userId}/schedules/{scheduleId} {
+      // 僅本人可讀寫自己的行程
+      allow read: if request.auth != null && (
+        request.auth.uid == userId ||
+        (
+          resource.data.participants is list && request.auth.uid in resource.data.participants
+        )
+      );
+      allow create: if request.auth != null && request.auth.uid == userId &&
+        request.resource.data.keys().hasOnly([
+          'title','date','time','location','description','createdAt','updatedAt','remindersDays','reminderTime','participants'
+        ]) &&
+        request.resource.data.title is string &&
+        (request.resource.data.date is timestamp || request.resource.data.date is string) &&
+        (request.resource.data.time == null || request.resource.data.time is string) &&
+        (request.resource.data.reminderTime == null || request.resource.data.reminderTime is string) &&
+        (request.resource.data.location == null || request.resource.data.location is string) &&
+        (request.resource.data.description == null || request.resource.data.description is string) &&
+        (request.resource.data.remindersDays == null || request.resource.data.remindersDays is list) &&
+        (request.resource.data.participants == null || request.resource.data.participants is list) &&
+        (request.resource.data.createdAt == null || request.resource.data.createdAt is timestamp) &&
+        (request.resource.data.updatedAt == null || request.resource.data.updatedAt is timestamp);
+      allow update: if request.auth != null && request.auth.uid == userId &&
+        request.resource.data.keys().hasOnly([
+          'title','date','time','location','description','updatedAt','remindersDays','reminderTime','participants'
+        ]) &&
+        (request.resource.data.title == null || request.resource.data.title is string) &&
+        (request.resource.data.date == null || request.resource.data.date is timestamp || request.resource.data.date is string) &&
+        (request.resource.data.time == null || request.resource.data.time is string) &&
+        (request.resource.data.reminderTime == null || request.resource.data.reminderTime is string) &&
+        (request.resource.data.location == null || request.resource.data.location is string) &&
+        (request.resource.data.description == null || request.resource.data.description is string) &&
+        (request.resource.data.remindersDays == null || request.resource.data.remindersDays is list) &&
+        (request.resource.data.participants == null || request.resource.data.participants is list) &&
+        (request.resource.data.updatedAt == null || request.resource.data.updatedAt is timestamp);
+      allow delete: if request.auth != null && request.auth.uid == userId;
     }
   }
 }

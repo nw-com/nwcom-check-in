@@ -126,6 +126,22 @@
             opacity: 1;
             bottom: 110px;
         }
+        /* Capture shutter button interactions */
+        #capture-btn {
+            cursor: pointer;
+            outline: none;
+            box-shadow: 0 4px 0 rgba(0,0,0,0.15);
+            transition: transform 120ms ease, box-shadow 120ms ease, background-color 120ms ease, border-color 120ms ease;
+        }
+        #capture-btn:hover {
+            box-shadow: 0 10px 18px rgba(0,0,0,0.25);
+        }
+        #capture-btn:active {
+            transform: scale(0.96);
+            background-color: #f9fafb;
+            border-color: #6b7280;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.2), 0 6px 12px rgba(0,0,0,0.2);
+        }
     </style>
 </head>
 <body class="flex items-center justify-center min-h-screen">
@@ -300,6 +316,7 @@
             googleMapsLoaded: false,
             activeListeners: [],
             currentLocation: null,
+            currentPage: null,
             users: [],
             trackingMap: null,
             trackingMarkers: [],
@@ -714,6 +731,14 @@
             document.getElementById('profile-avatar-btn').addEventListener('click', renderProfileModal);
 
             function showPage(pageName, subPage = null, params = {}) {
+                const prevPage = state.currentPage;
+                try {
+                    if (prevPage === 'calendar' && pageName !== 'calendar' && window.__calendarCleanup) {
+                        window.__calendarCleanup();
+                    }
+                } catch (e) {
+                    console.warn('Calendar cleanup failed:', e);
+                }
                 cleanupListeners();
                 state.currentLocation = null;
                 state.trackingMap = null;
@@ -733,6 +758,7 @@
                 const renderFunction = router[pageName] || renderAccessDenied;
                 try {
                     renderFunction(params);
+                    state.currentPage = pageName;
                 } catch(e) {
                     console.error("Failed to render page:", e);
                     mainContent.innerHTML = `<div class="p-4 text-red-500">e??e?�Fe??a?�Da?��a??a�?</div>`;
@@ -757,7 +783,12 @@
                     <div class="h-[50px] flex items-center justify-center border-b border-gray-200 bg-white">
                          <p id="current-time" class="text-lg font-semibold text-gray-700"></p>
                     </div>
-                    <div class="p-4 overflow-y-auto" style="height: calc(100% - 50px);">
+                    <div id="community-status-row" class="h-[50px] flex items-center justify-center border-b border-gray-200 bg-white">
+                        <button id="community-status-btn" class="mx-4 bg-red-100 text-red-700 font-semibold py-2 px-4 rounded-md hover:bg-red-200 border border-red-200 flex items-center justify-center shadow-sm">
+                            <i data-lucide="activity" class="w-4 h-4 mr-2"></i>社區人員狀況
+                        </button>
+                    </div>
+                    <div class="p-4 overflow-y-auto" style="height: calc(100% - 100px);">
                         <div class="bg-white p-4 rounded-lg mb-4 shadow-sm border">
                             <h3 class="font-bold text-red-800 mb-2 flex items-center"><i data-lucide="user-circle" class="w-4 h-4 mr-2"></i>a??c??c?�a??</h3>
                             <div id="my-status" class="text-gray-600">eR�a??a�M-...</div>
@@ -772,6 +803,12 @@
                            </div>
                            <div class="text-xs text-gray-500 mt-2">e??a??a?�Dc??a?�a??a??a??c?�a??</div>
                        </div>
+                        <div id="dashboard-notifications" class="bg-white p-4 rounded-lg mb-4 shadow-sm border">
+                           <h3 class="font-bold text-gray-800 mb-2 flex items-center"><i data-lucide="bell" class="w-4 h-4 mr-2"></i>通知</h3>
+                           <div id="dashboard-notifications-list" class="space-y-2 text-gray-700">
+                             <div class="text-gray-500">讀取中...</div>
+                           </div>
+                        </div>
                     </div>
                 `;
                 lucide.createIcons();
@@ -780,11 +817,20 @@
                     if(timeEl){ timeEl.textContent = new Date().toLocaleString('zh-TW', { dateStyle: 'long', timeStyle: 'medium' }); }
                 }, 1000);
                 state.activeListeners.push(() => clearInterval(timerInterval));
+
+                // 社區人員狀況按鈕開啟新視窗
+                const communityBtn = document.getElementById('community-status-btn');
+                if (communityBtn) {
+                    communityBtn.addEventListener('click', () => {
+                        try { window.open('https://nw-com.github.io/nw-checkin-all/', '_blank', 'noopener'); } catch(e) {}
+                    });
+                }
                 
                 // aa�Fa?�Da?��a?|e!��c?oa?!a�P�Dc?�a??
                 // aR?c?ce??ea?e�L-c?R
                 const defaultSettings = {
-                    showEmployeeStatus: true
+                    showEmployeeStatus: true,
+                    communityStatusAllowedUsers: []
                 };
                 
                 // a??ec|a??a??a?�Xa-?a?2c?2a??e�L-c?R
@@ -802,6 +848,16 @@
                     const container = document.getElementById('all-users-summary-card');
                     if (container) container.style.display = 'none';
                 }
+
+                // 依一般設定控制「社區人員狀況」按鈕可見性
+                try {
+                    const rowEl = document.getElementById('community-status-row');
+                    const myId = state.currentUserData?.id;
+                    const allowed = Array.isArray(localSettings.communityStatusAllowedUsers) && myId
+                        ? localSettings.communityStatusAllowedUsers.includes(myId)
+                        : false;
+                    if (rowEl) rowEl.style.display = allowed ? 'block' : 'none';
+                } catch(_) {}
                 
                 // a??ec|a??Firebasec?2a??a?�a?�Xe�L-c?Ri??a??a�M?e??a!?UI
                 try {
@@ -819,6 +875,13 @@
                                     container.style.display = settings.showEmployeeStatus ? 'block' : 'none';
                                 }
                             }
+                            // 更新社區人員狀況按鈕可見性
+                            const rowEl = document.getElementById('community-status-row');
+                            const myId = state.currentUserData?.id;
+                            const allowed = Array.isArray(settings.communityStatusAllowedUsers) && myId
+                                ? settings.communityStatusAllowedUsers.includes(myId)
+                                : false;
+                            if (rowEl) rowEl.style.display = allowed ? 'block' : 'none';
                     }
                 }).catch(error => {
                     console.warn("Could not fetch latest settings, using local settings instead:", error);
@@ -834,6 +897,122 @@
                     openAllUsersStatusModal();
                 });
             }
+
+            // 儀錶板通知（週五值班提醒）
+            (async () => {
+                try {
+                    const fs = window.__fs || {};
+                    const db = window.__db;
+                    const user = window.__auth?.currentUser;
+                    const listEl = document.getElementById('dashboard-notifications-list');
+                    if (!db || !user || !listEl) return;
+
+                    const { doc, getDoc, collection, query, where, onSnapshot, Timestamp } = fs;
+
+                    function formatYMD(date) {
+                        const y = date.getFullYear();
+                        const m = String(date.getMonth() + 1).padStart(2, '0');
+                        const d = String(date.getDate()).padStart(2, '0');
+                        return `${y}-${m}-${d}`;
+                    }
+
+                    function getWeekFriday(date) {
+                        const d = new Date(date);
+                        const day = d.getDay();
+                        const diffToMonday = day === 0 ? -6 : (1 - day);
+                        const monday = new Date(d);
+                        monday.setDate(d.getDate() + diffToMonday);
+                        const friday = new Date(monday);
+                        friday.setDate(monday.getDate() + 4);
+                        return friday;
+                    }
+
+                    async function renderDutyReminder() {
+                        const now = new Date();
+                        const day = now.getDay(); // 0=Sun,1=Mon,...,5=Fri
+                        const friday = getWeekFriday(now);
+                        const isoFriday = formatYMD(friday);
+
+                        const settingsRef = doc(db, 'settings', 'general');
+                        const s = await getDoc(settingsRef);
+                        const roster = s.exists() ? (s.data().fridayDutyRoster || {}) : {};
+                        const ids = roster[isoFriday] || [];
+                        // 將 UID 轉為姓名顯示（相容舊資料：若為姓名，則照原字串顯示）
+                        let nameMap = {};
+                        try {
+                            const snapUsers = await getDocs(collection(db, 'users'));
+                            snapUsers.forEach(d => {
+                                const data = d.data();
+                                nameMap[d.id] = data?.displayName || data?.name || data?.email || d.id;
+                            });
+                        } catch (e) {}
+                        const names = Array.isArray(ids) ? ids.map(v => nameMap[v] || v) : [];
+
+                        const clearedKey = `dutyReminderCleared-${isoFriday}-${user.uid}`;
+                        const cleared = localStorage.getItem(clearedKey) === '1';
+
+                        const inWeek = day >= 1 && day <= 5; // 週一至週五都顯示
+                        const shouldShow = (inWeek && names.length > 0 && !(day === 5 && cleared));
+                        if (shouldShow) {
+                            listEl.innerHTML = `
+                                <div class="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                                  <div class="flex items-center justify-between">
+                                    <div class="flex items-center"><i data-lucide="alert-circle" class="w-4 h-4 mr-2 text-yellow-600"></i><span class="font-medium text-yellow-800">本週五值班</span></div>
+                                    <button id="view-calendar" class="text-blue-600 hover:underline text-sm">查看月曆</button>
+                                  </div>
+                                  <div class="mt-2 text-sm text-gray-700">值班人員：${names.join('、')}</div>
+                                  <div class="mt-1 text-xs text-gray-500">星期五（${isoFriday}）值班提醒</div>
+                                </div>`;
+                            const btn = document.getElementById('view-calendar');
+                            btn?.addEventListener('click', () => {
+                                try {
+                                    document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+                                    const calTab = document.querySelector('.tab-btn[data-tab="calendar"]');
+                                    calTab?.classList.add('active');
+                                } catch (e) {
+                                    console.warn('更新分頁選取狀態失敗', e);
+                                }
+                                showPage('calendar', 'overview');
+                            });
+                            lucide.createIcons();
+                        } else {
+                            listEl.innerHTML = '<div class="text-gray-500">暫無通知</div>';
+                        }
+
+                        // 僅在週五當天監聽個人打卡以清除提醒
+                        if (day === 5 && names.length > 0 && !cleared) {
+                            const start = new Date(friday.getFullYear(), friday.getMonth(), friday.getDate());
+                            const end = new Date(friday.getFullYear(), friday.getMonth(), friday.getDate(), 23, 59, 59, 999);
+                            const tsStart = Timestamp?.fromDate ? Timestamp.fromDate(start) : start;
+                            const tsEnd = Timestamp?.fromDate ? Timestamp.fromDate(end) : end;
+                            const q = query(
+                                collection(db, 'clockInRecords'),
+                                where('userId', '==', user.uid),
+                                where('timestamp', '>=', tsStart),
+                                where('timestamp', '<=', tsEnd)
+                            );
+                            const unsubDuty = onSnapshot(q, (snap) => {
+                                let clearedNow = false;
+                                snap.forEach(d => {
+                                    const r = d.data();
+                                    if (r.type === '下班' || r.type === '自動下班') {
+                                        clearedNow = true;
+                                    }
+                                });
+                                if (clearedNow) {
+                                    localStorage.setItem(clearedKey, '1');
+                                    listEl.innerHTML = '<div class="text-gray-500">暫無通知</div>';
+                                }
+                            });
+                            state.activeListeners.push(unsubDuty);
+                        }
+                    }
+
+                    renderDutyReminder();
+                } catch (e) {
+                    console.warn('初始化儀錶板通知失敗', e);
+                }
+            })();
                 
                 const usersRef = collection(db, "users");
                 const unsubscribe = onSnapshot(query(usersRef), (querySnapshot) => {
@@ -864,7 +1043,8 @@
                     // 1) 上班中-辦公室 2) 返回-辦公室 3) 外出-項目-地點 4) 抵達-項目-地點
                     // 5) 離開-項目-地點 6) 請假中 7) 已下班 其餘置後
                     const statusPriority = (user) => {
-                        const locationText = user.clockInStatus === '外出' && user.outboundLocation ? user.outboundLocation : user.lastLocation;
+                        const isOutRelated = ['外出','抵達','離開'].includes(user.clockInStatus);
+                        const locationText = isOutRelated && user.outboundLocation ? user.outboundLocation : user.lastLocation;
                         const display = getStatusDisplayText(user.clockInStatus || '未打卡', locationText, user.dutyType);
                         let isLeave = (user.clockInStatus === '臨時請假') || (display.includes('請假'));
                         if (!isLeave) {
@@ -939,35 +1119,59 @@
                         }
                     });
 
-                   // e�L?cR?a??e|?aooa?�M
-                   let countWork = 0, countOutbound = 0, countOff = 0, countLeave = 0;
-                    const now = new Date();
-                    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-                    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-                   visibleUsersList.forEach(user => {
-                       const s = user.clockInStatus || '';
-                       const leave = user.leaveStatus || '';
-                       if (s === 'a�M?c?-' || s === 'e??a??') countWork++;
-                       else if (s === 'a??a?o' || s === 'a?�ge??' || s === 'e?�Fe??') countOutbound++;
-                       else if (s === 'a�M?c?-' || s === 'a�P2a�M?c?--a?aa??a?!') countOff++;
-                        
-                        // aa�Fa?�De??a??c?�a??i??e?�La??e??a??a??c??a?ca??a??c??e??a??c?3e??
-                        let isLeave = s === 'e?�La??e??a??';
-                        if (!isLeave && (leave === 'approved' || leave === 'pending')) {
-                            // aa�Fa?�Da?��a?|a??c??a?ca??a??c??e??a??e�L?e??
-                            if (user.leaveStartTime && user.leaveEndTime) {
-                                const leaveStart = user.leaveStartTime.toDate ? user.leaveStartTime.toDate() : new Date(user.leaveStartTime);
-                                const leaveEnd = user.leaveEndTime.toDate ? user.leaveEndTime.toDate() : new Date(user.leaveEndTime);
-                                isLeave = leaveStart <= todayEnd && leaveEnd >= todayStart;
-                            }
-                        }
-                       if (isLeave) countLeave++;
-                   });
-                    if (countWorkEl) countWorkEl.textContent = countWork;
-                    if (countOutboundEl) countOutboundEl.textContent = countOutbound;
-                    if (countOffEl) countOffEl.textContent = countOff;
-                    if (countLeaveEl) countLeaveEl.textContent = countLeave;
-                    if(!myStatusFound && document.getElementById('my-status')){ document.getElementById('my-status').textContent = 'c?!a3?a??a??a?�Lc??c?�a??'; }
+                   // 以最新打卡紀錄計算摘要人數，與彈窗一致
+                   (async () => {
+                       try {
+                           const latestMap = {};
+                           await Promise.all(visibleUsersList.map(async (u) => {
+                               try {
+                                   const qLatest = query(collection(db, 'clockInRecords'), where('userId', '==', u.id), orderBy('timestamp', 'desc'), limit(1));
+                                   const latestSnap = await getDocs(qLatest);
+                                   latestMap[u.id] = latestSnap.empty ? null : latestSnap.docs[0].data();
+                               } catch (e) {
+                                   console.warn('載入使用者最新打卡失敗:', e);
+                                   latestMap[u.id] = null;
+                               }
+                           }));
+
+                           let countWork = 0, countOutbound = 0, countOff = 0, countLeave = 0;
+                           const now = new Date();
+                           const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                           const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+                           visibleUsersList.forEach(u => {
+                               const latest = latestMap[u.id];
+                               const type = latest?.type || u.clockInStatus || '';
+                               const leave = u.leaveStatus || '';
+                               let isLeave = false;
+                               if (latest && (type === '臨時請假' || String(type).includes('請假'))) {
+                                   isLeave = true;
+                               } else if (leave === 'approved' || leave === 'pending') {
+                                   if (u.leaveStartTime && u.leaveEndTime) {
+                                       const leaveStart = u.leaveStartTime.toDate ? u.leaveStartTime.toDate() : new Date(u.leaveStartTime);
+                                       const leaveEnd = u.leaveEndTime.toDate ? u.leaveEndTime.toDate() : new Date(u.leaveEndTime);
+                                       isLeave = leaveStart <= todayEnd && leaveEnd >= todayStart;
+                                   }
+                               }
+                               if (isLeave) {
+                                   countLeave++;
+                                   return;
+                               }
+                               if (type === '上班' || type === '返回') countWork++;
+                               else if (type === '外出' || type === '抵達' || type === '離開') countOutbound++;
+                               else if (type === '下班' || type === '自動下班' || type === '已下班-未打卡') countOff++;
+                           });
+                           if (countWorkEl) countWorkEl.textContent = countWork;
+                           if (countOutboundEl) countOutboundEl.textContent = countOutbound;
+                           if (countOffEl) countOffEl.textContent = countOff;
+                           if (countLeaveEl) countLeaveEl.textContent = countLeave;
+                       } catch (e) {
+                           console.warn('更新儀錶板摘要人數時發生錯誤:', e);
+                       } finally {
+                           if(!myStatusFound && document.getElementById('my-status')){
+                               document.getElementById('my-status').textContent = '無法取得您的狀態';
+                           }
+                       }
+                   })();
                     
                 });
                 state.activeListeners.push(unsubscribe);
@@ -1020,66 +1224,112 @@
                     }
                     const visibleUsersList = users.filter(user => visibleUsers[user.id] !== false);
                     
-                    // 排序：自訂狀態優先級 + 最近更新時間（新至舊） + 姓名
-                    const statusPriority = (user) => {
-                        const locationText = user.clockInStatus === '外出' && user.outboundLocation ? user.outboundLocation : user.lastLocation;
-                        const display = getStatusDisplayText(user.clockInStatus || '未打卡', locationText, user.dutyType);
-                        let isLeave = (user.clockInStatus === '臨時請假') || (display.includes('請假'));
-                        if (!isLeave) {
-                            const leave = user.leaveStatus || '';
-                            if (leave === 'approved' || leave === 'pending') {
-                                const now = new Date();
-                                const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-                                const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-                                if (user.leaveStartTime && user.leaveEndTime) {
-                                    const leaveStart = user.leaveStartTime.toDate ? user.leaveStartTime.toDate() : new Date(user.leaveStartTime);
-                                    const leaveEnd = user.leaveEndTime.toDate ? user.leaveEndTime.toDate() : new Date(user.leaveEndTime);
-                                    isLeave = leaveStart <= todayEnd && leaveEnd >= todayStart;
+                    (async () => {
+                        const latestMap = {};
+                        try {
+                            await Promise.all(visibleUsersList.map(async (u) => {
+                                try {
+                                    const qLatest = query(collection(db, 'clockInRecords'), where('userId', '==', u.id), orderBy('timestamp', 'desc'), limit(1));
+                                    const latestSnap = await getDocs(qLatest);
+                                    if (!latestSnap.empty) {
+                                        latestMap[u.id] = latestSnap.docs[0].data();
+                                    } else {
+                                        latestMap[u.id] = null;
+                                    }
+                                } catch (e) {
+                                    console.warn('載入使用者最新打卡失敗:', e);
+                                    latestMap[u.id] = null;
                                 }
-                            }
+                            }));
+                        } catch (e) {
+                            console.warn('建立最新打卡對應表失敗:', e);
                         }
 
-                        if (display.includes('上班') && (display.includes('辦公室') || display.includes('在辦公室'))) return 1;
-                        if (display.includes('返回') && (display.includes('辦公室') || display.includes('在辦公室'))) return 2;
-                        if (display.startsWith('外出-')) return 3;
-                        if (display.startsWith('抵達-')) return 4;
-                        if (display.startsWith('離開-')) return 5;
-                        if (isLeave) return 6;
-                        if (display.includes('已下班')) return 7;
-                        return 8;
-                    };
+                        const prioOf = (display, isLeave) => {
+                            if (display.includes('上班') && (display.includes('辦公室') || display.includes('在辦公室'))) return 1;
+                            if (display.includes('返回') && (display.includes('辦公室') || display.includes('在辦公室'))) return 2;
+                            if (display.startsWith('外出-')) return 3;
+                            if (display.startsWith('抵達-')) return 4;
+                            if (display.startsWith('離開-')) return 5;
+                            if (isLeave) return 6;
+                            if (display.includes('已下班')) return 7;
+                            return 8;
+                        };
 
-                    visibleUsersList.sort((a, b) => {
-                        const prA = statusPriority(a);
-                        const prB = statusPriority(b);
-                        if (prA !== prB) return prA - prB;
-                        const tA = a.lastUpdated ? (a.lastUpdated.toDate ? a.lastUpdated.toDate() : new Date(a.lastUpdated)) : new Date(0);
-                        const tB = b.lastUpdated ? (b.lastUpdated.toDate ? b.lastUpdated.toDate() : new Date(b.lastUpdated)) : new Date(0);
-                        if (tA.getTime() !== tB.getTime()) return tB - tA;
-                        return a.name.localeCompare(b.name, 'zh-Hant');
-                    }).forEach(user => {
-                        const locationText = user.clockInStatus === 'a??a?o' && user.outboundLocation ? user.outboundLocation : user.lastLocation;
-                        const statusText = getStatusDisplayText(user.clockInStatus || 'a?aa??a?!', locationText, user.dutyType);
-                        const statusColor = getStatusColor(statusText);
-                        const timeFormatted = '讀取中...';
-                        listEl.innerHTML += `
-                            <div class=\"flex items-center justify-between bg-white p-3 rounded-md shadow-sm border\">
-                                <div class=\"flex items-center\">
-                                    <img src=\"${user.avatarUrl || `https://placehold.co/32x32/EFEFEF/333333?text=${user.name?.charAt(0) || 'U'}`}\" class=\"w-8 h-8 rounded-full mr-3 object-cover\">
-                                    <div>
-                                        <span class=\"font-medium text-gray-700\">${user.name || user.displayName || 'a?aa??a??'}</span>
-                                        <div class=\"flex items-center mt-1\">
-                                            <span class=\"text-sm font-semibold ${statusColor} mr-2\">${statusText}</span>
-                                            <span class=\"text-xs text-gray-500\" id=\"clock-time-${user.id}\">${timeFormatted}</span>
+                        visibleUsersList.sort((a, b) => {
+                            const latestA = latestMap[a.id] || null;
+                            const latestB = latestMap[b.id] || null;
+                            const locA = latestA?.locationName || ((['外出','抵達','離開'].includes(a.clockInStatus) && a.outboundLocation) ? a.outboundLocation : a.lastLocation);
+                            const locB = latestB?.locationName || ((['外出','抵達','離開'].includes(b.clockInStatus) && b.outboundLocation) ? b.outboundLocation : b.lastLocation);
+                            const displayA = latestA ? getStatusDisplayText(latestA.type || '未知', latestA.locationName || null, latestA.dutyType || null)
+                                                     : getStatusDisplayText(a.clockInStatus || '未打卡', locA, a.dutyType);
+                            const displayB = latestB ? getStatusDisplayText(latestB.type || '未知', latestB.locationName || null, latestB.dutyType || null)
+                                                     : getStatusDisplayText(b.clockInStatus || '未打卡', locB, b.dutyType);
+                            let isLeaveA = (a.clockInStatus === '臨時請假') || (displayA.includes('請假'));
+                            if (!isLeaveA) {
+                                const leaveA = a.leaveStatus || '';
+                                if (leaveA === 'approved' || leaveA === 'pending') {
+                                    const now = new Date();
+                                    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                                    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+                                    if (a.leaveStartTime && a.leaveEndTime) {
+                                        const leaveStartA = a.leaveStartTime.toDate ? a.leaveStartTime.toDate() : new Date(a.leaveStartTime);
+                                        const leaveEndA = a.leaveEndTime.toDate ? a.leaveEndTime.toDate() : new Date(a.leaveEndTime);
+                                        isLeaveA = leaveStartA <= todayEnd && leaveEndA >= todayStart;
+                                    }
+                                }
+                            }
+                            let isLeaveB = (b.clockInStatus === '臨時請假') || (displayB.includes('請假'));
+                            if (!isLeaveB) {
+                                const leaveB = b.leaveStatus || '';
+                                if (leaveB === 'approved' || leaveB === 'pending') {
+                                    const now = new Date();
+                                    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                                    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+                                    if (b.leaveStartTime && b.leaveEndTime) {
+                                        const leaveStartB = b.leaveStartTime.toDate ? b.leaveStartTime.toDate() : new Date(b.leaveStartTime);
+                                        const leaveEndB = b.leaveEndTime.toDate ? b.leaveEndTime.toDate() : new Date(b.leaveEndTime);
+                                        isLeaveB = leaveStartB <= todayEnd && leaveEndB >= todayStart;
+                                    }
+                                }
+                            }
+                            const prA = prioOf(displayA, isLeaveA);
+                            const prB = prioOf(displayB, isLeaveB);
+                            if (prA !== prB) return prA - prB;
+                            const tA = latestA?.timestamp?.toDate?.() ? latestA.timestamp.toDate() :
+                                       (a.lastUpdated ? (a.lastUpdated.toDate ? a.lastUpdated.toDate() : new Date(a.lastUpdated)) : new Date(0));
+                            const tB = latestB?.timestamp?.toDate?.() ? latestB.timestamp.toDate() :
+                                       (b.lastUpdated ? (b.lastUpdated.toDate ? b.lastUpdated.toDate() : new Date(b.lastUpdated)) : new Date(0));
+                            if (tA.getTime() !== tB.getTime()) return tB - tA;
+                            return a.name.localeCompare(b.name, 'zh-Hant');
+                        }).forEach(user => {
+                            const latest = latestMap[user.id] || null;
+                            const locText = latest?.locationName || ((['外出','抵達','離開'].includes(user.clockInStatus) && user.outboundLocation) ? user.outboundLocation : user.lastLocation);
+                            const statusText = latest ? getStatusDisplayText(latest.type || '未知', latest.locationName || null, latest.dutyType || null)
+                                                      : getStatusDisplayText(user.clockInStatus || '未打卡', locText, user.dutyType);
+                            const statusColor = getStatusColor(statusText);
+                            const clockInTime = latest?.timestamp?.toDate?.() ? latest.timestamp.toDate() : (latest?.timestamp ? new Date(latest.timestamp) : null);
+                            const timeFormatted = clockInTime ? clockInTime.toLocaleString('zh-TW', {year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'}) : 'N/A';
+                            listEl.innerHTML += `
+                                <div class=\"flex items-center justify-between bg-white p-3 rounded-md shadow-sm border\">
+                                    <div class=\"flex items-center\">
+                                        <img src=\"${user.avatarUrl || `https://placehold.co/32x32/EFEFEF/333333?text=${user.name?.charAt(0) || 'U'`}\" class=\"w-8 h-8 rounded-full mr-3 object-cover\">
+                                        <div>
+                                            <span class=\"font-medium text-gray-700\">${user.name || user.displayName || '未命名'}\</span>
+                                            <div class=\"flex items-center mt-1\">
+                                                <span class=\"text-sm font-semibold ${statusColor} mr-2\">${statusText}</span>
+                                                <span class=\"text-xs text-gray-500\" id=\"clock-time-${user.id}\">${timeFormatted}</span>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                                <div class=\"flex space-x-2\">
-                                    ${user.lastPhotoUrl ? `<button class=\"view-photo-btn p-2 bg-blue-100 rounded-md\" data-photo=\"${user.lastPhotoUrl}\" data-desc=\"${user.lastLocation || ''}\"><i data-lucide=\"image\" class=\"w-6 h-6 text-blue-600\"></i></button>` : ''}
-                                    ${user.lastLocation ? `<button class=\"view-map-btn p-2 bg-green-100 rounded-md\" data-lat=\"${user.lastLocation?.latitude || 0}\" data-lng=\"${user.lastLocation?.longitude || 0}\"><i data-lucide=\"map-pin\" class=\"w-6 h-6 text-green-600\"></i></button>` : ''}
-                                </div>
-                            </div>`;
-                    });
+                                    <div class=\"flex space-x-2\">
+                                        ${user.lastPhotoUrl ? `<button class=\"view-photo-btn p-2 bg-blue-100 rounded-md\" data-photo=\"${user.lastPhotoUrl}\" data-desc=\"${user.lastLocation || ''}\"><i data-lucide=\"image\" class=\"w-6 h-6 text-blue-600\"></i></button>` : ''}
+                                        ${user.lastLocation ? `<button class=\"view-map-btn p-2 bg-green-100 rounded-md\" data-lat=\"${user.lastLocation?.latitude || 0}\" data-lng=\"${user.lastLocation?.longitude || 0}\"><i data-lucide=\"map-pin\" class=\"w-6 h-6 text-green-600\"></i></button>` : ''}
+                                    </div>
+                                </div>`;
+                        });
+                        try { lucide.createIcons(); } catch (e) {}
+                    })();
                     // 更新每位使用者的最新打卡時間
                     try {
                         Promise.all(visibleUsersList.map(async (u) => {
@@ -1137,8 +1387,8 @@
                     <div class="h-[50px] flex items-center justify-around border-b border-gray-200 bg-white">
                         <button data-subtab="location" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'location' ? 'active' : ''}">aR?a??a??a?!</button>
                         <button data-subtab="records" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'records' ? 'active' : ''}">a??a?!c���e??</button>
+                        <button data-subtab="schedule" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'schedule' ? 'active' : ''}">我的班表</button>
                         <button data-subtab="leaves" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'leaves' ? 'active' : ''}">e??a??c���e??</button>
-                        <button data-subtab="workdays" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'workdays' ? 'active' : ''}">上班日期</button>
                     </div>
                     <div id="sub-page-content" class="overflow-y-auto" style="height: calc(100% - 50px);"></div>`;
                 
@@ -1147,10 +1397,10 @@
                     renderClockInLocation(subPageContent);
                 } else if (subPage === 'records') {
                     renderClockInRecords(subPageContent);
+                } else if (subPage === 'schedule') {
+                    renderClockInSchedule(subPageContent);
                 } else if (subPage === 'leaves') {
                     renderMyLeaveRecords(subPageContent);
-                } else if (subPage === 'workdays') {
-                    renderWorkdaysMonthView(subPageContent);
                 }
                 
                 mainContent.querySelectorAll('.sub-tab-btn').forEach(btn => btn.addEventListener('click', () => showPage('clock-in', btn.dataset.subtab)));
@@ -1791,24 +2041,18 @@
                                     <input type="text" id="other-reason" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500" placeholder="e??e?�Ma?�De??a??ao?c?��">
                                 </div>
                                 
-                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div class="grid grid-cols-1 gap-4">
                                     <div class="form-group">
-                                        <label for="leave-start-date" class="block text-sm font-medium text-gray-700 mb-1">e??a��?a?�Da??</label>
-                                        <input type="date" id="leave-start-date" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500" value="${todayStr}">
+                                        <label for="leave-start-dt" class="block text-sm font-medium text-gray-700 mb-1">開始時間</label>
+                                        <input type="datetime-local" id="leave-start-dt" step="600" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500" value="${(function(){const now=new Date();const y=now.getFullYear();const m=String(now.getMonth()+1).padStart(2,'0');const d=String(now.getDate()).padStart(2,'0');return `${y}-${m}-${d}T09:00`;})()}">
                                     </div>
                                     <div class="form-group">
-                                        <label for="leave-start-hour" class="block text-sm font-medium text-gray-700 mb-1">e??a��?a�X?a??</label>
-                                        <input type="number" id="leave-start-hour" min="0" max="23" step="1" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500" value="${currentHour}">
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="leave-end-date" class="block text-sm font-medium text-gray-700 mb-1">c�g?a??a?�Da??</label>
-                                        <input type="date" id="leave-end-date" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500" value="${todayStr}">
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="leave-end-hour" class="block text-sm font-medium text-gray-700 mb-1">c�g?a??a�X?a??</label>
-                                        <input type="number" id="leave-end-hour" min="0" max="23" step="1" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500" value="${defaultEndHour}">
+                                        <label for="leave-end-dt" class="block text-sm font-medium text-gray-700 mb-1">結束時間</label>
+                                        <input type="datetime-local" id="leave-end-dt" step="600" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500" value="${(function(){const now=new Date();const y=now.getFullYear();const m=String(now.getMonth()+1).padStart(2,'0');const d=String(now.getDate()).padStart(2,'0');return `${y}-${m}-${d}T17:30`;})()}">
+                                        <p class="text-xs text-gray-500 mt-1">時間格式：YYYY-MM-DD  hh:mm（每 10 分鐘一格）</p>
                                     </div>
                                 </div>
+                                <div class="text-xs text-gray-600" id="workhours-hint">當日上班時間：09:00 ~ 17:30</div>
                                 
                                 <div class="flex justify-end space-x-2 pt-2">
                                     <button type="button" id="leave-cancel-btn" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300">a??a??</button>
@@ -1843,6 +2087,64 @@
                 document.getElementById('leave-cancel-btn').addEventListener('click', () => {
                     document.body.removeChild(modal);
                 });
+
+                // 動態顯示當日上班時間（週一~週四為上班日；週五依值班名單；假日顯示非上班日）
+                const workhoursHintEl = document.getElementById('workhours-hint');
+                const parseLocalDateOnly = (s) => {
+                    if (!s || !s.includes('T')) return new Date();
+                    const [datePart] = s.split('T');
+                    const [yy, mm, dd] = datePart.split('-').map(n => parseInt(n, 10));
+                    return new Date(yy, (mm || 1) - 1, dd || 1);
+                };
+                async function updateWorkhoursHint() {
+                    try {
+                        const startVal = (document.getElementById('leave-start-dt').value || '').trim();
+                        const dt = parseLocalDateOnly(startVal);
+                        const year = dt.getFullYear();
+                        const month = dt.getMonth();
+                        const day = dt.getDate();
+                        const dow = dt.getDay();
+                        let isHolidayFlag = false;
+                        try {
+                            if (typeof fetchHolidaySettingsOnce === 'function') await fetchHolidaySettingsOnce();
+                            const hs = window.__holidaySettingsCache || { weekendIsHoliday: false, holidays: [] };
+                            const iso = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+                            const weekend = dow === 0 || dow === 6;
+                            const holidaysSet = new Set(hs.holidays || []);
+                            isHolidayFlag = holidaysSet.has(iso) || (hs.weekendIsHoliday && weekend);
+                        } catch (e) { /* ignore */ }
+
+                        const hourText = '09:00 ~ 17:30';
+                        let label = '非上班日';
+                        let isWork = false;
+                        if (!isHolidayFlag && dow >= 1 && dow <= 4) {
+                            isWork = true; label = '上班日';
+                        } else if (!isHolidayFlag && dow === 5) {
+                            try {
+                                const fs = window.__fs; const db = window.__db;
+                                if (fs && db) {
+                                    const { doc, getDoc } = fs;
+                                    const settingsRef = doc(db, 'settings', 'general');
+                                    const snap = await getDoc(settingsRef);
+                                    const roster = snap.exists() ? (snap.data().fridayDutyRoster || {}) : {};
+                                    const auth = window.__auth;
+                                    const myUid = auth?.currentUser?.uid || '';
+                                    const myName = auth?.currentUser?.displayName || auth?.currentUser?.email || '';
+                                    const iso = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+                                    const arr = roster[iso] || [];
+                                    const normalize = (s) => (s || '').trim();
+                                    isWork = Array.isArray(arr) && ((myUid && arr.includes(myUid)) || (myName && arr.some(n => normalize(n) === normalize(myName))));
+                                    if (isWork) label = '值班日';
+                                }
+                            } catch (e) { /* ignore */ }
+                        }
+                        workhoursHintEl.textContent = isWork ? `當日上班時間：${hourText}（${label}）` : `當日上班時間：非上班日`;
+                    } catch (e) {
+                        workhoursHintEl.textContent = '當日上班時間：09:00 ~ 17:30';
+                    }
+                }
+                document.getElementById('leave-start-dt').addEventListener('change', updateWorkhoursHint);
+                updateWorkhoursHint();
                 
                 // e!�La?Ra??ao?ao?a??
                 document.getElementById('leave-form').addEventListener('submit', async (e) => {
@@ -1860,19 +2162,21 @@
                         reason = otherReason;
                     }
                     // a??a??a?�Da??e??a�X?a??i??c�g?a??c?oa??e??
-                    const startDateStr = document.getElementById('leave-start-date').value;
-                    const endDateStr = document.getElementById('leave-end-date').value;
-                    const startHour = parseInt(document.getElementById('leave-start-hour').value, 10);
-                    const endHour = parseInt(document.getElementById('leave-end-hour').value, 10);
+                    const startVal = (document.getElementById('leave-start-dt').value || '').trim();
+                    const endVal = (document.getElementById('leave-end-dt').value || '').trim();
 
-                    if (!startDateStr || !endDateStr || isNaN(startHour) || isNaN(endHour)) {
-                        showToast('e??e?�Ma??a??a??c??a?�Da??e??a�X?a??', true);
+                    if (!startVal || !endVal || !startVal.includes('T') || !endVal.includes('T')) {
+                        showToast('請選擇有效的開始與結束時間', true);
                         return;
                     }
-                    const startTime = new Date(`${startDateStr}T00:00:00`);
-                    startTime.setHours(startHour, 0, 0, 0);
-                    const endTime = new Date(`${endDateStr}T00:00:00`);
-                    endTime.setHours(endHour, 0, 0, 0);
+                    const parseLocalDT = (s) => {
+                        const [datePart, timePart] = s.split('T');
+                        const [yy, mm, dd] = datePart.split('-').map(n => parseInt(n, 10));
+                        const [HH, MM] = timePart.split(':').map(n => parseInt(n, 10));
+                        return new Date(yy, (mm || 1) - 1, dd || 1, HH || 0, MM || 0, 0);
+                    };
+                    const startTime = parseLocalDT(startVal);
+                    const endTime = parseLocalDT(endVal);
                     
                     if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
                         showToast('e??e?�Ma??a??a??c??a??e??', true);
@@ -1897,6 +2201,8 @@
                             reasonType: reasonType,
                             startTime: Timestamp.fromDate(startTime),
                             endTime: Timestamp.fromDate(endTime),
+                            leaveStartTime: Timestamp.fromDate(startTime),
+                            leaveEndTime: Timestamp.fromDate(endTime),
                             status: 'pending',
                             createdAt: serverTimestamp()
                         });
@@ -2133,8 +2439,9 @@
                 container.innerHTML = `
                     <div class="p-4 space-y-4">
                         <div class="flex items-center space-x-2">
-                            <label for="record-date" class="text-sm font-medium">c��ce?�Ma?�Da??:</label>
-                            <input type="date" id="record-date" value="${today}" class="border border-gray-300 rounded-md px-2 py-1">
+                <label for="record-date" class="text-sm font-medium">篩選日期:</label>
+                <input type="date" id="record-date" value="${today}" class="border border-gray-300 rounded-md px-2 py-1">
+                <button id="open-month-report" class="ml-2 px-3 py-1.5 bg-indigo-600 text-white rounded hover:bg-indigo-700 text-sm">月報表</button>
                         </div>
                         <div id="records-list" class="space-y-3">
                             <div class="text-center p-4 text-gray-500">a-�Ga?�LeR�a??c���e??...</div>
@@ -2143,6 +2450,14 @@
                 `;
 
                 const dateInput = document.getElementById('record-date');
+                // 從班表快捷連結帶入指定日期（YYYY-MM-DD）
+                try {
+                    const presetDate = localStorage.getItem('__records_target_date');
+                    if (presetDate) {
+                        dateInput.value = presetDate;
+                        localStorage.removeItem('__records_target_date');
+                    }
+                } catch (e) { /* ignore */ }
                 const loadRecords = () => {
                     const selectedDate = new Date(dateInput.value);
                     const startOfDay = new Date(selectedDate);
@@ -2191,9 +2506,18 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                                         <p class="font-bold text-lg ${statusColor}">${statusText}</p>
                                         <p class="text-sm text-gray-600">${formatDate(record.timestamp)}</p>
                                     </div>
-                                    <button class="map-btn bg-blue-500 text-white px-2 py-1 rounded text-sm" data-lat="${record.location?.latitude || 0}" data-lng="${record.location?.longitude || 0}">
-                                        <i data-lucide="map-pin"></i> a?�Xa??
-                                    </button>
+                                    <div class="flex items-center gap-2">
+                                        <button class="map-btn bg-blue-500 text-white px-2 py-1 rounded text-sm" data-lat="${record.location?.latitude || 0}" data-lng="${record.location?.longitude || 0}">
+                                            <i data-lucide="map-pin"></i> 地圖
+                                        </button>
+                                        <button class="apply-mod-btn bg-orange-500 text-white px-2 py-1 rounded text-sm"
+                                            data-id="${record.id}"
+                                            data-type="${record.type || ''}"
+                                            data-ts="${(record.timestamp?.toMillis ? record.timestamp.toMillis() : (record.timestamp?.seconds ? record.timestamp.seconds * 1000 : (record.timestamp ? (new Date(record.timestamp)).getTime() : Date.now())))}"
+                                            data-locationname="${record.locationName || ''}">
+                                            <i data-lucide="edit"></i> 申請修改
+                                        </button>
+                                    </div>
                                 </div>
                                 <div class="mt-2 flex space-x-2 overflow-x-auto">
                                     <button class="photo-btn bg-green-500 text-white px-2 py-1 rounded text-sm" 
@@ -2214,6 +2538,109 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                                 const lng = parseFloat(e.currentTarget.dataset.lng);
                                 if(lat && lng) openMapModal(lat, lng);
                                 else showToast("c?!a??c?Re3?e�L?a?��e!��c?o", true);
+                            });
+                        });
+                        // 申請修改按鈕事件
+                        document.querySelectorAll('.apply-mod-btn').forEach(btn => {
+                            btn.addEventListener('click', async (e) => {
+                                const d = e.currentTarget.dataset;
+                                const tsMillis = parseInt(d.ts || '0', 10);
+                                const ts = Number.isFinite(tsMillis) && tsMillis > 0 ? new Date(tsMillis) : new Date();
+                                const recTypeRaw = d.type || '';
+                                const recLocationName = d.locationname || '';
+                                const typeMap = { clock_in: '上班', clock_out: '下班', out: '外出', arrive: '抵達', leave: '離開', return: '返回' };
+                                const recType = typeMap[recTypeRaw] || recTypeRaw;
+                                // 建立彈窗
+                                const backdrop = document.createElement('div');
+                                backdrop.className = 'fixed inset-0 bg-black bg-opacity-40 z-40';
+                                const modal = document.createElement('div');
+                                modal.className = 'fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg p-4 z-50 w-[92%] max-w-[560px]';
+                                modal.innerHTML = `
+                                    <h3 class="text-lg font-bold mb-3">申請修改打卡資料</h3>
+                                    <div class="space-y-3">
+                                        <div class="grid grid-cols-2 gap-3">
+                                            <div>
+                                                <label class="text-sm font-medium">日期</label>
+                                                <input type="date" id="mod-date" class="w-full border border-gray-300 rounded-md p-2" value="${ts.toISOString().split('T')[0]}" />
+                                            </div>
+                                            <div>
+                                                <label class="text-sm font-medium">時間</label>
+                                                <input type="time" id="mod-time" class="w-full border border-gray-300 rounded-md p-2" value="${String(ts.getHours()).padStart(2,'0')}:${String(ts.getMinutes()).padStart(2,'0')}" />
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label class="text-sm font-medium">項目</label>
+                                            <select id="mod-type" class="w-full border border-gray-300 rounded-md p-2">
+                                                <option value="上班" ${recType==='上班' ? 'selected' : ''}>上班</option>
+                                                <option value="下班" ${recType==='下班' ? 'selected' : ''}>下班</option>
+                                                <option value="外出" ${recType==='外出' ? 'selected' : ''}>外出</option>
+                                                <option value="抵達" ${recType==='抵達' ? 'selected' : ''}>抵達</option>
+                                                <option value="離開" ${recType==='離開' ? 'selected' : ''}>離開</option>
+                                                <option value="返回" ${recType==='返回' ? 'selected' : ''}>返回</option>
+                                            </select>
+                                        </div>
+                                        <div id="mod-extra" class="grid grid-cols-2 gap-3">
+                                            <div>
+                                                <label class="text-sm font-medium">事由</label>
+                                                <input type="text" id="mod-reason" class="w-full border border-gray-300 rounded-md p-2" placeholder="請輸入事由" />
+                                            </div>
+                                            <div>
+                                                <label class="text-sm font-medium">地點</label>
+                                                <input type="text" id="mod-location" class="w-full border border-gray-300 rounded-md p-2" placeholder="請輸入地點" value="${recLocationName}" />
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label class="text-sm font-medium">備註</label>
+                                            <input type="text" id="mod-note" class="w-full border border-gray-300 rounded-md p-2" placeholder="請填寫申請原因/說明" />
+                                        </div>
+                                    </div>
+                                    <div class="flex justify-end gap-2 mt-4">
+                                        <button id="mod-cancel" class="px-3 py-2 border rounded-md">取消</button>
+                                        <button id="mod-submit" class="px-3 py-2 bg-orange-600 text-white rounded-md">送出審核</button>
+                                    </div>
+                                `;
+                                document.body.appendChild(backdrop);
+                                document.body.appendChild(modal);
+                                const typeSelect = modal.querySelector('#mod-type');
+                                const reasonInput = modal.querySelector('#mod-reason');
+                                const locInput = modal.querySelector('#mod-location');
+                                const toggle = () => {
+                                    const need = ['外出','抵達','離開'].includes(typeSelect.value);
+                                    modal.querySelector('#mod-extra').style.display = need ? 'grid' : 'none';
+                                };
+                                typeSelect.addEventListener('change', toggle); toggle();
+                                modal.querySelector('#mod-cancel').addEventListener('click', () => { backdrop.remove(); modal.remove(); });
+                                backdrop.addEventListener('click', () => { backdrop.remove(); modal.remove(); });
+                                modal.querySelector('#mod-submit').addEventListener('click', async () => {
+                                    try {
+                                        const user = window.__auth?.currentUser; const db = window.__db; const { addDoc, collection, serverTimestamp } = window.__fs;
+                                        if (!user) { showToast('請先登入', true); return; }
+                                        const dateStr = modal.querySelector('#mod-date').value;
+                                        const timeStr = modal.querySelector('#mod-time').value;
+                                        const type = typeSelect.value;
+                                        const reason = (reasonInput.value || '').trim();
+                                        const location = (locInput.value || '').trim();
+                                        if (!dateStr || !timeStr) { showToast('請填寫日期與時間', true); return; }
+                                        if (['外出','抵達','離開'].includes(type) && (!reason || !location)) { showToast('外出/抵達/離開需填寫事由與地點', true); return; }
+                                        const tsNew = new Date(`${dateStr}T${timeStr}:00`);
+                                        const payload = {
+                                            userId: user.uid,
+                                            userName: user.displayName || '',
+                                            type,
+                                            timestamp: tsNew,
+                                            reason,
+                                            location,
+                                            status: 'pending',
+                                            createdAt: serverTimestamp()
+                                        };
+                                        await addDoc(collection(db, 'retroClockRequests'), payload);
+                                        showToast('已提交修改申請，待審核');
+                                        backdrop.remove(); modal.remove();
+                                    } catch (err) {
+                                        console.error('提交申請失敗', err);
+                                        showToast('提交失敗，請稍後再試', true);
+                                    }
+                                });
                             });
                         });
                         
@@ -2237,6 +2664,237 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
 
                 dateInput.addEventListener('change', loadRecords);
                 loadRecords();
+
+                // 月報表：選擇月份彈窗
+                const monthBtn = document.getElementById('open-month-report');
+                monthBtn?.addEventListener('click', () => openMonthReportModal());
+
+                function openMonthReportModal() {
+                    const now = new Date();
+                    const ym = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+                    const modal = document.createElement('div');
+                    modal.className = 'fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50';
+                    modal.innerHTML = `
+                        <div class="bg-white rounded-lg shadow-xl w-11/12 max-w-md overflow-hidden">
+                            <div class="px-4 py-3 bg-indigo-600 text-white flex items-center justify-between">
+                                <h3 class="font-semibold">選擇月份</h3>
+                                <button class="close-month-modal">
+                                    <i data-lucide="x" class="w-5 h-5"></i>
+                                </button>
+                            </div>
+                            <div class="p-4 space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">月份</label>
+                                    <input type="month" id="month-input" value="${ym}" class="w-full border border-gray-300 rounded-md px-3 py-2">
+                                </div>
+                                <div class="flex justify-end space-x-2">
+                                    <button class="close-month-modal px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300">取消</button>
+                                    <button id="gen-month-report" class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">生成月報表</button>
+                                </div>
+                            </div>
+                        </div>`;
+                    document.body.appendChild(modal);
+                    try { lucide.createIcons(); } catch(e) {}
+                    modal.querySelectorAll('.close-month-modal').forEach(btn => btn.addEventListener('click', () => document.body.removeChild(modal)));
+                    document.getElementById('gen-month-report').addEventListener('click', async () => {
+                        const mi = document.getElementById('month-input').value;
+                        if (!mi) { showToast('請選擇月份', true); return; }
+                        document.body.removeChild(modal);
+                        await generateMonthlyReport(mi);
+                    });
+                }
+
+                async function generateMonthlyReport(ymStr) {
+                    // ymStr: YYYY-MM
+                    const [yearStr, monthStr] = ymStr.split('-');
+                    const year = parseInt(yearStr, 10); const monthIndex = parseInt(monthStr, 10) - 1; // 0-based
+                    const start = new Date(year, monthIndex, 1, 0, 0, 0, 0);
+                    const end = new Date(year, monthIndex + 1, 0, 23, 59, 59, 999);
+
+                    // 讀取該月打卡紀錄（本人）
+                    const { collection, where, query, getDocs, Timestamp } = window.__fs; const db = window.__db;
+                    const startTS = Timestamp?.fromDate ? Timestamp.fromDate(new Date(year, monthIndex, 1)) : start;
+                    const endTS = Timestamp?.fromDate ? Timestamp.fromDate(new Date(year, monthIndex + 1, 0, 23, 59, 59, 999)) : end;
+                    const q = query(
+                        collection(db, 'clockInRecords'),
+                        where('userId', '==', state.currentUser.uid),
+                        where('timestamp', '>=', startTS),
+                        where('timestamp', '<=', endTS)
+                    );
+                    const snap = await getDocs(q);
+                    const allRecords = [];
+                    snap.forEach(d => allRecords.push({ id: d.id, ...d.data() }));
+
+                    // 請假資料（覆蓋該月任何一天）
+                    let leaves = [];
+                    try {
+                        const lq = query(collection(db, 'leaves'), where('userId','==', state.currentUser.uid));
+                        const ls = await getDocs(lq);
+                        ls.forEach(doc => leaves.push({ id: doc.id, ...doc.data() }));
+                    } catch(e) { console.warn('讀取請假失敗', e); }
+
+                    // 特殊勤務（值班）資料
+                    let duties = [];
+                    try {
+                        const dq = query(collection(db, 'specialDuties'), where('userId','==', state.currentUser.uid));
+                        const ds = await getDocs(dq);
+                        ds.forEach(doc => duties.push({ id: doc.id, ...doc.data() }));
+                    } catch(e) { console.warn('讀取特殊勤務失敗', e); }
+
+                    // 讀取週五值班名單（設定），用於判斷本人的值班日
+                    let fridayDutyRoster = {};
+                    try {
+                        const { doc, getDoc } = window.__fs || {};
+                        if (doc && getDoc && db) {
+                            const settingsRef = doc(db, 'settings', 'general');
+                            const settingsSnap = await getDoc(settingsRef);
+                            fridayDutyRoster = settingsSnap.exists() ? (settingsSnap.data().fridayDutyRoster || {}) : {};
+                        }
+                    } catch (e) { console.warn('讀取值班名單失敗', e); }
+
+                    // 準備列印容器
+                    const old = document.getElementById('monthly-report-container');
+                    if (old) old.remove();
+                    const container = document.createElement('div');
+                    container.id = 'monthly-report-container';
+                    container.className = 'fixed inset-0 z-50 bg-white';
+                    const name = state.currentUserData?.name || state.currentUser.displayName || state.currentUser.email || '';
+                    const ymTag = `${year}-${String(monthIndex+1).padStart(2,'0')}`;
+                    const titleText = `${ymTag}出勤紀錄-${name}`;
+                    container.innerHTML = `
+                        <div class="bg-white w-full h-full flex flex-col">
+                            <div class="px-4 py-3 bg-indigo-600 text-white flex items-center justify-between shrink-0">
+                                <h3 class="font-semibold">${titleText}</h3>
+                                <div class="space-x-2">
+                                    <button id="print-month-report" class="px-3 py-1.5 bg-white text-indigo-700 rounded hover:bg-gray-100">列印</button>
+                                    <button id="close-month-report" class="px-3 py-1.5 bg-white text-indigo-700 rounded hover:bg-gray-100">關閉</button>
+                                </div>
+                            </div>
+                            <div class="p-4 flex-1 overflow-auto">
+                                <div id="month-report-content" class="mx-auto" style="width:190mm">
+                                    <div id="month-report-inner" style="transform-origin: top left;">
+                                        <h2 class="text-xl font-bold mb-2 text-center">${titleText}</h2>
+                                        <table class="w-full border border-gray-300 text-sm">
+                                            <thead>
+                                                <tr class="bg-gray-100">
+                                                    <th class="border px-2 py-1">日期</th>
+                                                    <th class="border px-2 py-1">星期幾</th>
+                                                    <th class="border px-2 py-1">當日上班狀態+打卡時間</th>
+                                                    <th class="border px-2 py-1">當日下班狀態+打卡時間</th>
+                                                    <th class="border px-2 py-1">總時數</th>
+                                                    <th class="border px-2 py-1">外出次數</th>
+                                                    <th class="border px-2 py-1">假日/請假日/值班</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="month-report-body"></tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>`;
+                    document.body.appendChild(container);
+
+                    // 填充表格
+                    const weekdayZh = ['日','一','二','三','四','五','六'];
+                    const bodyEl = container.querySelector('#month-report-body');
+                    const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+                    for (let d = 1; d <= daysInMonth; d++) {
+                        const dayStart = new Date(year, monthIndex, d, 0, 0, 0, 0);
+                        const dayEnd = new Date(year, monthIndex, d, 23, 59, 59, 999);
+                        const w = dayStart.getDay();
+                        const dateLabel = `${year}-${String(monthIndex+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+
+                        const records = allRecords.filter(r => {
+                            const ts = r.timestamp?.toDate?.() || (r.timestamp ? new Date(r.timestamp) : null);
+                            if (!ts) return false;
+                            return ts >= dayStart && ts <= dayEnd;
+                        }).sort((a,b) => {
+                            const ta = a.timestamp?.toDate?.() || (a.timestamp ? new Date(a.timestamp) : new Date(0));
+                            const tb = b.timestamp?.toDate?.() || (b.timestamp ? new Date(b.timestamp) : new Date(0));
+                            return ta - tb;
+                        });
+
+                        const startRec = records[0];
+                        const endRec = records.length ? records[records.length - 1] : null;
+                        const startText = startRec ? `${startRec.type || ''} ${formatDate(startRec.timestamp)}` : '';
+                        const endText = endRec ? `${endRec.type || ''} ${formatDate(endRec.timestamp)}` : '';
+                        let totalHours = '';
+                        if (startRec && endRec) {
+                            const st = startRec.timestamp?.toDate?.() || new Date(startRec.timestamp);
+                            const et = endRec.timestamp?.toDate?.() || new Date(endRec.timestamp);
+                            const diff = (et - st) / 3600000; // hours
+                            totalHours = diff > 0 ? diff.toFixed(2) : '';
+                        }
+
+                        const outboundCount = records.filter(r => r.type === '外出').length;
+
+                        const indicators = [];
+                        const isWeekend = (w === 0 || w === 6);
+                        const isLeave = leaves.some(l => {
+                            const s = l.startTime?.toDate?.() || (l.startTime ? new Date(l.startTime) : null);
+                            const e = l.endTime?.toDate?.() || (l.endTime ? new Date(l.endTime) : null);
+                            if (!s || !e) return false;
+                            return s <= dayEnd && e >= dayStart; // overlap
+                        });
+                        const isDutyBySpecial = duties.some(di => {
+                            const s = di.startTime?.toDate?.() || (di.startTime ? new Date(di.startTime) : null);
+                            const e = di.endTime?.toDate?.() || (di.endTime ? new Date(di.endTime) : null);
+                            if (!s || !e) return false;
+                            return s < new Date(year, monthIndex, d+1, 0, 0, 0, 0) && e > dayStart; // overlap
+                        });
+                        // 週五值班名單（以 UID 優先，兼容姓名比對）
+                        const myUid = state.currentUser?.uid;
+                        const myName = state.currentUserData?.name || state.currentUser.displayName || state.currentUser.email || '';
+                        const arr = fridayDutyRoster[dateLabel] || [];
+                        const normalize = (s) => (s || '').trim();
+                        const isRosterDuty = Array.isArray(arr) && ((myUid && arr.includes(myUid)) || arr.some(n => normalize(n) === normalize(myName)));
+                        const isDuty = isDutyBySpecial || isRosterDuty;
+
+                        // 指示欄位：值班優先，不顯示假日
+                        if (!isDuty && isWeekend) indicators.push('假日');
+                        if (isLeave) indicators.push('請假日');
+                        if (isDuty) indicators.push('值班');
+
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `
+                            <td class="border px-2 py-1">${dateLabel}</td>
+                            <td class="border px-2 py-1">${weekdayZh[w]}</td>
+                            <td class="border px-2 py-1">${startText}</td>
+                            <td class="border px-2 py-1">${endText}</td>
+                            <td class="border px-2 py-1">${totalHours}</td>
+                            <td class="border px-2 py-1 text-center">${outboundCount}</td>
+                            <td class="border px-2 py-1">${indicators.join('、')}</td>`;
+                        bodyEl.appendChild(tr);
+                    }
+
+                    // 列印樣式注入（靠上對齊、水平置中，僅顯示報表內容）
+                    if (!document.getElementById('monthly-report-print-style')) {
+                        const style = document.createElement('style');
+                        style.id = 'monthly-report-print-style';
+                        style.textContent = `
+                        @page { size: A4; margin: 10mm; }
+                        @media print {
+                            body { -webkit-print-color-adjust: exact; }
+                            body > * { display: none !important; }
+                            #monthly-report-container { display: block !important; position: static !important; }
+                            #monthly-report-container > div { display: block !important; height: auto !important; }
+                            #monthly-report-container .px-4.py-3.bg-indigo-600 { display: none !important; }
+                            #monthly-report-container .p-4.flex-1 { padding: 0 !important; }
+                            #month-report-content { width: 190mm !important; margin: 0 auto 0 auto !important; }
+                            #month-report-inner { margin-top: 0 !important; }
+                            table { border-collapse: collapse; }
+                            th, td { font-size: 11px; line-height: 1.2; padding: 2px 4px; }
+                        }
+                        `;
+                        document.head.appendChild(style);
+                    }
+
+                    // 關閉、列印事件（已取消匯出PDF）
+                    container.querySelector('#close-month-report').addEventListener('click', () => container.remove());
+                    container.querySelector('#print-month-report').addEventListener('click', () => {
+                        window.print();
+                    });
+                }
             }
 
             async function initClockInMap() {
@@ -2295,7 +2953,7 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                         <button data-subtab="map" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'map' || !subPage ? 'active' : ''}">aooa?!a?�Xa??</button>
                         <button data-subtab="attendance" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'attendance' ? 'active' : ''}">a?oa??c���e??</button>
                         <button data-subtab="leave" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'leave' ? 'active' : ''}">a??a?Ra��ca?�M</button>
-                        <button data-subtab="devices" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'devices' ? 'active' : ''}">a??a?!e�G?c?R</button>
+                        <button data-subtab="retro" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'retro' ? 'active' : ''}">修改申請</button>
                     </div>
                     <div id="sub-page-content" class="overflow-y-auto" style="height: calc(100% - 50px);"></div>`;
                 
@@ -2304,13 +2962,454 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                     renderTrackingAttendance(subPageContent);
                 } else if (subPage === 'leave') {
                     renderTrackingLeave(subPageContent);
-                } else if (subPage === 'devices') {
-                    renderTrackingDevices(subPageContent);
+                } else if (subPage === 'retro') {
+                    renderRetroApprovals(subPageContent);
                 } else {
                     renderTrackingMap(subPageContent);
                 }
                 
                 mainContent.querySelectorAll('.sub-tab-btn').forEach(btn => btn.addEventListener('click', () => showPage('tracking', btn.dataset.subtab)));
+            }
+
+            async function renderRetroClockRequestForm(container) {
+                const user = auth.currentUser;
+                if (!user) {
+                    container.innerHTML = `<div class="p-4 text-red-600">請先登入以提交補打卡申請。</div>`;
+                    return;
+                }
+
+                container.innerHTML = `
+                    <div class="p-4 space-y-4">
+                        <div class="text-gray-700">補打卡申請</div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm text-gray-600">日期</label>
+                                <input type="date" id="retro-date" class="mt-1 w-full border rounded px-3 py-2" />
+                            </div>
+                            <div>
+                                <label class="block text-sm text-gray-600">時間</label>
+                                <input type="time" id="retro-time" class="mt-1 w-full border rounded px-3 py-2" />
+                            </div>
+                            <div>
+                                <label class="block text-sm text-gray-600">類型</label>
+                                <select id="retro-type" class="mt-1 w-full border rounded px-3 py-2">
+                                    <option value="clock_in">上班打卡</option>
+                                    <option value="clock_out">下班打卡</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm text-gray-600">地點</label>
+                                <input type="text" id="retro-location" class="mt-1 w-full border rounded px-3 py-2" placeholder="如：總部、工地A、遠端" />
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-sm text-gray-600">理由</label>
+                                <textarea id="retro-reason" class="mt-1 w-full border rounded px-3 py-2" rows="3" placeholder="請填寫補打卡原因"></textarea>
+                            </div>
+                        </div>
+                        <div class="flex justify-end">
+                            <button id="retro-submit" class="px-4 py-2 bg-blue-600 text-white rounded">提交申請</button>
+                        </div>
+                        <div id="retro-msg" class="text-sm mt-2"></div>
+                    </div>
+                `;
+
+                const submitBtn = container.querySelector('#retro-submit');
+                const msg = container.querySelector('#retro-msg');
+                submitBtn.addEventListener('click', async () => {
+                    const date = container.querySelector('#retro-date').value;
+                    const time = container.querySelector('#retro-time').value;
+                    const type = container.querySelector('#retro-type').value;
+                    const reason = container.querySelector('#retro-reason').value.trim();
+                    const location = container.querySelector('#retro-location').value.trim();
+
+                    if (!date || !time || !type || !reason) {
+                        msg.textContent = '請完整填寫日期、時間、類型與理由。';
+                        msg.className = 'text-sm mt-2 text-red-600';
+                        return;
+                    }
+                    try {
+                        const ts = new Date(`${date}T${time}:00`);
+                        const payload = {
+                            userId: user.uid,
+                            userName: user.displayName || '',
+                            type, // 'clock_in' | 'clock_out'
+                            timestamp: ts,
+                            reason,
+                            location,
+                            status: 'pending',
+                            createdAt: serverTimestamp()
+                        };
+                        await addDoc(collection(db, 'retroClockRequests'), payload);
+                        msg.textContent = '已提交補打卡申請，待審核。';
+                        msg.className = 'text-sm mt-2 text-green-600';
+                        container.querySelector('#retro-date').value = '';
+                        container.querySelector('#retro-time').value = '';
+                        container.querySelector('#retro-type').value = 'clock_in';
+                        container.querySelector('#retro-reason').value = '';
+                        container.querySelector('#retro-location').value = '';
+                        try { await renderMyRetroRequests(); } catch(e) {}
+                    } catch (e) {
+                        console.error(e);
+                        msg.textContent = '提交失敗，請稍後再試。';
+                        msg.className = 'text-sm mt-2 text-red-600';
+                    }
+                });
+
+                // 我的申請列表（本人）
+                const myListWrapper = document.createElement('div');
+                myListWrapper.className = 'p-4';
+                myListWrapper.innerHTML = `
+                    <div class="bg-white rounded-lg shadow-sm border p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="font-bold">我的申請列表</h3>
+                            <span class="text-sm text-gray-500">顯示本人已提交補打卡</span>
+                        </div>
+                        <div id="my-retro-list" class="space-y-3"></div>
+                    </div>`;
+                container.appendChild(myListWrapper);
+
+                async function renderMyRetroRequests() {
+                    const listEl = container.querySelector('#my-retro-list');
+                    if (!listEl) return;
+                    listEl.innerHTML = '<div class="text-center text-gray-500"><i data-lucide="loader" class="w-5 h-5 mr-2 inline-block animate-spin"></i>載入中...</div>';
+                    try {
+                        const q = query(collection(db,'retroClockRequests'), where('userId','==', user.uid));
+                        const snap = await getDocs(q);
+                        if (snap.empty) { listEl.innerHTML = '<p class="text-sm text-gray-500">尚無申請</p>'; return; }
+                        const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                        items.sort((a,b) => {
+                            const ta = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
+                            const tb = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
+                            return tb - ta;
+                        });
+                        listEl.innerHTML = '';
+                        items.forEach(r => {
+                            const when = r.timestamp?.toDate ? r.timestamp.toDate() : (r.timestamp ? new Date(r.timestamp) : null);
+                            const row = document.createElement('div');
+                            row.className = 'p-3 border rounded-md bg-white flex items-center justify-between';
+                            row.innerHTML = `
+                                <div>
+                                    <p class="font-medium text-gray-800">${r.type === 'clock_in' ? '上班' : (r.type === 'clock_out' ? '下班' : r.type)}</p>
+                                    <p class="text-sm text-gray-600">${when ? when.toLocaleString('zh-TW') : ''}</p>
+                                    ${r.location ? `<p class=\"text-xs text-gray-500\">地點：${r.location}</p>` : ''}
+                                    ${r.reason ? `<p class=\"text-xs text-gray-500\">事由：${r.reason}</p>` : ''}
+                                </div>
+                                <span class="text-sm ${r.status==='approved' ? 'text-green-600' : (r.status==='rejected' ? 'text-red-600' : 'text-gray-500')}">${r.status || 'pending'}</span>`;
+                            listEl.appendChild(row);
+                        });
+                    } catch (e) {
+                        console.error('載入申請列表失敗', e);
+                        listEl.innerHTML = '<p class="text-sm text-red-600">載入失敗</p>';
+                    }
+                }
+                try { await renderMyRetroRequests(); } catch(e) {}
+            }
+
+            async function renderRetroApprovals(container) {
+                const user = auth.currentUser;
+                if (!user) {
+                    container.innerHTML = `<div class="p-4 text-red-600">請先登入以審核修改申請。</div>`;
+                    return;
+                }
+
+                // 管理員、人事、高階主管可審核（依據 users 文件中的 role）
+                const db = window.__db; const { doc, getDoc } = window.__fs || {};
+                let canReview = false;
+                try {
+                    const uDoc = await getDoc(doc(db, 'users', user.uid));
+                    const role = uDoc.exists() ? uDoc.data().role : null;
+                    canReview = ['admin','hr','manager'].includes(role);
+                } catch (e) { canReview = false; }
+                if (!canReview) {
+                    container.innerHTML = `<div class="p-4 text-gray-600">僅管理員/人事/高階主管可審核。</div>`;
+                    return;
+                }
+
+                    container.innerHTML = `<div class="p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="text-gray-700">修改申請審核</div>
+                        <button id="manual-add-record" class="px-3 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">新增人員打卡紀錄</button>
+                    </div>
+                    <div class="mb-3 flex items-center gap-2">
+                        <input type="date" id="retro-filter-date" class="border border-gray-300 rounded-md p-2">
+                        <select id="retro-filter-user" class="border border-gray-300 rounded-md p-2 min-w-[180px]">
+                            <option value="">全部人員</option>
+                        </select>
+                    </div>
+                    <div id="retro-list" class="space-y-3"></div>
+                </div>
+                <div class="p-4">
+                    <div class="bg-white rounded-lg shadow-sm border p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="text-gray-700">修改紀錄</div>
+                            <span class="text-sm text-gray-500">顯示由審核與手動新增之修改紀錄</span>
+                        </div>
+                        <div id="retro-mod-list" class="space-y-3"></div>
+                    </div>
+                </div>`;
+
+                const list = container.querySelector('#retro-list');
+                const filterDateEl = container.querySelector('#retro-filter-date');
+                const filterUserEl = container.querySelector('#retro-filter-user');
+
+                // 載入人員選單
+                try {
+                    const usSnap = await getDocs(collection(db, 'users'));
+                    usSnap.forEach(d => {
+                        const opt = document.createElement('option');
+                        opt.value = d.id; opt.textContent = d.data().name || d.id;
+                        filterUserEl.appendChild(opt);
+                    });
+                } catch(e) {}
+
+                async function renderList() {
+                    list.innerHTML = `<div class=\"p-4 text-center text-gray-500\"><div class=\"flex items-center justify-center\"><i data-lucide=\"loader\" class=\"w-5 h-5 mr-2 animate-spin\"></i>載入申請...</div></div>`;
+                    try {
+                        const q = query(collection(db, 'retroClockRequests'), where('status', '==', 'pending'));
+                        const snap = await getDocs(q);
+                        const selectedUser = filterUserEl.value || '';
+                        const selectedDate = filterDateEl.value || '';
+                        const items = [];
+                        snap.forEach(docSnap => {
+                            const d = docSnap.data();
+                            const ts = d.timestamp?.toDate ? d.timestamp.toDate() : new Date(d.timestamp);
+                            const dateStr = ts ? ts.toISOString().split('T')[0] : '';
+                            if (selectedUser && d.userId !== selectedUser) return;
+                            if (selectedDate && dateStr !== selectedDate) return;
+                            items.push({ id: docSnap.id, ...d, ts });
+                        });
+                        if (items.length === 0) { list.innerHTML = `<div class=\"text-sm text-gray-500\">無符合條件的申請。</div>`; return; }
+                        items.sort((a,b) => {
+                            const ta = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
+                            const tb = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
+                            return tb - ta;
+                        });
+                        list.innerHTML = '';
+                        items.forEach(data => {
+                            const id = data.id;
+                            const row = document.createElement('div');
+                            row.className = 'border rounded p-3 flex items-center justify-between';
+                            row.innerHTML = `
+                                <div>
+                                    <div class=\"text-sm text-gray-700\">使用者：${data.userName || data.userId}</div>
+                                    <div class=\"text-sm text-gray-700\">類型：${data.type === 'clock_in' ? '上班' : (data.type === 'clock_out' ? '下班' : data.type)}</div>
+                                    <div class=\"text-sm text-gray-700\">時間：${data.ts ? data.ts.toLocaleString('zh-TW') : ''}</div>
+                                    <div class=\"text-sm text-gray-700\">地點：${data.location || ''}</div>
+                                    <div class=\"text-sm text-gray-700\">理由：${data.reason || ''}</div>
+                                </div>
+                                <div class=\"flex gap-2\">
+                                    <button class=\"approve px-3 py-1 bg-green-600 text-white rounded\" data-id=\"${id}\">核准</button>
+                                    <button class=\"reject px-3 py-1 bg-red-600 text-white rounded\" data-id=\"${id}\">駁回</button>
+                                </div>
+                            `;
+                            list.appendChild(row);
+                        });
+                    } catch (e) {
+                        console.error('讀取補打申請失敗', e);
+                        list.innerHTML = `<div class=\"text-sm text-red-600\">讀取失敗</div>`;
+                    }
+                }
+
+                filterDateEl.addEventListener('change', renderList);
+                filterUserEl.addEventListener('change', renderList);
+
+                async function renderModList() {
+                    const modEl = container.querySelector('#retro-mod-list');
+                    if (!modEl) return;
+                    modEl.innerHTML = `<div class=\"p-4 text-center text-gray-500\"><div class=\"flex items-center justify-center\"><i data-lucide=\"loader\" class=\"w-5 h-5 mr-2 animate-spin\"></i>載入修改紀錄...</div></div>`;
+                    try {
+                        const qs = await getDocs(query(collection(db, 'clockInRecords'), orderBy('timestamp','desc'), limit(200)));
+                        const selectedUser = filterUserEl.value || '';
+                        const selectedDate = filterDateEl.value || '';
+                        const items = [];
+                        qs.forEach(docSnap => {
+                            const rec = docSnap.data();
+                            const did = rec.deviceId || '';
+                            if (!['retro','retro-approval','manual-admin'].includes(did)) return;
+                            const when = rec.timestamp?.toDate ? rec.timestamp.toDate() : (rec.timestamp ? new Date(rec.timestamp) : null);
+                            const dateStr = when ? when.toISOString().split('T')[0] : '';
+                            if (selectedUser && rec.userId !== selectedUser) return;
+                            if (selectedDate && dateStr !== selectedDate) return;
+                            items.push({ id: docSnap.id, ...rec, when });
+                        });
+                        if (items.length === 0) { modEl.innerHTML = `<div class=\"text-sm text-gray-500\">無符合條件的修改紀錄。</div>`; return; }
+                        // 名稱映射
+                        const userMap = {};
+                        try {
+                            const usSnap = await getDocs(collection(db, 'users'));
+                            usSnap.forEach(d => userMap[d.id] = d.data().name || d.id);
+                        } catch(e) {}
+                        modEl.innerHTML = '';
+                        items.forEach(rec => {
+                            const userName = userMap[rec.userId] || rec.userId;
+                            const row = document.createElement('div');
+                            row.className = 'border rounded p-3 flex items-center justify-between bg-white';
+                            const locText = rec.locationName ? `地點：${rec.locationName}` : (typeof rec.location === 'string' ? `地點：${rec.location}` : '');
+                            row.innerHTML = `
+                                <div>
+                                    <div class=\"text-sm text-gray-700\">使用者：${userName}</div>
+                                    <div class=\"text-sm text-gray-700\">類型：${rec.type}</div>
+                                    <div class=\"text-sm text-gray-700\">時間：${rec.when ? rec.when.toLocaleString('zh-TW') : ''}</div>
+                                    ${locText ? `<div class=\\\"text-xs text-gray-500\\\">${locText}</div>` : ''}
+                                </div>
+                                <span class=\"text-xs text-gray-500\">來源：${rec.deviceId}</span>`;
+                            modEl.appendChild(row);
+                        });
+                    } catch (e) {
+                        console.error('讀取修改紀錄失敗', e);
+                        modEl.innerHTML = `<div class=\"text-sm text-red-600\">讀取失敗</div>`;
+                    }
+                }
+
+                filterDateEl.addEventListener('change', renderModList);
+                filterUserEl.addEventListener('change', renderModList);
+
+                // 核准/駁回
+                list.addEventListener('click', async (e) => {
+                    const target = e.target;
+                    if (!(target instanceof HTMLElement)) return;
+                    const id = target.dataset.id;
+                    if (!id) return;
+
+                    if (target.classList.contains('approve')) {
+                        try {
+                            const ref = doc(db, 'retroClockRequests', id);
+                            const dataSnap = await getDoc(ref);
+                            if (!dataSnap.exists()) return;
+                            const data = dataSnap.data();
+                            const ts = data.timestamp?.toDate ? data.timestamp.toDate() : new Date(data.timestamp);
+                            // 新增打卡紀錄
+                            const record = {
+                                userId: data.userId,
+                                userName: data.userName || '',
+                                type: data.type, // 'clock_in' | 'clock_out'
+                                timestamp: ts,
+                                location: data.location || '',
+                                isAutomatic: false,
+                                deviceId: 'retro-approval',
+                                createdAt: serverTimestamp()
+                            };
+                            await addDoc(collection(db, 'clockInRecords'), record);
+                            await updateDoc(ref, { status: 'approved', approvedAt: serverTimestamp(), approvedBy: user.uid });
+                            renderList();
+                        } catch (err) {
+                            console.error(err);
+                            alert('核准失敗，請稍後再試');
+                        }
+                    } else if (target.classList.contains('reject')) {
+                        try {
+                            const ref = doc(db, 'retroClockRequests', id);
+                            await updateDoc(ref, { status: 'rejected', rejectedAt: serverTimestamp(), approvedBy: user.uid });
+                            renderList();
+                        } catch (err) {
+                            console.error(err);
+                            alert('駁回失敗，請稍後再試');
+                        }
+                    }
+                });
+
+                // 手動新增人員打卡紀錄（彈窗）
+                container.querySelector('#manual-add-record').addEventListener('click', () => {
+                    const backdrop = document.createElement('div');
+                    backdrop.className = 'fixed inset-0 bg-black bg-opacity-40 z-40';
+                    const modal = document.createElement('div');
+                    modal.className = 'fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg p-4 z-50 w-[90%] max-w-[520px]';
+                    modal.innerHTML = `
+                        <h3 class=\"text-lg font-bold mb-3\">新增人員打卡紀錄</h3>
+                        <div class=\"space-y-3\">
+                            <div>
+                                <label class=\"text-sm font-medium\">人員</label>
+                                <select id=\"manual-user\" class=\"w-full border border-gray-300 rounded-md p-2\"></select>
+                            </div>
+                            <div class=\"grid grid-cols-2 gap-3\">
+                                <div>
+                                    <label class=\"text-sm font-medium\">日期</label>
+                                    <input type=\"date\" id=\"manual-date\" class=\"w-full border border-gray-300 rounded-md p-2\" />
+                                </div>
+                                <div>
+                                    <label class=\"text-sm font-medium\">時間</label>
+                                    <input type=\"time\" id=\"manual-time\" class=\"w-full border border-gray-300 rounded-md p-2\" />
+                                </div>
+                            </div>
+                            <div>
+                                <label class=\"text-sm font-medium\">項目</label>
+                                <select id=\"manual-type\" class=\"w-full border border-gray-300 rounded-md p-2\">
+                                    <option value=\"上班\">上班</option>
+                                    <option value=\"下班\">下班</option>
+                                    <option value=\"外出\">外出</option>
+                                    <option value=\"抵達\">抵達</option>
+                                    <option value=\"離開\">離開</option>
+                                    <option value=\"返回\">返回</option>
+                                </select>
+                            </div>
+                            <div id=\"manual-extra\" class=\"grid grid-cols-2 gap-3\">
+                                <div>
+                                    <label class=\"text-sm font-medium\">事由</label>
+                                    <input type=\"text\" id=\"manual-reason\" class=\"w-full border border-gray-300 rounded-md p-2\" placeholder=\"請輸入事由\" />
+                                </div>
+                                <div>
+                                    <label class=\"text-sm font-medium\">地點</label>
+                                    <input type=\"text\" id=\"manual-location\" class=\"w-full border border-gray-300 rounded-md p-2\" placeholder=\"請輸入地點\" />
+                                </div>
+                            </div>
+                        </div>
+                        <div class=\"flex justify-end gap-2 mt-4\">
+                            <button id=\"manual-cancel\" class=\"px-3 py-2 border rounded-md\">取消</button>
+                            <button id=\"manual-submit\" class=\"px-3 py-2 bg-indigo-600 text-white rounded-md\">新增</button>
+                        </div>
+                    `;
+                    document.body.appendChild(backdrop);
+                    document.body.appendChild(modal);
+                    // 填入人員
+                    filterUserEl.querySelectorAll('option').forEach(opt => {
+                        if (!opt.value) return;
+                        const o = document.createElement('option'); o.value = opt.value; o.textContent = opt.textContent;
+                        modal.querySelector('#manual-user').appendChild(o);
+                    });
+                    const typeSelect = modal.querySelector('#manual-type');
+                    const reasonInput = modal.querySelector('#manual-reason');
+                    const locInput = modal.querySelector('#manual-location');
+                    const toggle = () => {
+                        const need = ['外出','抵達','離開'].includes(typeSelect.value);
+                        modal.querySelector('#manual-extra').style.display = need ? 'grid' : 'none';
+                    };
+                    typeSelect.addEventListener('change', toggle); toggle();
+                    modal.querySelector('#manual-cancel').addEventListener('click', () => { backdrop.remove(); modal.remove(); });
+                    backdrop.addEventListener('click', () => { backdrop.remove(); modal.remove(); });
+                    modal.querySelector('#manual-submit').addEventListener('click', async () => {
+                        try {
+                            const userId = modal.querySelector('#manual-user').value;
+                            const dateStr = modal.querySelector('#manual-date').value;
+                            const timeStr = modal.querySelector('#manual-time').value;
+                            const type = typeSelect.value;
+                            const reason = (reasonInput.value || '').trim();
+                            const locationName = (locInput.value || '').trim();
+                            if (!userId || !dateStr || !timeStr) { showToast('請完整填寫人員與日期時間', true); return; }
+                            if (['外出','抵達','離開'].includes(type) && (!reason || !locationName)) { showToast('外出/抵達/離開需填寫事由與地點', true); return; }
+                            const ts = new Date(`${dateStr}T${timeStr}:00`);
+                            const record = {
+                                userId,
+                                userName: '',
+                                type,
+                                timestamp: ts,
+                                location: ['外出','抵達','離開'].includes(type) ? `${locationName}${reason ? '｜'+reason : ''}` : (locationName || ''),
+                                isAutomatic: false,
+                                deviceId: 'manual-admin',
+                                createdAt: serverTimestamp()
+                            };
+                            await addDoc(collection(db, 'clockInRecords'), record);
+                            showToast('已新增打卡紀錄');
+                            backdrop.remove(); modal.remove();
+                        } catch (err) {
+                            console.error('新增打卡失敗', err);
+                            showToast('新增失敗', true);
+                        }
+                    });
+                });
+
+                // 初次渲染
+                await renderList();
+                try { await renderModList(); } catch(e) {}
             }
 
             // aooao?a??e??i??a?oa??a??e!�La�?e??a??a??e!�L
@@ -2431,7 +3530,7 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                                 <img src="${user.avatarUrl || `https://placehold.co/32x32/EFEFEF/333333?text=${user.name.charAt(0)}`}" class="w-8 h-8 rounded-full mr-3 object-cover">
                                 <div>
                                     <p class="font-medium text-sm text-gray-800">${user.name}</p>
-<p class="text-xs text-gray-500">${getStatusDisplayText(user.status, user.lastLocation?.address, user.dutyType) || 'a?aa??a?!'}</p>
+<p class="text-xs text-gray-500">${getStatusDisplayText(user.status, ((['外出','抵達','離開'].includes(user.status) && user.outboundLocation) ? user.outboundLocation : user.lastLocation?.address), user.dutyType) || 'a?aa??a?!'}</p>
                                 </div>
                             </div>
                             <span class="text-xs text-gray-400">${user.lastClockInTime ? 'a?�e??c?�a??a??e??i??' + timeAgo(user.lastClockInTime.toDate()) : 'c?!c���e??'}</span>
@@ -2446,7 +3545,7 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                             const infoWindow = new google.maps.InfoWindow({ content: `
                                 <div class="p-1">
                                     <p class="font-bold">${user.name}</p>
-<p>c?�a??: ${getStatusDisplayText(user.status, user.lastLocation?.address, user.dutyType)}</p>
+<p>c?�a??: ${getStatusDisplayText(user.status, ((['外出','抵達','離開'].includes(user.status) && user.outboundLocation) ? user.outboundLocation : user.lastLocation?.address), user.dutyType)}</p>
                                     <p>a?�e??c?�a??a??e??: ${user.lastClockInTime ? formatDateTime(user.lastClockInTime) : 'N/A'}</p>
                                 </div>` });
                             marker.addListener('click', () => infoWindow.open({ anchor: marker, map: state.groupMap }));
@@ -2496,6 +3595,234 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                         loadRecords();
                     });
                 });
+            }
+
+            // 我的班表子分頁：顯示本月上班日期與排定時間與狀態，含月份切換與快捷連結
+            function renderClockInSchedule(container) {
+                const now = new Date();
+                let viewYear = now.getFullYear();
+                let viewMonth = now.getMonth(); // 0-based
+
+                // 讀取假日設定以決定預設是否為工作日（於 render() 時動態載入最新快取）
+                const getIsHoliday = async () => {
+                    try { if (typeof fetchHolidaySettingsOnce === 'function') await fetchHolidaySettingsOnce(); } catch (e) {}
+                    const holidaySettings = window.__holidaySettingsCache || { weekendIsHoliday: false, holidays: [] };
+                    const holidaysSet = new Set(holidaySettings.holidays || []);
+                    return (date) => {
+                        const ymd = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+                        const weekend = date.getDay() === 0 || date.getDay() === 6;
+                        return holidaysSet.has(ymd) || (holidaySettings.weekendIsHoliday && weekend);
+                    };
+                };
+
+                const renderShell = () => {
+                    container.innerHTML = `
+                        <div class="p-4 space-y-4 h-full">
+                            <div class="bg-white rounded-lg shadow-sm border p-4">
+                                <div class="flex items-center justify-between mb-4">
+                                    <h2 class="text-xl font-bold text-gray-800">我的班表（<span id="schedule-month-label">${viewYear}年${viewMonth+1}月</span>）</h2>
+                                    <div class="flex items-center gap-2">
+                                        <button id="prev-month" class="px-2 py-1 border rounded hover:bg-gray-100 text-sm">上一月</button>
+                                        <button id="today-month" class="px-2 py-1 border rounded hover:bg-gray-100 text-sm">回到當月</button>
+                                        <button id="next-month" class="px-2 py-1 border rounded hover:bg-gray-100 text-sm">下一月</button>
+                                    </div>
+                                </div>
+                                <div class="overflow-auto">
+                                    <table class="w-full border border-gray-300 text-sm">
+                                        <thead>
+                                            <tr class="bg-gray-100">
+                                                <th class="border px-2 py-1">日期(DD)</th>
+                                                <th class="border px-2 py-1">星期</th>
+                                                <th class="border px-2 py-1">排定上班時間</th>
+                                                <th class="border px-2 py-1">排定下班時間</th>
+                                                <th class="border px-2 py-1">狀態</th>
+                                                <th class="border px-2 py-1">操作</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="my-schedule-body"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>`;
+                };
+
+                const fetchWorkdays = async (ymKey) => {
+                    const db = window.__db; const { doc, getDoc } = window.__fs;
+                    let daysMap = {};
+                    const [yearStr, monthStr] = (ymKey || '').split('-');
+                    const makeYmd = (d) => `${yearStr}-${monthStr}-${String(Number(d)).padStart(2,'0')}`;
+                    const applyArrayDays = (arr) => {
+                        if (!Array.isArray(arr)) return;
+                        arr.forEach(n => {
+                            const ymd = makeYmd(n);
+                            if (!daysMap[ymd]) {
+                                daysMap[ymd] = { start: '09:00', end: '17:30' };
+                            }
+                        });
+                    };
+                    try {
+                        // 全域設定：settings/workdays_YYYY-MM
+                        const settingsDocSnap = await getDoc(doc(db, 'settings', `workdays_${ymKey}`));
+                        if (settingsDocSnap.exists()) {
+                            const sd = settingsDocSnap.data();
+                            if (sd && sd.days) {
+                                if (typeof sd.days === 'object' && !Array.isArray(sd.days)) {
+                                    daysMap = { ...sd.days };
+                                } else if (Array.isArray(sd.days)) {
+                                    applyArrayDays(sd.days);
+                                }
+                            }
+                        }
+                    } catch (e) { console.warn('讀取全域上班設定失敗', e); }
+                    try {
+                        // 個人覆蓋：users/{uid}/workdays/{YYYY-MM}
+                        const user = window.__auth?.currentUser;
+                        if (user) {
+                            const userDocSnap = await getDoc(doc(db, 'users', user.uid, 'workdays', ymKey));
+                            if (userDocSnap.exists()) {
+                                const ud = userDocSnap.data();
+                                if (ud && ud.days) {
+                                    if (typeof ud.days === 'object' && !Array.isArray(ud.days)) {
+                                        daysMap = { ...daysMap, ...ud.days };
+                                    } else if (Array.isArray(ud.days)) {
+                                        applyArrayDays(ud.days);
+                                    }
+                                }
+                            }
+                        }
+                    } catch (e) { console.warn('讀取個人上班設定失敗', e); }
+                    return daysMap;
+                };
+
+                const fetchDutiesAndRoster = async (year, month) => {
+                    const db = window.__db; const { collection, where, query, getDocs } = window.__fs || {};
+                    const startOfMonth = new Date(year, month, 1, 0, 0, 0, 0);
+                    const endOfMonth = new Date(year, month + 1, 0, 23, 59, 59, 999);
+                    // 特殊勤務（活動/支援等）
+                    let duties = [];
+                    try {
+                        const dq = query(collection(db, 'specialDuties'), where('userId','==', state.currentUser.uid));
+                        const ds = await getDocs(dq);
+                        ds.forEach(doc => duties.push({ id: doc.id, ...doc.data() }));
+                    } catch(e) { console.warn('讀取特殊勤務失敗', e); }
+                    // 值班名單（週五 roster）
+                    let fridayDutyRoster = {};
+                    try {
+                        const { doc, getDoc } = window.__fs || {};
+                        const settingsRef = doc(db, 'settings', 'general');
+                        const settingsSnap = await getDoc(settingsRef);
+                        fridayDutyRoster = settingsSnap.exists() ? (settingsSnap.data().fridayDutyRoster || {}) : {};
+                    } catch (e) { console.warn('讀取值班名單失敗', e); }
+                    // 請假資料（覆蓋該月任何一天）
+                    let leaves = [];
+                    try {
+                        const lq = query(collection(db, 'leaves'), where('userId','==', state.currentUser.uid));
+                        const ls = await getDocs(lq);
+                        ls.forEach(doc => leaves.push({ id: doc.id, ...doc.data() }));
+                    } catch(e) { console.warn('讀取請假失敗', e); }
+                    return { duties, fridayDutyRoster, leaves, startOfMonth, endOfMonth };
+                };
+
+                const render = async () => {
+                    const ymKey = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`;
+                    renderShell();
+                    const labelEl = container.querySelector('#schedule-month-label');
+                    if (labelEl) labelEl.textContent = `${viewYear}年${viewMonth+1}月`;
+                    const bodyEl = container.querySelector('#my-schedule-body');
+                    const daysMap = await fetchWorkdays(ymKey);
+                    const { duties, fridayDutyRoster, leaves } = await fetchDutiesAndRoster(viewYear, viewMonth);
+                    const isHoliday = await getIsHoliday();
+                    const weekdayZh = ['日','一','二','三','四','五','六'];
+                    const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+                    bodyEl.innerHTML = '';
+                    const myUid = state.currentUser?.uid;
+                    const myName = state.currentUserData?.name || state.currentUser.displayName || state.currentUser.email || '';
+                    const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+                    for (let d = 1; d <= daysInMonth; d++) {
+                        const dayStart = new Date(viewYear, viewMonth, d, 0, 0, 0, 0);
+                        const dayEnd = new Date(viewYear, viewMonth, d, 23, 59, 59, 999);
+                        const w = dayStart.getDay();
+                        const ymd = `${viewYear}-${String(viewMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                        const defaultIsWorkday = !isHoliday(dayStart) && (w >= 1 && w <= 4); // 週一~週四為上班日；週五不算上班日
+                        const existing = daysMap && daysMap[ymd] ? daysMap[ymd] : null;
+                        // 週五一律不依據上班設定顯示為上班日
+                        const startDefault = (w === 5) ? '' : (existing?.start || (defaultIsWorkday ? '09:00' : ''));
+                        const endDefault = (w === 5) ? '' : (existing?.end || (defaultIsWorkday ? '17:30' : ''));
+
+                        // 狀態判斷：請假日優先，其次值班日，再次活動支援，否則上班日
+                        const isLeave = Array.isArray(leaves) && leaves.some(l => {
+                            const s = l.startTime?.toDate?.() || (l.startTime ? new Date(l.startTime) : null);
+                            const e = l.endTime?.toDate?.() || (l.endTime ? new Date(l.endTime) : null);
+                            if (!s || !e) return false;
+                            return s <= dayEnd && e >= dayStart;
+                        });
+                        const arr = fridayDutyRoster[ymd] || [];
+                        const normalize = (s) => (s || '').trim();
+                        const isRosterDuty = Array.isArray(arr) && ((myUid && arr.includes(myUid)) || arr.some(n => normalize(n) === normalize(myName)));
+                        const isSpecialDuty = duties.some(di => {
+                            const s = di.startTime?.toDate?.() || (di.startTime ? new Date(di.startTime) : null);
+                            const e = di.endTime?.toDate?.() || (di.endTime ? new Date(di.endTime) : null);
+                            if (!s || !e) return false;
+                            return s <= dayEnd && e >= dayStart; // overlap
+                        });
+
+                        // 顯示條件：
+                        // - 假日優先：假日不顯示「上班日」，但若為值班或活動支援，仍可顯示
+                        // - 平日：週一~週四為上班日；週五僅顯示值班或活動支援
+                        const isWeekdayWork = Boolean(startDefault) || Boolean(endDefault);
+                        const shouldShow = isRosterDuty || isSpecialDuty || (isWeekdayWork && !isHoliday(dayStart));
+                        if (!shouldShow) continue;
+
+                        let statusLabel = '上班日';
+                        if (isLeave) statusLabel = '請假日';
+                        else if (isRosterDuty) statusLabel = '值班日';
+                        else if (isSpecialDuty) statusLabel = '活動支援';
+
+                        const isFuture = dayStart > endOfToday;
+                        // 值班日一律顯示 09:00~17:30（即便為週五或未設定個人上班日）
+                        const startDisp = isRosterDuty ? '09:00' : (startDefault || '');
+                        const endDisp = isRosterDuty ? '17:30' : (endDefault || '');
+                        const actionHtml = isFuture
+                            ? `--`
+                            : `<button class="open-day-records px-2 py-1 bg-indigo-600 text-white rounded text-xs" data-date="${ymd}">查看當日打卡紀錄</button>`;
+
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `
+                            <td class="border px-2 py-1 text-center">${String(d).padStart(2,'0')}</td>
+                            <td class="border px-2 py-1 text-center">${weekdayZh[w]}</td>
+                            <td class="border px-2 py-1 text-center">${startDisp || '--:--'}</td>
+                            <td class="border px-2 py-1 text-center">${endDisp || '--:--'}</td>
+                            <td class="border px-2 py-1 text-center">${statusLabel}</td>
+                            <td class="border px-2 py-1 text-center">${actionHtml}</td>
+                        `;
+                        bodyEl.appendChild(tr);
+                    }
+
+                    if (!bodyEl.children.length) {
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `<td class="border px-2 py-3 text-center text-gray-500" colspan="6">本月無上班日</td>`;
+                        bodyEl.appendChild(tr);
+                    }
+
+                    // 綁定快捷連結事件
+                    container.querySelectorAll('.open-day-records').forEach(btn => {
+                        btn.addEventListener('click', (e) => {
+                            const ymd = e.currentTarget.dataset.date;
+                            try { localStorage.setItem('__records_target_date', ymd); } catch (err) {}
+                            showPage('clock-in', 'records');
+                        });
+                    });
+
+                    // 綁定月份切換
+                    const prevBtn = container.querySelector('#prev-month');
+                    const nextBtn = container.querySelector('#next-month');
+                    const todayBtn = container.querySelector('#today-month');
+                    prevBtn?.addEventListener('click', () => { viewMonth--; if (viewMonth < 0) { viewMonth = 11; viewYear--; } render(); });
+                    nextBtn?.addEventListener('click', () => { viewMonth++; if (viewMonth > 11) { viewMonth = 0; viewYear++; } render(); });
+                    todayBtn?.addEventListener('click', () => { viewYear = now.getFullYear(); viewMonth = now.getMonth(); render(); });
+                };
+
+                render().then(() => { try { lucide.createIcons(); } catch(e) {} });
             }
 
             // a?��c?�Li??a?oa??c���e??a??e!�La�M2a??i??a?��a?��a??aR?c?�La??c??a??a?Ri??
@@ -2730,6 +4057,355 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
             }
             
             function renderTrackingAttendance(container) {
+                // 覆蓋為「每帳號月報表」視圖（與月報表一致），並在函式開頭提前 return
+                const today = new Date();
+                const defaultMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+                container.innerHTML = `
+                    <div class="p-4 space-y-4">
+                        <div class="flex flex-wrap items-center gap-4 mb-4">
+                            <div class="flex items-center space-x-2">
+                                <label for="monthly-user-select" class="text-sm font-medium">選擇人員:</label>
+                                <select id="monthly-user-select" class="border border-gray-300 rounded-md px-2 py-1">
+                                    <option value="all">全部人員</option>
+                                </select>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <label for="monthly-month" class="text-sm font-medium">選擇月份:</label>
+                                <input type="month" id="monthly-month" value="${defaultMonth}" class="border border-gray-300 rounded-md px-2 py-1">
+                            </div>
+                            <div class="flex items-center space-x-2 ml-auto">
+                                <button id="btn-print-monthly" class="bg-gray-700 text-white px-3 py-1 rounded flex items-center">
+                                    <i data-lucide="printer" class="w-4 h-4 mr-1"></i> 列印
+                                </button>
+                                <button id="btn-export-excel" class="bg-blue-600 text-white px-3 py-1 rounded flex items中心">
+                                    <i data-lucide="download" class="w-4 h-4 mr-1"></i> 匯出Excel
+                                </button>
+                            </div>
+                        </div>
+                        <div class="bg白 rounded-lg shadow overflow-x-auto">
+                            <table id="attendance-monthly-table" class="min-w-full divide-y divide-gray-200 text-sm">
+                                <thead class="bg-gray-50" id="attendance-monthly-thead"></thead>
+                                <tbody id="attendance-monthly-tbody" class="bg白 divide-y divide-gray-200">
+                                    <tr><td colspan="32" class="px-6 py-4 text-center text-gray-500">
+                                        <div class="flex items-center justify-center">
+                                            <i data-lucide="loader" class="w-5 h-5 mr-2 animate-spin"></i>
+                                            載入中...
+                                        </div>
+                                    </td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+                try { lucide.createIcons(); } catch(e) {}
+
+                const usersRef = collection(db, "users");
+                const userSelect = document.getElementById('monthly-user-select');
+                const monthInput = document.getElementById('monthly-month');
+                const theadEl = document.getElementById('attendance-monthly-thead');
+                const tbodyEl = document.getElementById('attendance-monthly-tbody');
+
+                let usersArr = [];
+                let usersMap = {};
+
+                const fmtHM = (d) => `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+
+                const renderHeader = (daysInMonth) => {
+                    const cols = ['<tr><th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">人員</th>'];
+                    for (let i = 1; i <= daysInMonth; i++) {
+                        cols.push(`<th class="px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">${String(i).padStart(2,'0')}</th>`);
+                    }
+                    cols.push('<th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">出勤日數</th>');
+                    cols.push('<th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">總工時(小時)</th>');
+                    cols.push('<th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">請假日數</th>');
+                    cols.push('<th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">特殊勤務日數</th>');
+                    cols.push('</tr>');
+                    theadEl.innerHTML = cols.join('');
+                };
+
+                const loadMonthlyReport = async () => {
+                    const ymStr = monthInput.value || defaultMonth;
+                    const [yStr, mStr] = ymStr.split('-');
+                    const year = Number(yStr);
+                    const month = Number(mStr) - 1; // 0-based
+                    const startOfMonth = new Date(year, month, 1, 0, 0, 0, 0);
+                    const endOfMonth = new Date(year, month + 1, 0, 23, 59, 59, 999);
+                    const daysInMonth = new Date(year, month + 1, 0).getDate();
+                    renderHeader(daysInMonth);
+
+                    const selectedUserId = userSelect.value;
+                    const recordsRef = collection(db, "clockInRecords");
+                    const { Timestamp } = window.__fs || {};
+                    const startTS = Timestamp?.fromDate ? Timestamp.fromDate(startOfMonth) : startOfMonth;
+                    const endTS = Timestamp?.fromDate ? Timestamp.fromDate(endOfMonth) : endOfMonth;
+                    let q;
+                    if (selectedUserId === 'all') {
+                        q = query(recordsRef, where("timestamp", ">=", startTS), where("timestamp", "<=", endTS));
+                    } else {
+                        q = query(recordsRef, where("userId", "==", selectedUserId), where("timestamp", ">=", startTS), where("timestamp", "<=", endTS));
+                    }
+
+                    tbodyEl.innerHTML = `<tr><td colspan="32" class="px-6 py-4 text-center text-gray-500"><div class="flex items-center justify-center"><i data-lucide="loader" class="w-5 h-5 mr-2 animate-spin"></i>載入中...</div></td></tr>`;
+
+                    try {
+                        const snap = await getDocs(q);
+                        const byUser = new Map(); // userId -> { days: Map<day, {start:Date|null, end:Date|null}> }
+                        snap.forEach(d => {
+                            const r = d.data();
+                            const uid = r.userId;
+                            const dt = r.timestamp?.toDate?.() || (r.timestamp ? new Date(r.timestamp) : null);
+                            if (!uid || !dt) return;
+                            const day = dt.getDate();
+                            const entry = byUser.get(uid) || { days: new Map() };
+                            const dayObj = entry.days.get(day) || { start: null, end: null };
+                            if (r.type === '上班') {
+                                if (!dayObj.start || dt < dayObj.start) dayObj.start = dt;
+                            }
+                            if (r.type === '下班' || r.type === '自動下班') {
+                                if (!dayObj.end || dt > dayObj.end) dayObj.end = dt;
+                            }
+                            entry.days.set(day, dayObj);
+                            byUser.set(uid, entry);
+                        });
+
+                        // 計算落在本月的日期集合（請假、特殊勤務）
+                        const dayNumbersInRange = (start, end) => {
+                            if (!start || !end) return [];
+                            const cs = new Date(Math.max(start.getTime(), startOfMonth.getTime()));
+                            const ce = new Date(Math.min(end.getTime(), endOfMonth.getTime()));
+                            cs.setHours(12,0,0,0); ce.setHours(12,0,0,0);
+                            const out = [];
+                            for (let d = new Date(cs); d <= ce; d.setDate(d.getDate() + 1)) {
+                                out.push(d.getDate());
+                            }
+                            return out;
+                        };
+
+                        // 讀取請假（僅計入已核准）
+                        const leaveDaySetMap = new Map(); // userId -> Set(dayNumbers)
+                        try {
+                            const leavesRef = collection(db, 'leaves');
+                            let qLeaves;
+                            if (selectedUserId === 'all') {
+                                qLeaves = query(leavesRef, where('status','==','approved'));
+                            } else {
+                                qLeaves = query(leavesRef, where('status','==','approved'), where('userId','==', selectedUserId));
+                            }
+                            const leavesSnap = await getDocs(qLeaves);
+                            leavesSnap.forEach(doc => {
+                                const lv = doc.data();
+                                const uid = lv.userId || lv.uid || (lv.user && lv.user.id);
+                                if (!uid) return;
+                                const s = (lv.startTime && lv.startTime.toDate?.()) || (lv.startTime ? new Date(lv.startTime) : (lv.leaveStartTime && lv.leaveStartTime.toDate?.()) || (lv.leaveStartTime ? new Date(lv.leaveStartTime) : null));
+                                const e = (lv.endTime && lv.endTime.toDate?.()) || (lv.endTime ? new Date(lv.endTime) : (lv.leaveEndTime && lv.leaveEndTime.toDate?.()) || (lv.leaveEndTime ? new Date(lv.leaveEndTime) : null));
+                                if (!s || !e) return;
+                                const days = dayNumbersInRange(s, e);
+                                if (!days.length) return;
+                                const set = leaveDaySetMap.get(uid) || new Set();
+                                days.forEach(n => set.add(n));
+                                leaveDaySetMap.set(uid, set);
+                            });
+                        } catch (e) { /* ignore leave load errors */ }
+
+                        // 讀取特殊勤務（跨月以 startTime 或 endTime 落在本月即計入）
+                        const specialDutyDaySetMap = new Map(); // userId -> Set(dayNumbers)
+                        try {
+                            const sdRef = collection(db, 'specialDuties');
+                            const startTS2 = Timestamp?.fromDate ? Timestamp.fromDate(startOfMonth) : startOfMonth;
+                            const endTS2 = Timestamp?.fromDate ? Timestamp.fromDate(endOfMonth) : endOfMonth;
+                            let q1, q2;
+                            if (selectedUserId === 'all') {
+                                q1 = query(sdRef, where('startTime','>=', startTS2), where('startTime','<=', endTS2));
+                                q2 = query(sdRef, where('endTime','>=', startTS2), where('endTime','<=', endTS2));
+                            } else {
+                                q1 = query(sdRef, where('userId','==', selectedUserId), where('startTime','>=', startTS2), where('startTime','<=', endTS2));
+                                q2 = query(sdRef, where('userId','==', selectedUserId), where('endTime','>=', startTS2), where('endTime','<=', endTS2));
+                            }
+                            const sdDocs = new Map();
+                            for (const qq of [q1, q2]) {
+                                const sSnap = await getDocs(qq);
+                                sSnap.forEach(doc => { sdDocs.set(doc.id, doc.data()); });
+                            }
+                            sdDocs.forEach(sd => {
+                                const uid = sd.userId;
+                                const s = sd.startTime?.toDate?.() || (sd.startTime ? new Date(sd.startTime) : null);
+                                const e = sd.endTime?.toDate?.() || (sd.endTime ? new Date(sd.endTime) : null);
+                                if (!uid || !s || !e) return;
+                                const days = dayNumbersInRange(s, e);
+                                if (!days.length) return;
+                                const set = specialDutyDaySetMap.get(uid) || new Set();
+                                days.forEach(n => set.add(n));
+                                specialDutyDaySetMap.set(uid, set);
+                            });
+                        } catch (e) { /* ignore special duty load errors */ }
+
+                        const buildRow = (user) => {
+                            const uid = user.id;
+                            const entry = byUser.get(uid) || { days: new Map() };
+                            let attendDays = 0;
+                            let totalMinutes = 0;
+                            const tds = [`<td class="px-3 py-2 whitespace-nowrap text-sm text-gray-800">${user.name || usersMap[uid] || '未知用戶'}</td>`];
+                            for (let i = 1; i <= daysInMonth; i++) {
+                                const dObj = entry.days.get(i) || { start: null, end: null };
+                                const hasStart = !!dObj.start;
+                                const hasEnd = !!dObj.end;
+                                const cls = hasStart && hasEnd ? 'bg-green-50' : (hasStart || hasEnd ? 'bg-yellow-50' : '');
+                                let text = '--';
+                                if (hasStart && hasEnd) text = `${fmtHM(dObj.start)}~${fmtHM(dObj.end)}`;
+                                else if (hasStart) text = `${fmtHM(dObj.start)}`;
+                                else if (hasEnd) text = `${fmtHM(dObj.end)}`;
+                                if (hasStart || hasEnd) attendDays++;
+                                if (hasStart && hasEnd) totalMinutes += Math.max(0, (dObj.end - dObj.start) / 60000);
+                                tds.push(`<td class="px-2 py-1 text-center text-xs ${cls}">${text}</td>`);
+                            }
+                            const totalHours = (totalMinutes / 60).toFixed(2);
+                            const leaveDays = (leaveDaySetMap.get(uid)?.size) || 0;
+                            const dutyDays = (specialDutyDaySetMap.get(uid)?.size) || 0;
+                            tds.push(`<td class="px-3 py-2 text-center text-sm">${attendDays}</td>`);
+                            tds.push(`<td class="px-3 py-2 text-center text-sm">${totalHours}</td>`);
+                            tds.push(`<td class="px-3 py-2 text-center text-sm">${leaveDays}</td>`);
+                            tds.push(`<td class="px-3 py-2 text-center text-sm">${dutyDays}</td>`);
+                            return `<tr>${tds.join('')}</tr>`;
+                        };
+
+                        const rows = [];
+                        if (selectedUserId === 'all') {
+                            const sorted = [...usersArr].sort((a,b) => a.name.localeCompare(b.name, 'zh-Hant'));
+                            sorted.forEach(u => rows.push(buildRow(u)));
+                        } else {
+                            const user = usersArr.find(u => u.id === selectedUserId);
+                            if (user) rows.push(buildRow(user));
+                        }
+                        tbodyEl.innerHTML = rows.length ? rows.join('') : `<tr><td colspan="${daysInMonth + 5}" class="px-6 py-4 text-center text-gray-500">無資料</td></tr>`;
+                        try { lucide.createIcons(); } catch(e) {}
+                    } catch (err) {
+                        console.error('讀取月報表失敗', err);
+                        tbodyEl.innerHTML = `<tr><td colspan="32" class="px-6 py-4 text-center text-red-500">讀取紀錄失敗。</td></tr>`;
+                    }
+                };
+
+                getDocs(usersRef).then((qs) => {
+                    const users = [];
+                    qs.forEach(doc => { users.push({ id: doc.id, ...doc.data() }); });
+                    usersArr = users;
+                    usersMap = users.reduce((acc, u) => { acc[u.id] = u.name; return acc; }, {});
+                    users.sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant')).forEach(user => {
+                        const option = document.createElement('option');
+                        option.value = user.id;
+                        option.textContent = user.name;
+                        userSelect.appendChild(option);
+                    });
+                    loadMonthlyReport();
+                });
+
+                userSelect.addEventListener('change', loadMonthlyReport);
+                monthInput.addEventListener('change', loadMonthlyReport);
+
+                const btnPrint = document.getElementById('btn-print-monthly');
+                const btnExport = document.getElementById('btn-export-excel');
+                btnPrint.addEventListener('click', printMonthlyReport);
+                btnExport.addEventListener('click', exportMonthlyToExcel);
+
+                function getSelectedUserLabel() {
+                    const sel = document.getElementById('monthly-user-select');
+                    const opt = sel.options[sel.selectedIndex];
+                    return opt ? opt.textContent : '全部人員';
+                }
+
+                async function ensureXLSX() {
+                    if (window.XLSX) return true;
+                    return new Promise((resolve) => {
+                        const s = document.createElement('script');
+                        s.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+                        s.onload = () => resolve(true);
+                        s.onerror = () => resolve(false);
+                        document.head.appendChild(s);
+                    });
+                }
+
+                function tableToCSV(table) {
+                    let csv = '';
+                    const rows = table.querySelectorAll('tr');
+                    rows.forEach(row => {
+                        const cells = row.querySelectorAll('th,td');
+                        const values = Array.from(cells).map(cell => '"' + (cell.innerText || '').replace(/"/g, '""') + '"');
+                        csv += values.join(',') + '\r\n';
+                    });
+                    return csv;
+                }
+
+                async function exportMonthlyToExcel() {
+                    try {
+                        const ok = await ensureXLSX();
+                        const ymStr = monthInput.value || defaultMonth;
+                        const userLabel = getSelectedUserLabel();
+                        const filename = `出勤月報表_${ymStr}_${userLabel}.xlsx`;
+                        const table = document.getElementById('attendance-monthly-table');
+                        if (ok && window.XLSX && window.XLSX.utils && window.XLSX.writeFile) {
+                            const wb = XLSX.utils.table_to_book(table, { sheet: '月報表' });
+                            XLSX.writeFile(wb, filename);
+                        } else {
+                            const csv = tableToCSV(table);
+                            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                            const a = document.createElement('a');
+                            a.href = URL.createObjectURL(blob);
+                            a.download = `出勤月報表_${ymStr}_${userLabel}.csv`;
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                        }
+                    } catch (err) {
+                        console.error('exportMonthlyToExcel error', err);
+                        showToast && showToast('匯出失敗', true);
+                    }
+                }
+
+                function printMonthlyReport() {
+                    try {
+                        const ymStr = monthInput.value || defaultMonth;
+                        const userLabel = getSelectedUserLabel();
+                        const table = document.getElementById('attendance-monthly-table');
+                        // 依月份天數動態縮放，確保列印為「一欄寬」
+                        const [yStr, mStr] = (ymStr || '').split('-');
+                        const year = Number(yStr);
+                        const monthNum = Number(mStr); // 1-based
+                        const daysInMonth = new Date(year, monthNum, 0).getDate();
+                        const extraCols = 5; // 人員 + 出勤 + 總工時 + 請假 + 特殊勤務
+                        const targetBase = 31; // 以 31 天為基準
+                        let scale = targetBase / (daysInMonth + extraCols);
+                        scale = Math.max(0.55, Math.min(0.95, scale));
+                        const html = `<!doctype html><html><head><meta charset="utf-8"><title>出勤月報表</title>
+                        <style>
+                            @page { size: A4 landscape; margin: 10mm; }
+                            * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                            body { font-family: system-ui,-apple-system,Segoe UI,Roboto,\"Helvetica Neue\",Arial,\"Noto Sans\",sans-serif; color: #111; }
+                            h1 { font-size: 14px; margin-bottom: 6px; }
+                            table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+                            thead th { background: #f9fafb; }
+                            th, td { border: 1px solid #d1d5db; padding: 2px 3px; font-size: 10px; }
+                            th:first-child, td:first-child { text-align: left; }
+                            th:not(:first-child), td:not(:first-child) { text-align: center; white-space: nowrap; }
+                            tr { page-break-inside: avoid; }
+                            #print-wrap { transform: scale(${scale}); transform-origin: top left; width: calc(100% / ${scale}); }
+                        </style>
+                        </head><body>
+                        <h1>出勤月報表：${ymStr}（${userLabel}）</h1>
+                        <div id=\"print-wrap\">${table.outerHTML}</div>
+                        </body></html>`;
+                        const w = window.open('', '_blank');
+                        w.document.open();
+                        w.document.write(html);
+                        w.document.close();
+                        w.focus();
+                        w.print();
+                    } catch (err) {
+                        console.error('printMonthlyReport error', err);
+                        showToast && showToast('列印失敗', true);
+                    }
+                }
+
+                // 統一格式後直接返回，避免執行舊的每日列表邏輯
+                return;
                 container.innerHTML = `
                     <div class="p-4 space-y-4">
                         <div class="flex flex-wrap items-center gap-4 mb-4">
@@ -3296,7 +4972,7 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                                 <img src="${user.avatarUrl || `https://placehold.co/32x32/EFEFEF/333333?text=${user.name.charAt(0)}`}" class="w-8 h-8 rounded-full mr-3 object-cover">
                                 <div>
                                     <p class="font-medium text-sm text-gray-800">${user.name}</p>
-                                    <p class="text-xs text-gray-500">${getStatusDisplayText(user.status, user.lastLocation?.address) || 'a?aa??a?!'}</p>
+                                    <p class="text-xs text-gray-500">${getStatusDisplayText(user.status, ((['外出','抵達','離開'].includes(user.status) && user.outboundLocation) ? user.outboundLocation : user.lastLocation?.address), user.dutyType) || 'a?aa??a?!'}</p>
                                 </div>
                             </div>
                             <span class="text-xs text-gray-400">${user.lastClockInTime ? 'a?�e??c?�a??a??e??i??' + timeAgo(user.lastClockInTime.toDate()) : 'c?!c���e??'}</span>
@@ -3321,7 +4997,7 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                                 content: `
                                     <div class="p-1">
                                         <p class="font-bold">${user.name}</p>
-                                        <p>c?�a??: ${getStatusDisplayText(user.status, user.lastLocation?.address)}</p>
+                                        <p>c?�a??: ${getStatusDisplayText(user.status, ((['外出','抵達','離開'].includes(user.status) && user.outboundLocation) ? user.outboundLocation : user.lastLocation?.address), user.dutyType)}</p>
                                         <p>a?�e??c?�a??a??e??: ${user.lastClockInTime ? formatDateTime(user.lastClockInTime) : 'N/A'}</p>
                                     </div>
                                 `
@@ -3550,55 +5226,8 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                             </div>
                         </div>
                         
-                        <div class="bg-white p-4 rounded-md shadow-sm border mb-4">
-                            <h3 class="font-bold text-lg mb-4">e?aa??a�M?c?-a??a?!e�L-aR?</h3>
-                            <div class="space-y-4">
-                                <div class="flex items-center justify-between">
-                                    <label for="enable-auto-clock-out" class="text-gray-700">a??c?�Le?aa??a�M?c?-a??a?!</label>
-                                    <label class="switch">
-                                        <input type="checkbox" id="enable-auto-clock-out">
-                                        <span class="slider round"></span>
-                                    </label>
-                                </div>
-                                <div class="flex items-center justify-between">
-                                    <label for="work-hours" class="text-gray-700">a�P�Da??a??a?�Mi??a�X?a??i??</label>
-                                    <div class="flex items-center space-x-2">
-                                        <input type="number" id="work-hours" min="1" max="24" value="8" class="w-20 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500">
-                                        <span class="text-gray-500 text-sm">a�X?a??</span>
-                                    </div>
-                                </div>
-                                <div class="text-sm text-gray-600 bg-gray-50 p-3 rounded-md">
-                                    <i data-lucide="info" class="w-4 h-4 inline mr-1"></i>
-                                    a??c?�La??i??c3?c�g��a�X?a?�La�M?c?-a??a?!a??c??a??aR?a??a?�Me?aa??a?�Pe!?a�M?c?-a??a?!i??c?�a??e!��c?oc?oa�?a�P2a�M?c?--a?aa??a?!a�?
-                                </div>
-                            </div>
-                        </div>
                         
-                        <div class="bg-white p-4 rounded-md shadow-sm border mb-4" id="admin-overtime-section" style="display: none;">
-                            <h3 class="font-bold text-lg mb-4">cR!c??a?!a??e??</h3>
-                            <div class="space-y-4">
-                                <div class="flex items-center justify-between">
-                                    <div>
-                                        <label class="text-gray-700 font-medium">aa�Fa?�De??a??c?�a??</label>
-                                        <p class="text-sm text-gray-500">aa�Fa?�Da?�a??a?!a�P�Da?��a?|a??e??e??a�P�Da??a??a?�Mc??a??a3?</p>
-                                    </div>
-                                    <div class="flex space-x-2">
-                                        <button id="check-overtime-btn" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 flex items-center">
-                                            <i data-lucide="clock" class="w-4 h-4 mr-2"></i>aa�Fa?�De??a??
-                                        </button>
-                                        <button id="test-overtime-btn" class="bg-orange-600 text-white px-4 py-2 rounded-md hover:bg-orange-700 flex items-center">
-                                            <i data-lucide="test-tube" class="w-4 h-4 mr-2"></i>a�M?ec|e??a??
-                                        </button>
-                                    </div>
-                                </div>
-                                <div id="overtime-results" class="hidden">
-                                    <div class="bg-yellow-50 border border-yellow-200 rounded-md p-3">
-                                        <h4 class="font-medium text-yellow-800 mb-2">e??a??a?!a�P�Da??e!�L</h4>
-                                        <div id="overtime-list" class="space-y-2"></div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                        
                         
                         <div class="bg-white p-4 rounded-md shadow-sm border mb-4">
                             <h3 class="font-bold text-lg mb-4">e!��c?oa?�a??a�M3e??</h3>
@@ -3611,6 +5240,21 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                                 <div class="flex justify-center items-center py-4">
                                     <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-red-600"></div>
                                     <span class="ml-2 text-gray-600">e??a?�Da�M-...</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-white p-4 rounded-md shadow-sm border mb-4">
+                            <h3 class="font-bold text-lg mb-4">「社區人員狀況」按鈕可見人員</h3>
+                            <p class="text-sm text-gray-600 mb-4">勾選可在儀表板看到「社區人員狀況」按鈕的帳號</p>
+                            <div id="community-status-settings" class="space-y-2">
+                                <div class="flex items-center justify-between p-2 border-b">
+                                    <label class="text-gray-700 font-medium">帳號名稱</label>
+                                    <label class="text-gray-700 font-medium">可見</label>
+                                </div>
+                                <div class="flex justify-center items-center py-4">
+                                    <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-red-600"></div>
+                                    <span class="ml-2 text-gray-600">載入中...</span>
                                 </div>
                             </div>
                         </div>
@@ -3629,23 +5273,21 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                         const settings = docSnap.data();
                         document.getElementById('show-employee-status').checked = settings.showEmployeeStatus !== false;
                         
-                        // e??a?�De?aa??a�M?c?-a??a?!e�L-aR?
-                        document.getElementById('enable-auto-clock-out').checked = settings.enableAutoClockOut || false;
-                        document.getElementById('work-hours').value = settings.workHours || 8;
-                        
                         // e??a?�Da??c?�Le�?e!��c?oe�L-aR?
                         loadUserDisplaySettings(settings.visibleUsers || {});
+                        // 載入「社區人員狀況」按鈕可見名單
+                        loadCommunityStatusAllowedUsers(Array.isArray(settings.communityStatusAllowedUsers) ? settings.communityStatusAllowedUsers : []);
                     } else {
                         // a|?a??e�L-aR?a�M?a-?a?�Li??e??a?�De??e�L-a�?i??a?�Le?�Le!��c?oi??
-                        document.getElementById('enable-auto-clock-out').checked = false;
-                        document.getElementById('work-hours').value = 8;
                         loadUserDisplaySettings({});
+                        loadCommunityStatusAllowedUsers([]);
                     }
                 }).catch(error => {
                     console.error("Error getting general settings:", error);
                     showToast("c?!a3?eR�a??e�L-aR?", true);
                     // c??c??e?��ea?a??i??a??c??e??a?�Da??c?�Le�?a??e!�L
                     loadUserDisplaySettings({});
+                    loadCommunityStatusAllowedUsers([]);
                 });
                 
                 // e??a?�Da??c?�Le�?a??e!�La�M|e�L-aR?e!��c?oc?�a??
@@ -3729,14 +5371,78 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                         `;
                     });
                 }
+
+                // 載入「社區人員狀況」按鈕可見人員
+                function loadCommunityStatusAllowedUsers(allowedUserIds) {
+                    const container = document.getElementById('community-status-settings');
+                    const usersRef = collection(db, "users");
+                    getDocs(usersRef).then((querySnapshot) => {
+                        container.innerHTML = `
+                            <div class="flex items-center justify-between p-2 border-b">
+                                <label class="text-gray-700 font-medium">帳號名稱</label>
+                                <label class="text-gray-700 font-medium">可見</label>
+                            </div>
+                        `;
+
+                        const selectAllDiv = document.createElement('div');
+                        selectAllDiv.className = 'flex items-center justify-between p-2 border-b bg-gray-50';
+                        selectAllDiv.innerHTML = `
+                            <label for="select-all-community" class="text-gray-700 font-medium">全選/取消全選</label>
+                            <label class="switch">
+                                <input type="checkbox" id="select-all-community">
+                                <span class="slider round"></span>
+                            </label>
+                        `;
+                        container.appendChild(selectAllDiv);
+
+                        const selectAllCheckbox = document.getElementById('select-all-community');
+                        const userCheckboxes = [];
+
+                        querySnapshot.forEach((doc) => {
+                            const userData = doc.data();
+                            const userId = doc.id;
+                            const isAllowed = Array.isArray(allowedUserIds) ? allowedUserIds.includes(userId) : false;
+                            const row = document.createElement('div');
+                            row.className = 'flex items-center justify-between p-2 border-b';
+                            row.innerHTML = `
+                                <label for="community-${userId}" class="text-gray-700">${userData.name || userData.email || '未命名使用者'}</label>
+                                <label class="switch">
+                                    <input type="checkbox" id="community-${userId}" data-user-id="${userId}" class="community-btn-visible-checkbox" ${isAllowed ? 'checked' : ''}>
+                                    <span class="slider round"></span>
+                                </label>
+                            `;
+                            container.appendChild(row);
+                            userCheckboxes.push(row.querySelector(`#community-${userId}`));
+                        });
+
+                        selectAllCheckbox.checked = userCheckboxes.length > 0 && userCheckboxes.every(cb => cb.checked);
+                        selectAllCheckbox.addEventListener('change', () => {
+                            const isChecked = selectAllCheckbox.checked;
+                            userCheckboxes.forEach(cb => { cb.checked = isChecked; });
+                        });
+
+                        userCheckboxes.forEach(cb => {
+                            cb.addEventListener('change', () => {
+                                selectAllCheckbox.checked = userCheckboxes.every(cb => cb.checked);
+                            });
+                        });
+                    }).catch(error => {
+                        console.error('Error getting users for community status settings:', error);
+                        container.innerHTML = `
+                            <div class="p-4 text-center text-red-600">
+                                <p>無法載入名單</p>
+                                <p class="text-sm">${error.message}</p>
+                            </div>
+                        `;
+                    });
+                }
                 
                 // a?2a-?e�L-aR?
                 document.getElementById('save-general-settings').addEventListener('click', async () => {
                     try {
                         showLoading(true);
                         const showEmployeeStatus = document.getElementById('show-employee-status').checked;
-                        const enableAutoClockOut = document.getElementById('enable-auto-clock-out').checked;
-                        const workHours = parseInt(document.getElementById('work-hours').value) || 8;
+                        
                         
                         // a??e??a??c?�Le�?e!��c?oe�L-aR?
                         const visibleUsers = {};
@@ -3747,13 +5453,17 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                                 visibleUsers[userId] = false;
                             }
                         });
+
+                        // 收集「社區人員狀況」按鈕可見名單
+                        const communityStatusAllowedUsers = Array.from(document.querySelectorAll('.community-btn-visible-checkbox'))
+                            .filter(cb => cb.checked)
+                            .map(cb => cb.dataset.userId);
                         
                         // a?2a-?a?�X Firebase
                         await setDoc(doc(db, "settings", "general"), {
                             showEmployeeStatus,
-                            enableAutoClockOut,
-                            workHours,
                             visibleUsers,
+                            communityStatusAllowedUsers,
                             updatedAt: serverTimestamp()
                         }, { merge: true });
                         
@@ -3766,111 +5476,8 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                     }
                 });
                 
-                // aa�Fa?�Dc?�La??a?��a?|c?ocR!c??a?!i??a|?a??a?��a??e!��c?ocR!c??a?!a??e??
-                (window.checkAdminStatus ? window.checkAdminStatus() : Promise.resolve(false)).then(isAdmin => {
-                    if (isAdmin) {
-                        document.getElementById('admin-overtime-section').style.display = 'block';
-                        
-                        // a�P?a??aa�Fa?�De??a??a??e??c??ao?a??c?�Ge??a?�L
-                        document.getElementById('check-overtime-btn').addEventListener('click', async () => {
-                            try {
-                                const btn = document.getElementById('check-overtime-btn');
-                                const originalText = btn.innerHTML;
-                                btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 mr-2 animate-spin"></i>aa�Fa?�Da�M-...';
-                                btn.disabled = true;
-                                
-                                // ea?c?�Laa�Fa?�De??a??c?�a??c??a??a?�M
-                                const overtimeUsers = await checkAllUsersOvertimeStatus();
-                                
-                                // e!��c?oc�g?a??
-                                const resultsDiv = document.getElementById('overtime-results');
-                                const listDiv = document.getElementById('overtime-list');
-                                
-                                if (overtimeUsers && overtimeUsers.length > 0) {
-                                    listDiv.innerHTML = '';
-                                    overtimeUsers.forEach(user => {
-                                        const userDiv = document.createElement('div');
-                                        userDiv.className = 'flex items-center justify-between p-2 bg-white rounded border';
-                                        userDiv.innerHTML = `
-                                            <div>
-                                                <span class="font-medium">${user.displayName}</span>
-                                                <span class="text-sm text-gray-500 ml-2">a�P2a�P�Da?? ${user.workingHours} a�X?a??</span>
-                                            </div>
-                                            <span class="text-xs text-gray-400">${user.clockInTime.toLocaleString()}</span>
-                                        `;
-                                        listDiv.appendChild(userDiv);
-                                    });
-                                    resultsDiv.classList.remove('hidden');
-                                } else {
-                                    listDiv.innerHTML = '<div class="text-center text-gray-600 py-2">c?Ra??a2?a??e??a??c??a?!a�P�D</div>';
-                                    resultsDiv.classList.remove('hidden');
-                                }
-                                
-                            } catch (error) {
-                                console.error('aa�Fa?�De??a??c?�a??a?��a??:', error);
-                                showToast('aa�Fa?�De??a??c?�a??a?��a??i??' + error.message, true);
-                            } finally {
-                                const btn = document.getElementById('check-overtime-btn');
-                                btn.innerHTML = '<i data-lucide="clock" class="w-4 h-4 mr-2"></i>aa�Fa?�De??a??';
-                                btn.disabled = false;
-                                lucide.createIcons();
-                            }
-                         });
-                         
-                         // a�P?a??a�M?ec|e??a??a??e??c??ao?a??c?�Ge??a?�L
-                         document.getElementById('test-overtime-btn').addEventListener('click', async () => {
-                             try {
-                                 const user = auth.currentUser;
-                                 if (!user) {
-                                     showToast('e??a??c??a?�D', true);
-                                     return;
-                                 }
-                                 
-                                 const btn = document.getElementById('test-overtime-btn');
-                                 btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 mr-2 animate-spin"></i>a�M?ec|a�M-...';
-                                 btn.disabled = true;
-                                 
-                                 // a�L!a??e??a??a??a3?i??a?oc??a�M�c-?a�?9a�X?a??a??a�M?c?-a�?c??a??e|?a??a?!c���e??
-                                 const nineHoursAgo = new Date();
-                                 nineHoursAgo.setHours(nineHoursAgo.getHours() - 9);
-                                 const db = window.__db; const { Timestamp, GeoPoint, addDoc, collection, serverTimestamp, setDoc, doc } = window.__fs;
-                                 const ts = Timestamp.fromDate(nineHoursAgo);
-                                 const loc = new GeoPoint(25.0330, 121.5654);
-                                 await addDoc(collection(db, 'clockInRecords'), {
-                                     userId: user.uid,
-                                     type: 'a�M?c?-',
-                                     timestamp: ts,
-                                     location: loc,
-                                     photoUrls: [],
-                                     descriptions: [],
-                                     deviceId: 'test-device'
-                                 });
-                                 // a�X?a??c?�Le�?c?�a??e�L-c?oa�M?c?-i??a??a?��a?�Xa??e�L��a??a??i??
-                                 await setDoc(doc(db, 'users', user.uid), {
-                                     clockInStatus: 'a�M?c?-',
-                                     status: 'a�M?c?-',
-                                     lastUpdated: serverTimestamp()
-                                 }, { merge: true });
-                                 
-                                 showToast('a�P2e�L-aR?a�M?ec|e??a??c?�a??i??9a�X?a??a??a�M?c?-i??i??e??e??a?�Xe??a?�De??e?�Fa�M?ec|e?aa??a�M?c?-a??a?!a??e??');
-                                 
-                                 // 3c��?a??e?aa??e??a?�Xe??a?�De??e?�F
-                                 setTimeout(() => {
-                                     window.location.reload();
-                                 }, 3000);
-                                 
-                             } catch (error) {
-                                 console.error('e�L-aR?a�M?ec|e??a??c?�a??a?��a??:', error);
-                                 showToast('e�L-aR?a�M?ec|e??a??c?�a??a?��a??i??' + error.message, true);
-                             } finally {
-                                 const btn = document.getElementById('test-overtime-btn');
-                                 btn.innerHTML = '<i data-lucide="test-tube" class="w-4 h-4 mr-2"></i>a�M?ec|e??a??';
-                                 btn.disabled = false;
-                                 lucide.createIcons();
-                             }
-                         });
-                     }
-                 });
+                // 移除管理員加班檢查／測試按鈕邏輯，已不再提供
+                // （保留全域 window.checkAdminStatus 定義供其他功能使用）
                 
                 // aa�Fa?�DcR!c??a?!c?�a??c??e??a?ca??a?�M
                 // 確保已存在全域 window.checkAdminStatus，避免重複定義
@@ -5222,7 +6829,7 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                                     <button id="switch-camera-btn" class="w-12 h-12 bg-gray-700 rounded-full flex items-center justify-center">
                                         <i data-lucide="refresh-cw" class="w-6 h-6"></i>
                                     </button>
-                                    <button id="capture-btn" class="w-24 h-24 bg-white rounded-full border-4 border-gray-500 flex items-center justify-center">
+            <button id="capture-btn" class="w-40 h-20 bg-white rounded-full border-4 border-gray-500 flex items-center justify-center">
                                         <i data-lucide="camera" class="w-10 h-10 text-gray-800"></i>
                                     </button>
                                     <div class="w-12 h-12"></div><!-- ccoc??a??c��?a??a??a�X?c�L�� -->

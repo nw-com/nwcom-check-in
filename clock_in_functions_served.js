@@ -389,8 +389,8 @@ function updateButtonStatus() {
             }
             break;
         case '離開':
-            // 離開後：外出循環顯示返回（藍），下班可動作（紅），返回可動作（深綠）
-            setOutboundCycleButton('返回', '返回打卡', 'bg-blue-500');
+            // 離開後：外出循環回到外出（藍），下班可動作（紅），返回可動作（深綠）
+            setOutboundCycleButton('外出', '外出打卡', 'bg-blue-500');
             setWorkToggleButton('下班', '下班打卡', 'bg-red-500');
             if (returnBtn) {
                 returnBtn.disabled = false;
@@ -737,6 +737,11 @@ function openTempLeaveModal() {
     const endDay = String(endTime.getDate()).padStart(2, '0');
     const endHours = String(endTime.getHours()).padStart(2, '0');
     endDateInput.value = `${endYear}-${endMonth}-${endDay}T${endHours}:00`;
+
+    // 顯示時間格式提示，避免 12 小時制誤解
+    const timeHint = document.createElement('p');
+    timeHint.className = 'text-xs text-gray-500 mt-1 mb-2';
+    timeHint.textContent = '時間格式：YYYY-MM-DD hh:mm（24 小時制；若顯示上午/下午，請選擇正確時段或輸入 17:00 表示下午 5:00）';
     
     // 整日日期區間（整日）
     const startDayLabel = document.createElement('label');
@@ -812,6 +817,31 @@ function openTempLeaveModal() {
         // 獲取時間區間
         let startTime;
         let endTime;
+        const parseFlexibleLocalDT = (s) => {
+            const str = (s || '').trim();
+            if (!str) return new Date(NaN);
+            if (str.includes('T')) { // 標準 datetime-local 格式
+                const [datePart, timePart] = str.split('T');
+                const [yy, mm, dd] = datePart.split('-').map(n => parseInt(n, 10));
+                const [HH, MM] = timePart.split(':').map(n => parseInt(n, 10));
+                return new Date(yy, (mm || 1) - 1, dd || 1, HH || 0, MM || 0, 0);
+            }
+            const ampmMatch = str.match(/(上午|下午)/);
+            const hasPM = ampmMatch?.[1] === '下午';
+            const norm = str.replace(/[年\/]/g, '-').replace(/\s+/g, ' ').trim();
+            const cleaned = norm.replace(/\s*(上午|下午)\s*/g, ' ');
+            const parts = cleaned.split(' ');
+            const datePart = parts[0] || '';
+            const timePart = parts[1] || '';
+            const [yy, mm, dd] = datePart.split('-').map(n => parseInt(n, 10));
+            let [h, m] = timePart.split(':').map(n => parseInt(n, 10));
+            if (isNaN(h)) h = 0; if (isNaN(m)) m = 0;
+            if (ampmMatch) {
+                if (hasPM && h < 12) h += 12;
+                if (!hasPM && h === 12) h = 0;
+            }
+            return new Date(yy, (mm || 1) - 1, dd || 1, h, m, 0, 0);
+        };
         if (selectedType === 'full_day') {
             const startDayVal = startDayInput.value;
             const endDayVal = endDayInput.value;
@@ -822,8 +852,8 @@ function openTempLeaveModal() {
             startTime = new Date(`${startDayVal}T00:00:00`);
             endTime = new Date(`${endDayVal}T23:59:59`);
         } else {
-            startTime = new Date(startDateInput.value);
-            endTime = new Date(endDateInput.value);
+            startTime = parseFlexibleLocalDT(startDateInput.value);
+            endTime = parseFlexibleLocalDT(endDateInput.value);
         }
         
         // 驗證時間
@@ -904,6 +934,7 @@ function openTempLeaveModal() {
     modal.appendChild(startDateInput);
     modal.appendChild(endDateLabel);
     modal.appendChild(endDateInput);
+    modal.appendChild(timeHint);
     modal.appendChild(startDayLabel);
     modal.appendChild(startDayInput);
     modal.appendChild(endDayLabel);
