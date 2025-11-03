@@ -3095,7 +3095,7 @@
                 }
 
                 // 共享：以指定使用者與月份生成「個人月報表」的覆蓋視窗（與個人打卡紀錄月報表相同方式）
-                async function renderPersonalMonthlyReport(userId, userName, ymStr) {
+                window.renderPersonalMonthlyReport = async function(userId, userName, ymStr) {
                     try {
                         const { collection, where, query, getDocs, Timestamp, doc, getDoc } = window.__fs || {};
                         const db = window.__db;
