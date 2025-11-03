@@ -3892,50 +3892,59 @@
                 mainContent.querySelectorAll('.sub-tab-btn').forEach(btn => btn.addEventListener('click', () => showPage('hr', btn.dataset.subtab)));
             }
 
-            // 人事 > 月報表子分頁：與打卡 > 打卡紀錄中的月報表視窗一致
+            // 人事 > 月報表子分頁：改為列表顯示（姓名｜月報表生成）
             function renderHRMonthly(container) {
                 const today = new Date();
                 const defaultMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
                 container.innerHTML = `
-                    <div class="p-4 space-y-4">
-                        <div class="flex flex-wrap items-center gap-4 mb-4">
-                            <div class="flex items-center space-x-2">
-                                <label for="hr-month-user" class="text-sm font-medium">選擇人員:</label>
-                                <select id="hr-month-user" class="border border-gray-300 rounded-md px-2 py-1">
-                                    <option value="all">全部人員</option>
-                                </select>
-                            </div>
-                            <div class="flex items-center space-x-2">
-                                <label for="hr-month-select" class="text-sm font-medium">選擇月份:</label>
-                                <input type="month" id="hr-month-select" value="${defaultMonth}" class="border border-gray-300 rounded-md px-2 py-1">
-                            </div>
-                            <div class="flex items-center space-x-2 ml-auto">
-                                <button id="btn-hr-personal-report" class="bg-green-600 text-white px-3 py-1 rounded flex items-center">
-                                    <i data-lucide="file-text" class="w-4 h-4 mr-1"></i> 個人報表
-                                </button>
-                            </div>
+                    <div class="p-4 space-y-2">
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full table-auto border border-gray-200 rounded-md">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="text-left px-3 py-2 border-b">姓名</th>
+                                        <th class="text-left px-3 py-2 border-b">月報表</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="hr-monthly-list"></tbody>
+                            </table>
                         </div>
-                        <div class="text-xs text-gray-500">提示：請選擇單一人員後點擊「個人報表」，會開啟與「打卡紀錄」子分頁月報表按鈕一致的個人月報表內容（同一資料來源與版面）。</div>
+                        <div class="text-xs text-gray-500">提示：點擊「生成」選擇月份後，會產出該人員該月份可列印的個人月報表。</div>
                     </div>`;
                 try { lucide.createIcons(); } catch(e) {}
 
                 const db = window.__db;
-                const { collection, getDocs } = window.__fs;
-                const usersRef = collection(db, 'users');
-                const userSelect = document.getElementById('hr-month-user');
-                const monthInput = document.getElementById('hr-month-select');
-                const btnPersonal = document.getElementById('btn-hr-personal-report');
+                const { collection, getDocs } = window.__fs || {};
+                if (!db || !collection || !getDocs) {
+                    container.innerHTML = '<div class="p-4 text-red-600">系統未初始化，請稍後再試。</div>';
+                    return;
+                }
 
+                const usersRef = collection(db, 'users');
+                const tbody = container.querySelector('#hr-monthly-list');
                 const users = [];
-                const usersMap = {};
 
                 getDocs(usersRef).then((qs) => {
-                    qs.forEach(doc => { const u = { id: doc.id, ...doc.data() }; users.push(u); usersMap[u.id] = u.name; });
-                    users.sort((a,b) => a.name.localeCompare(b.name, 'zh-Hant')).forEach(u => {
-                        const opt = document.createElement('option');
-                        opt.value = u.id; opt.textContent = u.name; userSelect.appendChild(opt);
+                    qs.forEach(doc => {
+                        const data = doc.data() || {};
+                        const name = data.name || data.displayName || data.account || data.email || doc.id;
+                        users.push({ id: doc.id, name });
                     });
-                }).catch(e => console.warn('載入人員失敗', e));
+                    users.sort((a,b) => String(a.name).localeCompare(String(b.name), 'zh-Hant'));
+                    users.forEach(u => {
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `
+                            <td class="px-3 py-2 border-b">${u.name}</td>
+                            <td class="px-3 py-2 border-b">
+                                <button class="gen-month-btn px-3 py-1 bg-indigo-600 text-white rounded hover:bg-indigo-700" data-userid="${u.id}" data-username="${u.name}">生成</button>
+                            </td>`;
+                        tbody.appendChild(tr);
+                    });
+                    bindGenButtons();
+                }).catch(e => {
+                    console.warn('載入人員失敗', e);
+                    tbody.innerHTML = '<tr><td class="px-3 py-2 text-red-600" colspan="2">載入人員失敗</td></tr>';
+                });
 
                 // 防護：若本地函式存在但未綁到 window，補綁一次
                 try {
@@ -3944,24 +3953,57 @@
                     }
                 } catch (_) {}
 
-                btnPersonal.addEventListener('click', () => {
-                    const selectedUserId = userSelect.value;
-                    const ymStr = monthInput.value || defaultMonth;
-                    if (selectedUserId === 'all') { showToast && showToast('請選擇單一人員後再產生個人報表', true); return; }
-                    const userName = usersMap[selectedUserId] || '未知用戶';
-                    try {
-                        if (typeof renderPersonalMonthlyReport === 'function') {
-                            renderPersonalMonthlyReport(selectedUserId, userName, ymStr);
-                        } else if (typeof window.renderPersonalMonthlyReport === 'function') {
-                            window.renderPersonalMonthlyReport(selectedUserId, userName, ymStr);
-                        } else {
-                            showToast && showToast('無法找到個人月報表功能', true);
+                function openUserMonthModal(userId, userName) {
+                    const now = new Date();
+                    const ym = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+                    const modal = document.createElement('div');
+                    modal.className = 'fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50';
+                    modal.innerHTML = `
+                        <div class="bg-white rounded-lg shadow-xl w-11/12 max-w-md overflow-hidden">
+                            <div class="px-4 py-3 bg-indigo-600 text-white flex items-center justify-between">
+                                <h3 class="font-semibold">選擇月份</h3>
+                                <button class="close-month-modal"><i data-lucide="x" class="w-5 h-5"></i></button>
+                            </div>
+                            <div class="p-4 space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">月份</label>
+                                    <input type="month" id="month-input" value="${ym}" class="w-full border border-gray-300 rounded-md px-3 py-2">
+                                </div>
+                                <div class="flex justify-end space-x-2">
+                                    <button class="close-month-modal px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300">取消</button>
+                                    <button id="gen-user-month-report" class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">生成月報表</button>
+                                </div>
+                            </div>
+                        </div>`;
+                    document.body.appendChild(modal);
+                    try { lucide.createIcons(); } catch(e) {}
+                    modal.querySelectorAll('.close-month-modal').forEach(btn => btn.addEventListener('click', () => document.body.removeChild(modal)));
+                    modal.querySelector('#gen-user-month-report').addEventListener('click', async () => {
+                        const mi = document.getElementById('month-input').value || defaultMonth;
+                        if (!mi) { showToast && showToast('請選擇月份', true); return; }
+                        document.body.removeChild(modal);
+                        try {
+                            if (typeof window.renderPersonalMonthlyReport === 'function') {
+                                await window.renderPersonalMonthlyReport(userId, userName, mi);
+                            } else {
+                                showToast && showToast('無法找到個人月報表功能', true);
+                            }
+                        } catch (e) {
+                            console.error('生成個人月報表失敗', e);
+                            showToast && showToast('生成個人月報表失敗', true);
                         }
-                    } catch (err) {
-                        console.error('開啟個人月報表失敗', err);
-                        showToast && showToast('開啟個人月報表失敗', true);
-                    }
-                });
+                    });
+                }
+
+                function bindGenButtons() {
+                    container.querySelectorAll('.gen-month-btn').forEach(btn => {
+                        btn.addEventListener('click', () => {
+                            const uid = btn.dataset.userid;
+                            const uname = btn.dataset.username;
+                            openUserMonthModal(uid, uname);
+                        });
+                    });
+                }
             }
 
             // 群組分頁：人員地圖、出勤紀錄（僅顯示指定成員）
@@ -4652,9 +4694,7 @@
             }
             
             function renderTrackingAttendance(container) {
-                // 若未切換為月報表模式，預設使用「每日卡片列表」視圖
-                const isMonthly = state && state.trackingAttendanceMode === 'monthly';
-                if (!isMonthly) {
+                // 使用「每日卡片列表」視圖（移除「月報表」按鈕）
                     const defaultDateStr = (function(){
                         try { return localStorage.getItem('__records_target_date') || new Date().toISOString().split('T')[0]; }
                         catch(e) { return new Date().toISOString().split('T')[0]; }
@@ -4672,9 +4712,6 @@
                                     <label for="record-date" class="text-sm font-medium">日期:</label>
                                     <input type="date" id="record-date" value="${defaultDateStr}" class="border border-gray-300 rounded-md px-2 py-1">
                                 </div>
-                                <button id="btn-monthly" class="ml-auto bg-indigo-600 text-white px-3 py-1 rounded flex items-center">
-                                    <i data-lucide="table" class="w-4 h-4 mr-1"></i> 月報表
-                                </button>
                             </div>
                             <div id="attendance-records-list" class="space-y-3"></div>
                         </div>
@@ -4705,8 +4742,8 @@
                             userSelect.appendChild(opt);
                         });
 
-                        const initUserId = (function(){ try { return localStorage.getItem('__records_target_user') || 'all'; } catch(e) { return 'all'; } })();
-                        if ([...userSelect.options].some(o => o.value === initUserId)) userSelect.value = initUserId;
+                        // 預設選擇「全部人員」，不再沿用前次選擇
+                        userSelect.value = 'all';
                         await renderAttendanceRecordsList('attendance-records-list', userSelect.value, dateInput.value, allowedUserIds);
                     })().catch(err => { console.error('初始化每日列表失敗', err); });
 
@@ -4717,11 +4754,6 @@
                     dateInput.addEventListener('change', () => {
                         try { localStorage.setItem('__records_target_date', dateInput.value); } catch(e) {}
                         renderAttendanceRecordsList('attendance-records-list', userSelect.value, dateInput.value, allowedUserIds);
-                    });
-                    const btnMonthly = document.getElementById('btn-monthly');
-                    btnMonthly?.addEventListener('click', () => {
-                        state.trackingAttendanceMode = 'monthly';
-                        renderTrackingAttendance(container);
                     });
                     return; // 不進入月報表程式碼
                 }
