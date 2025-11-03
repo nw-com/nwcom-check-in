@@ -2895,6 +2895,247 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                         window.print();
                     });
                 }
+
+                // 共享：以指定使用者與月份生成「個人月報表」的覆蓋視窗（與個人打卡紀錄月報表相同方式）
+                window.renderPersonalMonthlyReport = async function(userId, userName, ymStr) {
+                    try {
+                        const { collection, where, query, getDocs, Timestamp, doc, getDoc } = window.__fs || {};
+                        const db = window.__db;
+                        if (!db || !collection || !query || !getDocs) {
+                            console.error('Firestore 未初始化');
+                            showToast && showToast('系統未初始化，請稍後重試', true);
+                            return;
+                        }
+                        const [yearStr, monthStr] = ymStr.split('-');
+                        const year = parseInt(yearStr, 10);
+                        const monthIndex = parseInt(monthStr, 10) - 1; // 0-based
+
+                        const startTS = Timestamp?.fromDate ? Timestamp.fromDate(new Date(year, monthIndex, 1)) : new Date(year, monthIndex, 1);
+                        const endTS = Timestamp?.fromDate ? Timestamp.fromDate(new Date(year, monthIndex + 1, 0, 23, 59, 59, 999)) : new Date(year, monthIndex + 1, 0, 23, 59, 59, 999);
+
+                        // 該使用者該月的打卡紀錄
+                        const q = query(
+                            collection(db, 'clockInRecords'),
+                            where('userId', '==', userId),
+                            where('timestamp', '>=', startTS),
+                            where('timestamp', '<=', endTS)
+                        );
+                        const snap = await getDocs(q);
+                        const allRecords = [];
+                        snap.forEach(d => allRecords.push({ id: d.id, ...d.data() }));
+
+                        // 請假資料（覆蓋該月任何一天）
+                        let leaves = [];
+                        try {
+                            const lq = query(collection(db, 'leaves'), where('userId','==', userId));
+                            const ls = await getDocs(lq);
+                            ls.forEach(docu => leaves.push({ id: docu.id, ...docu.data() }));
+                        } catch(e) { console.warn('讀取請假失敗', e); }
+
+                        // 特殊勤務（值班）資料
+                        let duties = [];
+                        try {
+                            const dq = query(collection(db, 'specialDuties'), where('userId','==', userId));
+                            const ds = await getDocs(dq);
+                            ds.forEach(docu => duties.push({ id: docu.id, ...docu.data() }));
+                        } catch(e) { console.warn('讀取特殊勤務失敗', e); }
+
+                        // 週五值班名單
+                        let fridayDutyRoster = {};
+                        try {
+                            if (doc && getDoc && db) {
+                                const settingsRef = doc(db, 'settings', 'general');
+                                const settingsSnap = await getDoc(settingsRef);
+                                fridayDutyRoster = settingsSnap.exists() ? (settingsSnap.data().fridayDutyRoster || {}) : {};
+                            }
+                        } catch (e) { console.warn('讀取值班名單失敗', e); }
+
+                        // 準備覆蓋視窗
+                        const old = document.getElementById('monthly-report-container');
+                        if (old) old.remove();
+                        const container = document.createElement('div');
+                        container.id = 'monthly-report-container';
+                        container.className = 'fixed inset-0 z-50 bg白';
+                        const ymTag = `${year}-${String(monthIndex+1).padStart(2,'0')}`;
+                        const titleText = `${ymTag}出勤紀錄-${userName || ''}`;
+                        container.innerHTML = `
+                            <div class="bg白 w-full h-full flex flex-col">
+                                <div class="px-4 py-3 bg-indigo-600 text-white flex items中心 justify-between shrink-0">
+                                    <h3 class="font-semibold">${titleText}</h3>
+                                    <div class="space-x-2">
+                                        <button id="print-month-report" class="px-3 py-1.5 bg白 text-indigo-700 rounded hover:bg-gray-100">列印</button>
+                                        <button id="close-month-report" class="px-3 py-1.5 bg白 text-indigo-700 rounded hover:bg-gray-100">關閉</button>
+                                    </div>
+                                </div>
+                                <div class="p-4 flex-1 overflow-auto">
+                                    <div id="month-report-content" class="mx-auto" style="width:190mm">
+                                        <div id="month-report-inner" style="transform-origin: top left;">
+                                            <h2 class="text-xl font-bold mb-2 text-center">${titleText}</h2>
+                                            <table class="w-full border border-gray-300 text-sm">
+                                                <thead>
+                                                    <tr class="bg-gray-100">
+                                                        <th class="border px-2 py-1">日期</th>
+                                                        <th class="border px-2 py-1">星期幾</th>
+                                                        <th class="border px-2 py-1">當日上班狀態+打卡時間</th>
+                                                        <th class="border px-2 py-1">當日下班狀態+打卡時間</th>
+                                                        <th class="border px-2 py-1">總時數</th>
+                                                        <th class="border px-2 py-1">外出次數</th>
+                                                        <th class="border px-2 py-1">假日/請假日/值班</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody id="month-report-body"></tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>`;
+                        document.body.appendChild(container);
+
+                        // 填充表格
+                        const weekdayZh = ['日','一','二','三','四','五','六'];
+                        const bodyEl = container.querySelector('#month-report-body');
+                        const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+                        for (let d = 1; d <= daysInMonth; d++) {
+                            const dayStart = new Date(year, monthIndex, d, 0, 0, 0, 0);
+                            const dayEnd = new Date(year, monthIndex, d, 23, 59, 59, 999);
+                            const w = dayStart.getDay();
+                            const dateLabel = `${year}-${String(monthIndex+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+
+                            const records = allRecords.filter(r => {
+                                const ts = r.timestamp?.toDate?.() || (r.timestamp ? new Date(r.timestamp) : null);
+                                if (!ts) return false;
+                                return ts >= dayStart && ts <= dayEnd;
+                            }).sort((a,b) => {
+                                const ta = a.timestamp?.toDate?.() || (a.timestamp ? new Date(a.timestamp) : new Date(0));
+                                const tb = b.timestamp?.toDate?.() || (b.timestamp ? new Date(b.timestamp) : new Date(0));
+                                return ta - tb;
+                            });
+
+                            let startRecord = records.find(r => (r.type === '上班')) || records.find(r => (r.type === '外出')) || null;
+                            let endRecord = records.slice().reverse().find(r => (r.type === '下班')) || null;
+                            const fmt = (dt) => dt ? `${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}` : '';
+                            const startTime = startRecord ? (startRecord.timestamp?.toDate?.() || new Date(startRecord.timestamp)) : null;
+                            const endTime = endRecord ? (endRecord.timestamp?.toDate?.() || new Date(endRecord.timestamp)) : null;
+                            const startText = startRecord ? `${startRecord.type}${startTime ? ' '+fmt(startTime) : ''}` : '';
+                            const endText = endRecord ? `${endRecord.type}${endTime ? ' '+fmt(endTime) : ''}` : '';
+
+                            let totalHours = '';
+                            if (startTime && endTime && endTime > startTime) {
+                                const diffMs = endTime - startTime;
+                                totalHours = (diffMs / 3600000).toFixed(2);
+                            }
+
+                            const outboundCount = records.filter(r => r.type === '外出').length;
+
+                            let indicators = [];
+                            try {
+                                const ymId = `${year}-${String(monthIndex+1).padStart(2,'0')}`;
+                                if (doc && getDoc && db) {
+                                    const ref = doc(db, 'users', userId, 'workdays', ymId);
+                                    const snap2 = await getDoc(ref);
+                                    const days = snap2.exists() ? (snap2.data().days || []) : [];
+                                    const set = new Set(days.map(n => Number(n)));
+                                    const nextDay = new Date(dayStart); nextDay.setDate(nextDay.getDate()+1);
+                                    const isDutyBySpecial = duties.some(di => {
+                                        const s = di.startTime?.toDate?.() || (di.startTime ? new Date(di.startTime) : null);
+                                        const e = di.endTime?.toDate?.() || (di.endTime ? new Date(di.endTime) : null);
+                                        if (!s || !e) return false;
+                                        return s < nextDay && e > dayStart;
+                                    });
+                                    const arr = fridayDutyRoster[dateLabel] || [];
+                                    const normalize = (s) => (s || '').trim();
+                                    const isRosterDuty = Array.isArray(arr) && (arr.includes(userId) || arr.some(n => normalize(n) === normalize(userName || '')));
+                                    const isDuty = isDutyBySpecial || isRosterDuty;
+                                    if (!isDuty && !set.has(d)) indicators.push('假日');
+                                } else {
+                                    const nextDay = new Date(dayStart); nextDay.setDate(nextDay.getDate()+1);
+                                    const isDutyBySpecial = duties.some(di => {
+                                        const s = di.startTime?.toDate?.() || (di.startTime ? new Date(di.startTime) : null);
+                                        const e = di.endTime?.toDate?.() || (di.endTime ? new Date(di.endTime) : null);
+                                        if (!s || !e) return false;
+                                        return s < nextDay && e > dayStart;
+                                    });
+                                    const arr = fridayDutyRoster[dateLabel] || [];
+                                    const normalize = (s) => (s || '').trim();
+                                    const isRosterDuty = Array.isArray(arr) && (arr.includes(userId) || arr.some(n => normalize(n) === normalize(userName || '')));
+                                    const isDuty = isDutyBySpecial || isRosterDuty;
+                                    if (!isDuty && (w === 6 || w === 0)) indicators.push('假日');
+                                }
+                            } catch(e) {
+                                const nextDay = new Date(dayStart); nextDay.setDate(nextDay.getDate()+1);
+                                const isDutyBySpecial = duties.some(di => {
+                                    const s = di.startTime?.toDate?.() || (di.startTime ? new Date(di.startTime) : null);
+                                    const e = di.endTime?.toDate?.() || (di.endTime ? new Date(di.endTime) : null);
+                                    if (!s || !e) return false;
+                                    return s < nextDay && e > dayStart;
+                                });
+                                const arr = fridayDutyRoster[dateLabel] || [];
+                                const normalize = (s) => (s || '').trim();
+                                const isRosterDuty = Array.isArray(arr) && (arr.includes(userId) || arr.some(n => normalize(n) === normalize(userName || '')));
+                                const isDuty = isDutyBySpecial || isRosterDuty;
+                                if (!isDuty && (w === 6 || w === 0)) indicators.push('假日');
+                            }
+                            const nextDay2 = new Date(dayStart); nextDay2.setDate(nextDay2.getDate()+1);
+                            const isLeave = leaves.some(l => {
+                                const s = l.startTime?.toDate?.() || (l.startTime ? new Date(l.startTime) : null);
+                                const e = l.endTime?.toDate?.() || (l.endTime ? new Date(l.endTime) : null);
+                                if (!s || !e) return false;
+                                return s < nextDay2 && e > dayStart;
+                            });
+                            if (isLeave) indicators.push('請假日');
+                            const isDutyBySpecial2 = duties.some(di => {
+                                const s = di.startTime?.toDate?.() || (di.startTime ? new Date(di.startTime) : null);
+                                const e = di.endTime?.toDate?.() || (di.endTime ? new Date(di.endTime) : null);
+                                if (!s || !e) return false;
+                                return s < nextDay2 && e > dayStart;
+                            });
+                            const arr2 = fridayDutyRoster[dateLabel] || [];
+                            const normalize2 = (s) => (s || '').trim();
+                            const isRosterDuty2 = Array.isArray(arr2) && (arr2.includes(userId) || arr2.some(n => normalize2(n) === normalize2(userName || '')));
+                            const isDuty2 = isDutyBySpecial2 || isRosterDuty2;
+                            if (isDuty2) indicators.push('值班');
+
+                            const tr = document.createElement('tr');
+                            tr.innerHTML = `
+                                <td class="border px-2 py-1">${dateLabel}</td>
+                                <td class="border px-2 py-1">${weekdayZh[w]}</td>
+                                <td class="border px-2 py-1">${startText}</td>
+                                <td class="border px-2 py-1">${endText}</td>
+                                <td class="border px-2 py-1">${totalHours}</td>
+                                <td class="border px-2 py-1 text-center">${outboundCount}</td>
+                                <td class="border px-2 py-1">${indicators.join('、')}</td>`;
+                            bodyEl.appendChild(tr);
+                        }
+
+                        // 列印樣式
+                        if (!document.getElementById('monthly-report-print-style')) {
+                            const style = document.createElement('style');
+                            style.id = 'monthly-report-print-style';
+                            style.textContent = `
+                            @page { size: A4; margin: 10mm; }
+                            @media print {
+                                body { -webkit-print-color-adjust: exact; }
+                                body > * { display: none !important; }
+                                #monthly-report-container { display: block !important; position: static !important; }
+                                #monthly-report-container > div { display: block !important; height: auto !important; }
+                                #monthly-report-container .px-4.py-3.bg-indigo-600 { display: none !important; }
+                                #monthly-report-container .p-4.flex-1 { padding: 0 !important; }
+                                #month-report-content { width: 190mm !important; margin: 0 auto 0 auto !important; }
+                                #month-report-inner { margin-top: 0 !important; }
+                                table { border-collapse: collapse; }
+                                th, td { font-size: 11px; line-height: 1.2; padding: 2px 4px; }
+                            }
+                            `;
+                            document.head.appendChild(style);
+                        }
+
+                        container.querySelector('#close-month-report').addEventListener('click', () => container.remove());
+                        container.querySelector('#print-month-report').addEventListener('click', () => { window.print(); });
+                    } catch (err) {
+                        console.error('renderPersonalMonthlyReport 失敗', err);
+                        showToast && showToast('生成個人月報表失敗', true);
+                    }
+                }
             }
 
             async function initClockInMap() {
@@ -4074,6 +4315,9 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                                 <input type="month" id="monthly-month" value="${defaultMonth}" class="border border-gray-300 rounded-md px-2 py-1">
                             </div>
                             <div class="flex items-center space-x-2 ml-auto">
+                                <button id="btn-personal-report" class="bg-indigo-600 text-white px-3 py-1 rounded flex items-center">
+                                    <i data-lucide="user" class="w-4 h-4 mr-1"></i> 個人報表
+                                </button>
                                 <button id="btn-print-monthly" class="bg-gray-700 text-white px-3 py-1 rounded flex items-center">
                                     <i data-lucide="printer" class="w-4 h-4 mr-1"></i> 列印
                                 </button>
@@ -4303,8 +4547,29 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
 
                 const btnPrint = document.getElementById('btn-print-monthly');
                 const btnExport = document.getElementById('btn-export-excel');
+                const btnPersonal = document.getElementById('btn-personal-report');
                 btnPrint.addEventListener('click', printMonthlyReport);
                 btnExport.addEventListener('click', exportMonthlyToExcel);
+                btnPersonal.addEventListener('click', () => {
+                    try {
+                        const selectedUserId = userSelect.value;
+                        const ymStr = monthInput.value || defaultMonth;
+                        if (selectedUserId === 'all') {
+                            showToast && showToast('請先選擇單一人員', true);
+                            return;
+                        }
+                        const user = usersArr.find(u => u.id === selectedUserId);
+                        const userName = (user && user.name) || usersMap[selectedUserId] || '';
+                        if (typeof window.renderPersonalMonthlyReport === 'function') {
+                            window.renderPersonalMonthlyReport(selectedUserId, userName, ymStr);
+                        } else {
+                            showToast && showToast('系統未準備個人報表功能', true);
+                        }
+                    } catch (e) {
+                        console.error('個人報表開啟失敗', e);
+                        showToast && showToast('開啟個人報表失敗', true);
+                    }
+                });
 
                 function getSelectedUserLabel() {
                     const sel = document.getElementById('monthly-user-select');
