@@ -7058,7 +7058,8 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                 })();
             }
 
-            function renderLeaveInfo(userData) {
+            // Avoid duplicate identifier error: assign to window if not defined
+            if (!window.renderLeaveInfo) { window.renderLeaveInfo = function(userData) {
                 if (!userData) return 'c?Ra??a2?a??e??a??e�L?e??';
                 let isLeave = userData.clockInStatus === 'e?�La??e??a??';
                 if (!isLeave && (userData.leaveStatus === 'approved' || userData.leaveStatus === 'pending')) {
@@ -7079,7 +7080,7 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                 const endTime = toDate(userData.leaveEndTime);
                 const timeInfo = (startTime && endTime) ? `<div class="text-sm mt-1">a?? ${formatDateTime(startTime)} e?3 ${formatDateTime(endTime)}</div>` : '';
                 return `<div class="font-medium">${statusText}: ${reasonText} ${typeText}</div>${timeInfo}`;
-            }
+            }; }
 
             function openAvatarCameraModal(callback) {
                 const modalId = `avatar-camera-modal-${Date.now()}`;

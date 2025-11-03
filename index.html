@@ -7795,28 +7795,7 @@
                 }
             }
 
-            function renderLeaveInfo(userData) {
-                if (!userData) return '目前沒有請假記錄';
-                let isLeave = userData.clockInStatus === '臨時請假';
-                if (!isLeave && (userData.leaveStatus === 'approved' || userData.leaveStatus === 'pending')) {
-                    const toDate = v => v?.toDate ? v.toDate() : (v ? new Date(v) : null);
-                    const startTime = toDate(userData.leaveStartTime);
-                    const endTime = toDate(userData.leaveEndTime);
-                    const now = new Date();
-                    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-                    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-                    isLeave = !!(startTime && endTime && startTime <= todayEnd && endTime >= todayStart);
-                }
-                if (!isLeave) return '目前沒有請假記錄';
-                const statusText = userData.leaveStatus === 'approved' ? '已請假' : '請假申請';
-                const reasonText = userData.leaveReason ? `${userData.leaveReason}` : '';
-                const typeText = userData.reasonType ? `(${userData.reasonType})` : '';
-                const toDate = v => v?.toDate ? v.toDate() : (v ? new Date(v) : null);
-                const startTime = toDate(userData.leaveStartTime);
-                const endTime = toDate(userData.leaveEndTime);
-                const timeInfo = (startTime && endTime) ? `<div class="text-sm mt-1">從 ${formatDateTime(startTime)} 至 ${formatDateTime(endTime)}</div>` : '';
-                return `<div class="font-medium">${statusText}: ${reasonText} ${typeText}</div>${timeInfo}`;
-            }
+            // renderLeaveInfo 已於稍後區塊定義為完整版本，移除重複宣告以避免語法錯誤
 
             function openAvatarCameraModal(callback) {
                 const modalId = `avatar-camera-modal-${Date.now()}`;
