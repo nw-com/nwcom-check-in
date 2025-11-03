@@ -3659,16 +3659,89 @@ const statusText = getStatusDisplayText(record.type || '未知', record.location
                     <div class="h-[50px] flex items-center justify-around border-b border-gray-200 bg-white">
                         <button data-subtab="attendance" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'attendance' ? 'active' : ''}">a?oa??a??e!�L</button>
                         <button data-subtab="leave" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'leave' ? 'active' : ''}">e??a??a??e!�L</button>
+                        <button data-subtab="monthly" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'monthly' ? 'active' : ''}">月報表</button>
                     </div>
                     <div id="sub-page-content" class="overflow-y-auto" style="height: calc(100% - 50px);"></div>`;
 
                 const subPageContent = document.getElementById('sub-page-content');
                 if (subPage === 'leave') {
                     renderTrackingLeave(subPageContent);
+                } else if (subPage === 'monthly') {
+                    renderHRMonthly(subPageContent);
                 } else {
                     renderTrackingAttendance(subPageContent);
                 }
                 mainContent.querySelectorAll('.sub-tab-btn').forEach(btn => btn.addEventListener('click', () => showPage('hr', btn.dataset.subtab)));
+            }
+
+            // 人事 > 月報表：可產出與「打卡紀錄」子分頁月報表按鈕開啟的視窗一致內容
+            function renderHRMonthly(container) {
+                const today = new Date();
+                const defaultMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+                container.innerHTML = `
+                    <div class="p-4 space-y-4">
+                        <div class="flex flex-wrap items-center gap-4 mb-4">
+                            <div class="flex items-center space-x-2">
+                                <label for="hr-monthly-user" class="text-sm font-medium">選擇人員:</label>
+                                <select id="hr-monthly-user" class="border border-gray-300 rounded-md px-2 py-1">
+                                    <option value="">請選擇</option>
+                                </select>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <label for="hr-monthly-month" class="text-sm font-medium">選擇月份:</label>
+                                <input type="month" id="hr-monthly-month" value="${defaultMonth}" class="border border-gray-300 rounded-md px-2 py-1">
+                            </div>
+                            <div class="flex items-center space-x-2 ml-auto">
+                                <button id="hr-btn-personal-report" class="bg-indigo-600 text-white px-3 py-1 rounded flex items-center">
+                                    <i data-lucide="user" class="w-4 h-4 mr-1"></i> 個人報表
+                                </button>
+                            </div>
+                        </div>
+                        <div class="text-gray-600 text-sm">提示：請選擇人員與月份後，點擊「個人報表」以開啟與「打卡紀錄」子分頁一致的月報視窗。</div>
+                    </div>
+                `;
+                try { lucide.createIcons(); } catch(e) {}
+
+                const userSelect = container.querySelector('#hr-monthly-user');
+                const monthInput = container.querySelector('#hr-monthly-month');
+                const btn = container.querySelector('#hr-btn-personal-report');
+
+                let usersArr = [];
+                let usersMap = {};
+
+                // 載入人員名單
+                try {
+                    getDocs(collection(db, 'users')).then((qs) => {
+                        const users = [];
+                        qs.forEach(doc => { users.push({ id: doc.id, ...doc.data() }); });
+                        usersArr = users;
+                        usersMap = users.reduce((acc,u) => { acc[u.id] = u.name; return acc; }, {});
+                        users.sort((a,b) => (a.name || '').localeCompare(b.name || '', 'zh-Hant')).forEach(u => {
+                            const opt = document.createElement('option');
+                            opt.value = u.id;
+                            opt.textContent = u.name || u.id;
+                            userSelect.appendChild(opt);
+                        });
+                    });
+                } catch(e) {}
+
+                btn.addEventListener('click', () => {
+                    try {
+                        const uid = userSelect.value;
+                        const ymStr = monthInput.value || defaultMonth;
+                        if (!uid) { showToast && showToast('請先選擇人員', true); return; }
+                        const user = usersArr.find(u => u.id === uid);
+                        const userName = (user && user.name) || usersMap[uid] || '';
+                        if (typeof window.renderPersonalMonthlyReport === 'function') {
+                            window.renderPersonalMonthlyReport(uid, userName, ymStr);
+                        } else {
+                            showToast && showToast('系統未準備個人報表功能', true);
+                        }
+                    } catch (e) {
+                        console.error('HR 月報表開啟失敗', e);
+                        showToast && showToast('開啟個人月報表失敗', true);
+                    }
+                });
             }
 
             // c??c�g?a??e??i??aooa?!a?�Xa??a�?a?oa??c���e??i??a??e!��c?oa??aR?a??a?!i??
