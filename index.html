@@ -1091,6 +1091,41 @@
                     const countOffEl = document.getElementById('count-off');
                     const countLeaveEl = document.getElementById('count-leave');
                     let myStatusFound = false;
+                    // 優先載入並更新「我的狀態」，避免 fallback 顯示無法取得
+                    (async () => {
+                        try {
+                            const uid = state.currentUser?.uid;
+                            if (!uid) return;
+                            const q = query(collection(db, 'clockInRecords'), where('userId', '==', uid), orderBy('timestamp', 'desc'), limit(1));
+                            const snap = await getDocs(q);
+                            let innerHTML = '';
+                            if (!snap.empty) {
+                                const r = snap.docs[0].data();
+                                const statusTextLast = getStatusDisplayText(r.type || '未知', r.locationName || null, r.dutyType || null);
+                                const statusColorLast = getStatusColor(statusTextLast);
+                                const ts = r.timestamp && r.timestamp.toDate ? r.timestamp.toDate() : (r.timestamp ? new Date(r.timestamp) : null);
+                                innerHTML = `
+                                    <div class=\"flex items-center justify-between\">
+                                        <span class=\"font-semibold text-lg ${statusColorLast}\">${statusTextLast}</span>
+                                    </div>
+                                    <div class=\"text-sm text-gray-500 mt-1\">
+                                        ${ts ? '打卡 ' + ts.toLocaleString('zh-TW', {year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit'}) : ''}
+                                    </div>`;
+                            } else {
+                                const statusTextLast = '尚未打卡';
+                                const statusColorLast = getStatusColor(statusTextLast);
+                                innerHTML = `
+                                    <div class=\"flex items-center justify-between\">
+                                        <span class=\"font-semibold text-lg ${statusColorLast}\">${statusTextLast}</span>
+                                    </div>`;
+                            }
+                            const myStatusEl = document.getElementById('my-status');
+                            if (myStatusEl) myStatusEl.innerHTML = innerHTML;
+                            myStatusFound = true;
+                        } catch (err) {
+                            console.error('讀取最新打卡紀錄失敗', err);
+                        }
+                    })();
                     const users = [];
                     querySnapshot.forEach(doc => users.push({id: doc.id, ...doc.data()}));
                     
@@ -1354,6 +1389,43 @@
                                     </div>
                                     
                                 </div>`;
+
+                            // 若是當前使用者，更新「我的狀態」區塊並標示已找到
+                            if (user.id === state.currentUser?.uid) {
+                                try { myStatusFound = true; } catch (e) {}
+                                (async () => {
+                                    try {
+                                        const recordsRef = collection(db, 'clockInRecords');
+                                        const q = query(recordsRef, where('userId', '==', state.currentUser.uid), orderBy('timestamp', 'desc'), limit(1));
+                                        const snap = await getDocs(q);
+                                        let innerHTML = '';
+                                        if (!snap.empty) {
+                                            const r = snap.docs[0].data();
+                                            const statusTextLast = getStatusDisplayText(r.type || '未知', r.locationName || null, r.dutyType || null);
+                                            const statusColorLast = getStatusColor(statusTextLast);
+                                            const ts = r.timestamp && r.timestamp.toDate ? r.timestamp.toDate() : (r.timestamp ? new Date(r.timestamp) : null);
+                                            innerHTML = `
+                                                <div class="flex items-center justify-between">
+                                                    <span class="font-semibold text-lg ${statusColorLast}">${statusTextLast}</span>
+                                                </div>
+                                                <div class="text-sm text-gray-500 mt-1">
+                                                    ${ts ? '打卡 ' + ts.toLocaleString('zh-TW', {year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit'}) : ''}
+                                                </div>`;
+                                        } else {
+                                            const statusTextLast = '尚未打卡';
+                                            const statusColorLast = getStatusColor(statusTextLast);
+                                            innerHTML = `
+                                                <div class="flex items-center justify-between">
+                                                    <span class="font-semibold text-lg ${statusColorLast}">${statusTextLast}</span>
+                                                </div>`;
+                                        }
+                                        const myStatusEl = document.getElementById('my-status');
+                                        if (myStatusEl) myStatusEl.innerHTML = innerHTML;
+                                    } catch (err) {
+                                        console.error('讀取最新打卡紀錄失敗', err);
+                                    }
+                                })();
+                            }
                         });
                         // 重新以最新 clockInRecords 更新每位使用者的時間（避免快照時序不同步）
                         try {
@@ -4212,9 +4284,13 @@
                         <div class="flex flex-wrap items-center gap-4 mb-4">
                             <div class="flex items-center space-x-2">
                                 <label for="monthly-user-select" class="text-sm font-medium">選擇人員:</label>
-                                <select id="monthly-user-select" class="border border-gray-300 rounded-md px-2 py-1">
-                                    <option value="all">全部人員</option>
-                                </select>
+                                <div class="flex items-center gap-2">
+                                    <input id="select-all-users" type="checkbox" class="h-4 w-4">
+                                    <label for="select-all-users" class="text-xs text-gray-600">全選</label>
+                                    <select id="monthly-user-select" multiple class="border border-gray-300 rounded-md px-2 py-1 min-w-[180px]" title="可按住 Ctrl/Command 多選">
+                                    </select>
+                                </div>
+                                <div id="selected-users-label" class="text-xs text-gray-500 ml-2">全部人員</div>
                             </div>
                             <div class="flex items-center space-x-2">
                                 <label for="monthly-month" class="text-sm font-medium">選擇月份:</label>
@@ -4256,15 +4332,24 @@
                 let usersMap = {};
 
                 const fmtHM = (d) => `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+                const weekdayZh = (d) => ['日','一','二','三','四','五','六'][d.getDay()];
 
-                const renderHeader = (daysInMonth) => {
+                const renderHeader = (year, monthIndex, daysInMonth) => {
                     const cols = ['<tr><th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">人員</th>'];
                     for (let i = 1; i <= daysInMonth; i++) {
-                        cols.push(`<th class="px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">${String(i).padStart(2,'0')}</th>`);
+                        const wd = weekdayZh(new Date(year, monthIndex, i));
+                        cols.push(`<th class="px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">${String(i).padStart(2,'0')}(${wd})</th>`);
                     }
                     cols.push('<th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">出勤日數</th>');
                     cols.push('<th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">總工時(小時)</th>');
+                    cols.push('<th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">遲到次數</th>');
+                    cols.push('<th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">遲到時數</th>');
+                    cols.push('<th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">早退次數</th>');
+                    cols.push('<th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">早退時數</th>');
                     cols.push('<th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">請假日數</th>');
+                    cols.push('<th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">病假日數</th>');
+                    cols.push('<th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">事假日數</th>');
+                    cols.push('<th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">其他請假日數</th>');
                     cols.push('<th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">特殊勤務日數</th>');
                     cols.push('</tr>');
                     theadEl.innerHTML = cols.join('');
@@ -4278,18 +4363,18 @@
                     const startOfMonth = new Date(year, month, 1, 0, 0, 0, 0);
                     const endOfMonth = new Date(year, month + 1, 0, 23, 59, 59, 999);
                     const daysInMonth = new Date(year, month + 1, 0).getDate();
-                    renderHeader(daysInMonth);
+                    renderHeader(year, month, daysInMonth);
 
-                    const selectedUserId = userSelect.value;
+                    const getSelectedUserIds = () => {
+                        const ids = Array.from(userSelect.selectedOptions).map(o => o.value);
+                        return ids;
+                    };
                     const recordsRef = collection(db, 'clockInRecords');
                     const startTS = Timestamp?.fromDate ? Timestamp.fromDate(startOfMonth) : startOfMonth;
                     const endTS = Timestamp?.fromDate ? Timestamp.fromDate(endOfMonth) : endOfMonth;
-                    let q;
-                    if (selectedUserId === 'all') {
-                        q = query(recordsRef, where('timestamp', '>=', startTS), where('timestamp', '<=', endTS));
-                    } else {
-                        q = query(recordsRef, where('userId', '==', selectedUserId), where('timestamp', '>=', startTS), where('timestamp', '<=', endTS));
-                    }
+                    const selectedIds = getSelectedUserIds();
+                    // 直接取月份範圍資料，再在前端依使用者過濾，避免 Firestore IN 限制
+                    const q = query(recordsRef, where('timestamp', '>=', startTS), where('timestamp', '<=', endTS));
 
                     tbodyEl.innerHTML = `<tr><td colspan="32" class="px-6 py-4 text-center text-gray-500"><div class="flex items-center justify-center"><i data-lucide="loader" class="w-5 h-5 mr-2 animate-spin"></i>載入中...</div></td></tr>`;
 
@@ -4301,6 +4386,7 @@
                             const uid = r.userId;
                             const dt = r.timestamp?.toDate?.() || (r.timestamp ? new Date(r.timestamp) : null);
                             if (!uid || !dt) return;
+                            if (selectedIds.length && !selectedIds.includes(uid)) return;
                             const day = dt.getDate();
                             const entry = byUser.get(uid) || { days: new Map() };
                             const dayObj = entry.days.get(day) || { start: null, end: null };
@@ -4323,14 +4409,14 @@
                         const leaveDaySetMap = new Map();
                         try {
                             const leavesRef = collection(db, 'leaves');
-                            let qLeaves;
-                            if (selectedUserId === 'all') { qLeaves = query(leavesRef, where('status','==','approved')); }
-                            else { qLeaves = query(leavesRef, where('status','==','approved'), where('userId','==', selectedUserId)); }
+                            const qLeaves = query(leavesRef, where('status','==','approved'));
                             const leavesSnap = await getDocs(qLeaves);
+                            const leaveReasonDaysMap = new Map();
                             leavesSnap.forEach(doc => {
                                 const lv = doc.data();
                                 const uid = lv.userId || lv.uid || (lv.user && lv.user.id);
                                 if (!uid) return;
+                                if (selectedIds.length && !selectedIds.includes(uid)) return;
                                 const s = (lv.startTime && lv.startTime.toDate?.()) || (lv.startTime ? new Date(lv.startTime) : (lv.leaveStartTime && lv.leaveStartTime.toDate?.()) || (lv.leaveStartTime ? new Date(lv.leaveStartTime) : null));
                                 const e = (lv.endTime && lv.endTime.toDate?.()) || (lv.endTime ? new Date(lv.endTime) : (lv.leaveEndTime && lv.leaveEndTime.toDate?.()) || (lv.leaveEndTime ? new Date(lv.leaveEndTime) : null));
                                 if (!s || !e) return;
@@ -4339,7 +4425,14 @@
                                 const set = leaveDaySetMap.get(uid) || new Set();
                                 days.forEach(n => set.add(n));
                                 leaveDaySetMap.set(uid, set);
+                                const reason = (lv.reason || lv.reasonType || lv.leaveReason || '').trim();
+                                const cat = reason === '病假' ? 'sick' : (reason === '事假' ? 'personal' : 'other');
+                                const catMap = leaveReasonDaysMap.get(uid) || { sick: new Set(), personal: new Set(), other: new Set() };
+                                days.forEach(n => catMap[cat].add(n));
+                                leaveReasonDaysMap.set(uid, catMap);
                             });
+                            // 暫存於外層以便 buildRow 使用
+                            window.__hr_leave_reason_days_map = leaveReasonDaysMap;
                         } catch (e) {}
 
                         const specialDutyDaySetMap = new Map();
@@ -4347,14 +4440,8 @@
                             const sdRef = collection(db, 'specialDuties');
                             const startTS2 = Timestamp?.fromDate ? Timestamp.fromDate(startOfMonth) : startOfMonth;
                             const endTS2 = Timestamp?.fromDate ? Timestamp.fromDate(endOfMonth) : endOfMonth;
-                            let q1, q2;
-                            if (selectedUserId === 'all') {
-                                q1 = query(sdRef, where('startTime','>=', startTS2), where('startTime','<=', endTS2));
-                                q2 = query(sdRef, where('endTime','>=', startTS2), where('endTime','<=', endTS2));
-                            } else {
-                                q1 = query(sdRef, where('userId','==', selectedUserId), where('startTime','>=', startTS2), where('startTime','<=', endTS2));
-                                q2 = query(sdRef, where('userId','==', selectedUserId), where('endTime','>=', startTS2), where('endTime','<=', endTS2));
-                            }
+                            const q1 = query(sdRef, where('startTime','>=', startTS2), where('startTime','<=', endTS2));
+                            const q2 = query(sdRef, where('endTime','>=', startTS2), where('endTime','<=', endTS2));
                             const sdDocs = new Map();
                             for (const qq of [q1, q2]) { const sSnap = await getDocs(qq); sSnap.forEach(doc => { sdDocs.set(doc.id, doc.data()); }); }
                             sdDocs.forEach(sd => {
@@ -4362,6 +4449,7 @@
                                 const s = sd.startTime?.toDate?.() || (sd.startTime ? new Date(sd.startTime) : null);
                                 const e = sd.endTime?.toDate?.() || (sd.endTime ? new Date(sd.endTime) : null);
                                 if (!uid || !s || !e) return;
+                                if (selectedIds.length && !selectedIds.includes(uid)) return;
                                 const days = dayNumbersInRange(s, e);
                                 if (!days.length) return;
                                 const set = specialDutyDaySetMap.get(uid) || new Set();
@@ -4374,6 +4462,7 @@
                             const uid = user.id;
                             const entry = byUser.get(uid) || { days: new Map() };
                             let attendDays = 0; let totalMinutes = 0;
+                            let lateCount = 0; let lateMinutes = 0; let earlyCount = 0; let earlyMinutes = 0;
                             const tds = [`<td class="px-3 py-2 whitespace-nowrap text-sm text-gray-800">${user.name || usersMap[uid] || '未知用戶'}</td>`];
                             for (let i = 1; i <= daysInMonth; i++) {
                                 const dObj = entry.days.get(i) || { start: null, end: null };
@@ -4384,7 +4473,13 @@
                                 else if (hasStart) text = `${fmtHM(dObj.start)}`;
                                 else if (hasEnd) text = `${fmtHM(dObj.end)}`;
                                 if (hasStart || hasEnd) attendDays++;
-                                if (hasStart && hasEnd) totalMinutes += Math.max(0, (dObj.end - dObj.start) / 60000);
+                                if (hasStart && hasEnd) {
+                                    totalMinutes += Math.max(0, (dObj.end - dObj.start) / 60000);
+                                    const workStart = new Date(startOfMonth.getFullYear(), startOfMonth.getMonth(), i, 9, 0, 0);
+                                    const workEnd = new Date(startOfMonth.getFullYear(), startOfMonth.getMonth(), i, 17, 30, 0);
+                                    if (dObj.start > workStart) { lateCount++; lateMinutes += Math.round((dObj.start - workStart) / 60000); }
+                                    if (dObj.end < workEnd) { earlyCount++; earlyMinutes += Math.round((workEnd - dObj.end) / 60000); }
+                                }
                                 tds.push(`<td class="px-2 py-1 text-center text-xs ${cls}">${text}</td>`);
                             }
                             const totalHours = (totalMinutes / 60).toFixed(2);
@@ -4392,20 +4487,27 @@
                             const dutyDays = (specialDutyDaySetMap.get(uid)?.size) || 0;
                             tds.push(`<td class="px-3 py-2 text-center text-sm">${attendDays}</td>`);
                             tds.push(`<td class="px-3 py-2 text-center text-sm">${totalHours}</td>`);
+                            tds.push(`<td class="px-3 py-2 text-center text-sm">${lateCount}</td>`);
+                            tds.push(`<td class="px-3 py-2 text-center text-sm">${(lateMinutes/60).toFixed(2)}</td>`);
+                            tds.push(`<td class="px-3 py-2 text-center text-sm">${earlyCount}</td>`);
+                            tds.push(`<td class="px-3 py-2 text-center text-sm">${(earlyMinutes/60).toFixed(2)}</td>`);
                             tds.push(`<td class="px-3 py-2 text-center text-sm">${leaveDays}</td>`);
+                            const rmap = window.__hr_leave_reason_days_map?.get(uid);
+                            const sickDays = rmap ? rmap.sick.size : 0;
+                            const personalDays = rmap ? rmap.personal.size : 0;
+                            const otherDays = rmap ? rmap.other.size : 0;
+                            tds.push(`<td class="px-3 py-2 text-center text-sm">${sickDays}</td>`);
+                            tds.push(`<td class="px-3 py-2 text-center text-sm">${personalDays}</td>`);
+                            tds.push(`<td class="px-3 py-2 text-center text-sm">${otherDays}</td>`);
                             tds.push(`<td class="px-3 py-2 text-center text-sm">${dutyDays}</td>`);
                             return `<tr>${tds.join('')}</tr>`;
                         };
 
                         const rows = [];
-                        if (selectedUserId === 'all') {
-                            const sorted = [...usersArr].sort((a,b) => a.name.localeCompare(b.name, 'zh-Hant'));
-                            sorted.forEach(u => rows.push(buildRow(u)));
-                        } else {
-                            const user = usersArr.find(u => u.id === selectedUserId);
-                            if (user) rows.push(buildRow(user));
-                        }
-                        tbodyEl.innerHTML = rows.length ? rows.join('') : `<tr><td colspan="${daysInMonth + 5}" class="px-6 py-4 text-center text-gray-500">無資料</td></tr>`;
+                        const picked = selectedIds.length ? usersArr.filter(u => selectedIds.includes(u.id)) : usersArr;
+                        picked.sort((a,b) => a.name.localeCompare(b.name, 'zh-Hant')).forEach(u => rows.push(buildRow(u)));
+                        const extraCols = 12; // 1(人員) + 11 統計欄位
+                        tbodyEl.innerHTML = rows.length ? rows.join('') : `<tr><td colspan="${daysInMonth + extraCols}" class="px-6 py-4 text-center text-gray-500">無資料</td></tr>`;
                         try { lucide.createIcons(); } catch(e) {}
                     } catch (err) {
                         console.error('讀取月報表失敗', err);
@@ -4419,12 +4521,22 @@
                     usersArr = users;
                     usersMap = users.reduce((acc, u) => { acc[u.id] = u.name; return acc; }, {});
                     users.sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant')).forEach(user => {
-                        const option = document.createElement('option'); option.value = user.id; option.textContent = user.name; userSelect.appendChild(option);
+                        const option = document.createElement('option'); option.value = user.id; option.textContent = user.name; option.selected = true; userSelect.appendChild(option);
                     });
+                    const chkAll = document.getElementById('select-all-users');
+                    if (chkAll) chkAll.checked = true;
+                    updateSelectedUsersLabel();
                     loadMonthlyReport();
                 });
 
-                userSelect.addEventListener('change', loadMonthlyReport);
+                userSelect.addEventListener('change', () => { syncSelectAllCheckbox(); updateSelectedUsersLabel(); loadMonthlyReport(); });
+                const chkAll = document.getElementById('select-all-users');
+                chkAll && chkAll.addEventListener('change', () => {
+                    const checked = chkAll.checked;
+                    Array.from(userSelect.options).forEach(opt => { opt.selected = checked; });
+                    updateSelectedUsersLabel();
+                    loadMonthlyReport();
+                });
                 monthInput.addEventListener('change', loadMonthlyReport);
 
                 const btnPrint = document.getElementById('btn-print-monthly');
@@ -4434,8 +4546,22 @@
 
                 function getSelectedUserLabel() {
                     const sel = document.getElementById('monthly-user-select');
-                    const opt = sel.options[sel.selectedIndex];
-                    return opt ? opt.textContent : '全部人員';
+                    const names = Array.from(sel.selectedOptions).map(o => o.textContent);
+                    if (!names.length || names.length === sel.options.length) return '全部人員';
+                    const shown = names.slice(0, 5).join('、');
+                    return names.length > 5 ? `${shown} 等${names.length}人` : shown;
+                }
+                function updateSelectedUsersLabel() {
+                    const labelEl = document.getElementById('selected-users-label');
+                    if (!labelEl) return;
+                    labelEl.textContent = getSelectedUserLabel();
+                }
+                function syncSelectAllCheckbox() {
+                    const sel = document.getElementById('monthly-user-select');
+                    const chkAll = document.getElementById('select-all-users');
+                    if (!sel || !chkAll) return;
+                    const allSelected = Array.from(sel.options).every(o => o.selected);
+                    chkAll.checked = allSelected;
                 }
 
                 async function ensureXLSX() {
@@ -4495,7 +4621,7 @@
                         const year = Number(yStr);
                         const monthNum = Number(mStr);
                         const daysInMonth = new Date(year, monthNum, 0).getDate();
-                        const extraCols = 5;
+                        const extraCols = 12;
                         const targetBase = 31;
                         let scale = targetBase / (daysInMonth + extraCols);
                         scale = Math.max(0.55, Math.min(0.95, scale));
