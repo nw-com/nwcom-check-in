@@ -309,6 +309,7 @@
             setDoc,
             query,
             where,
+            onSnapshot,
             orderBy,
             limit,
             Timestamp,
@@ -561,10 +562,10 @@
                     if (navClockIn) navClockIn.classList.remove('hide');
                     if (navOther) navOther.classList.remove('hide');
                 } else if (role === 'admin') {
-                    // 管理員：顯示追蹤、設定、人事；不顯示群組（依需求）
+                    // 管理員：顯示追蹤、設定、人事
                     navTracking.classList.remove('hide');
                     navSettings.classList.remove('hide');
-                    navHr.classList.remove('hide');
+                    if (navHr) navHr.classList.remove('hide');
                     if (navOther) navOther.classList.add('hide');
                 } else if (role === 'manager') {
                     // 高階主管：顯示追蹤
@@ -576,9 +577,9 @@
                     navGroup.classList.remove('hide');
                     if (navOther) navOther.classList.add('hide');
                 } else if (role === 'hr') {
-                    // 人事：顯示追蹤與人事
+                    // 人事角色：顯示追蹤與人事
                     navTracking.classList.remove('hide');
-                    navHr.classList.remove('hide');
+                    if (navHr) navHr.classList.remove('hide');
                     if (navOther) navOther.classList.add('hide');
                 } else {
                     // 內勤/一般使用者：不顯示追蹤、設定、HR、群組；不顯示「其他」分頁
@@ -811,8 +812,8 @@
                     'other': () => state.currentUserData.role === 'field' ? renderOther(subPage || 'news') : renderAccessDenied(),
                     'calendar': () => renderCalendar(subPage || 'overview'),
                     'settings': () => state.currentUserData.role === 'admin' ? renderSettings(subPage || 'accounts') : renderAccessDenied(),
-                    'hr': () => (state.currentUserData.role === 'admin' || state.currentUserData.role === 'hr') ? renderHR(subPage || 'attendance') : renderAccessDenied(),
-                    'group': () => state.currentUserData.role === 'junior_manager' ? renderGroup(subPage || 'map') : renderAccessDenied()
+                    'group': () => state.currentUserData.role === 'junior_manager' ? renderGroup(subPage || 'map') : renderAccessDenied(),
+                    'hr': () => ['admin','hr'].includes(state.currentUserData.role) ? renderHR(subPage || 'print') : renderAccessDenied()
                 };
                 const renderFunction = router[pageName] || renderAccessDenied;
                 try {
@@ -824,6 +825,8 @@
                 }
                 lucide.createIcons();
             }
+            // 讓其他區塊可安全呼叫（例如打卡流程結束後）
+            window.showPage = showPage;
 
             function renderAccessDenied() {
                 mainContent.innerHTML = `
@@ -1106,88 +1109,7 @@
                     // 過濾掉不顯示的使用者
                     const visibleUsersList = users.filter(user => visibleUsers[user.id] !== false);
                     
-                    // 狀態優先級（自訂）：
-                    // 1) 上班中-辦公室 2) 返回-辦公室 3) 外出-項目-地點 4) 抵達-項目-地點
-                    // 5) 離開-項目-地點 6) 請假中 7) 已下班 其餘置後
-                    const statusPriority = (user) => {
-                        const isOutRelated = ['外出','抵達','離開'].includes(user.clockInStatus);
-                        const locationText = isOutRelated && user.outboundLocation ? user.outboundLocation : (user.lastLocation?.address || null);
-                        const display = getStatusDisplayText(user.clockInStatus || '未打卡', locationText, user.dutyType);
-                        // 請假中：臨時請假或當天有效的請假申請
-                        let isLeave = (user.clockInStatus === '臨時請假') || (display.includes('請假'));
-                        if (!isLeave) {
-                            const leave = user.leaveStatus || '';
-                            if (leave === 'approved' || leave === 'pending') {
-                                const now = new Date();
-                                const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-                                const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-                                if (user.leaveStartTime && user.leaveEndTime) {
-                                    const leaveStart = user.leaveStartTime.toDate ? user.leaveStartTime.toDate() : new Date(user.leaveStartTime);
-                                    const leaveEnd = user.leaveEndTime.toDate ? user.leaveEndTime.toDate() : new Date(user.leaveEndTime);
-                                    isLeave = leaveStart <= todayEnd && leaveEnd >= todayStart;
-                                }
-                            }
-                        }
-
-                        if (display.includes('上班') && (display.includes('辦公室') || display.includes('在辦公室'))) return 1;
-                        if (display.includes('返回') && (display.includes('辦公室') || display.includes('在辦公室'))) return 2;
-                        if (display.startsWith('外出-')) return 3;
-                        if (display.startsWith('抵達-')) return 4;
-                        if (display.startsWith('離開-')) return 5;
-                        if (isLeave) return 6;
-                        if (display.includes('已下班')) return 7;
-                        return 8;
-                    };
-
-                    visibleUsersList.sort((a, b) => {
-                        const prA = statusPriority(a);
-                        const prB = statusPriority(b);
-                        if (prA !== prB) return prA - prB;
-                        // 同優先級用最近更新時間（lastUpdated）新到舊
-                        const tA = a.lastUpdated ? (a.lastUpdated.toDate ? a.lastUpdated.toDate() : new Date(a.lastUpdated)) : new Date(0);
-                        const tB = b.lastUpdated ? (b.lastUpdated.toDate ? b.lastUpdated.toDate() : new Date(b.lastUpdated)) : new Date(0);
-                        if (tA.getTime() !== tB.getTime()) return tB - tA;
-                        return a.name.localeCompare(b.name, 'zh-Hant');
-                    }).forEach(user => {
-                            const isOutRelated = ['外出','抵達','離開'].includes(user.clockInStatus);
-                            const locationText = isOutRelated && user.outboundLocation ? user.outboundLocation : (user.lastLocation?.address || null);
-                            const statusText = getStatusDisplayText(user.clockInStatus || '未打卡', locationText, user.dutyType);
-                            const statusColor = getStatusColor(statusText);
-                        if (user.id === state.currentUser.uid) {
-                            myStatusFound = true;
-                            (async () => {
-                                try {
-                                    const recordsRef = collection(db, 'clockInRecords');
-                                    const q = query(recordsRef, where('userId', '==', state.currentUser.uid), orderBy('timestamp', 'desc'), limit(1));
-                                    const snap = await getDocs(q);
-                                    let innerHTML = '';
-                                    if (!snap.empty) {
-                                        const r = snap.docs[0].data();
-                                        const statusTextLast = getStatusDisplayText(r.type || '未知', r.locationName || null, r.dutyType || null);
-                                        const statusColorLast = getStatusColor(statusTextLast);
-                                        const ts = r.timestamp && r.timestamp.toDate ? r.timestamp.toDate() : (r.timestamp ? new Date(r.timestamp) : null);
-                                        innerHTML = `
-                                          <div class="flex items-center justify-between">
-                                            <span class="font-semibold text-lg ${statusColorLast}">${statusTextLast}</span>
-                                          </div>
-                                          <div class="text-sm text-gray-500 mt-1">
-                                            ${ts ? '打卡 ' + ts.toLocaleString('zh-TW', {year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit'}) : ''}
-                                          </div>`;
-                                    } else {
-                                        const statusTextLast = '尚未打卡';
-                                        const statusColorLast = getStatusColor(statusTextLast);
-                                        innerHTML = `
-                                          <div class="flex items-center justify-between">
-                                            <span class="font-semibold text-lg ${statusColorLast}">${statusTextLast}</span>
-                                          </div>`;
-                                    }
-                                    document.getElementById('my-status').innerHTML = innerHTML;
-                                } catch (err) {
-                                    console.error('讀取最新打卡紀錄失敗', err);
-                                }
-                            })();
-                        }
-                    });
+                    
 
                    // 以最新打卡紀錄計算摘要人數，與彈窗一致
                    (async () => {
@@ -1482,11 +1404,12 @@
             }
 
             function renderClockIn(subPage) {
+                // 若有舊連結導到已移除的 schedule，改導至 location
+                if (subPage === 'schedule') subPage = 'location';
                 mainContent.innerHTML = `
                     <div class="h-[50px] flex items-center justify-around border-b border-gray-200 bg-white">
                         <button data-subtab="location" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'location' ? 'active' : ''}">定位打卡</button>
                         <button data-subtab="records" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'records' ? 'active' : ''}">打卡紀錄</button>
-                        <button data-subtab="schedule" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'schedule' ? 'active' : ''}">我的班表</button>
                         <button data-subtab="leaves" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'leaves' ? 'active' : ''}">請假紀錄</button>
                     </div>
                     <div id="sub-page-content" class="overflow-y-auto" style="height: calc(100% - 50px);"></div>`;
@@ -1496,8 +1419,6 @@
                     renderClockInLocation(subPageContent);
                 } else if (subPage === 'records') {
                     renderClockInRecords(subPageContent);
-                } else if (subPage === 'schedule') {
-                    renderClockInSchedule(subPageContent);
                 } else if (subPage === 'leaves') {
                     renderMyLeaveRecords(subPageContent);
                 }
@@ -2587,6 +2508,16 @@
                     }
                 } catch (e) { /* ignore */ }
                 const loadRecords = () => {
+                    const fs = window.__fs || {};
+                    const db = window.__db;
+                    const { collection, query, where, onSnapshot, Timestamp } = fs;
+                    if (!db || typeof onSnapshot !== 'function' || typeof collection !== 'function') {
+                        const recordsListEl = document.getElementById('records-list');
+                        if (recordsListEl) {
+                            recordsListEl.innerHTML = `<div class="text-center p-4 text-gray-500">系統初始化中，正在準備資料...</div>`;
+                        }
+                        return;
+                    }
                     const selectedDate = new Date(dateInput.value);
                     const startOfDay = new Date(selectedDate);
                     startOfDay.setHours(0, 0, 0, 0);
@@ -2595,7 +2526,6 @@
                     
                     const recordsRef = collection(db, "clockInRecords");
                     // Firestore 端日期範圍查詢以避免時區邊界誤差（保留前端過濾作為保險）
-                    const { Timestamp } = window.__fs || {};
                     const startTS = Timestamp?.fromDate ? Timestamp.fromDate(startOfDay) : startOfDay;
                     const endTS = Timestamp?.fromDate ? Timestamp.fromDate(endOfDay) : endOfDay;
                     const q = query(
@@ -2797,7 +2727,15 @@
                 };
 
                 dateInput.addEventListener('change', loadRecords);
-                loadRecords();
+                if (!(window.__db && window.__fs && typeof window.__fs.onSnapshot === 'function')) {
+                    const recordsListEl = document.getElementById('records-list');
+                    if (recordsListEl) {
+                        recordsListEl.innerHTML = `<div class="text-center p-4 text-gray-500">系統初始化中，請稍候...</div>`;
+                    }
+                    window.addEventListener('firebase-ready', () => setTimeout(loadRecords, 0), { once: true });
+                } else {
+                    loadRecords();
+                }
 
                 // 月報表：選擇月份彈窗
                 const monthBtn = document.getElementById('open-month-report');
@@ -2992,8 +2930,8 @@
                                 const normalize = (s) => (s || '').trim();
                                 const isRosterDuty = Array.isArray(arr) && (arr.includes(myUid) || arr.some(n => normalize(n) === normalize(myName)));
                                 const isDuty = isDutyBySpecial || isRosterDuty;
-                                // 非值班且不在使用者自訂工作日，才標示假日
-                                if (!isDuty && !set.has(d)) indicators.push('假日');
+                                // 非值班且不在使用者自訂工作日，且沒有打卡紀錄，才標示假日
+                                if (!isDuty && !set.has(d) && records.length === 0) indicators.push('假日');
                             } else {
                                 // 後備判斷：週末為假日
                                 // 若為值班則不標示假日
@@ -3010,7 +2948,7 @@
                                 const normalize = (s) => (s || '').trim();
                                 const isRosterDuty = Array.isArray(arr) && (arr.includes(myUid) || arr.some(n => normalize(n) === normalize(myName)));
                                 const isDuty = isDutyBySpecial || isRosterDuty;
-                                if (!isDuty && (w === 6 || w === 0)) indicators.push('假日');
+                                if (!isDuty && (w === 6 || w === 0) && records.length === 0) indicators.push('假日');
                             }
                         } catch(e) {
                             // 讀取失敗，維持週末為假日，但仍嘗試以 UID/姓名判斷值班
@@ -3027,7 +2965,7 @@
                             const normalize = (s) => (s || '').trim();
                             const isRosterDuty = Array.isArray(arr) && ((myUid && arr.includes(myUid)) || arr.some(n => normalize(n) === normalize(myName)));
                             const isDuty = isDutyBySpecial || isRosterDuty;
-                            if (!isDuty && (w === 6 || w === 0)) indicators.push('假日');
+                            if (!isDuty && (w === 6 || w === 0) && records.length === 0) indicators.push('假日');
                         }
                         // 請假日（時間範圍相交）
                         const nextDay = new Date(dayStart); nextDay.setDate(nextDay.getDate()+1);
@@ -3092,6 +3030,623 @@
                         window.print();
                     });
                     // 已取消 PDF 匯出功能
+                }
+
+                // 共享：以指定使用者與月份生成「個人月報表」的覆蓋視窗（與個人打卡紀錄月報表相同方式）
+                window.renderPersonalMonthlyReport = async function(userId, userName, ymStr) {
+                    try {
+                        const { collection, where, query, getDocs, Timestamp, doc, getDoc } = window.__fs || {};
+                        const db = window.__db;
+                        if (!db || !collection || !query || !getDocs) {
+                            console.error('Firestore 未初始化');
+                            showToast && showToast('系統未初始化，請稍後重試', true);
+                            return;
+                        }
+                        const [yearStr, monthStr] = ymStr.split('-');
+                        const year = parseInt(yearStr, 10);
+                        const monthIndex = parseInt(monthStr, 10) - 1; // 0-based
+
+                        const startTS = Timestamp?.fromDate ? Timestamp.fromDate(new Date(year, monthIndex, 1)) : new Date(year, monthIndex, 1);
+                        const endTS = Timestamp?.fromDate ? Timestamp.fromDate(new Date(year, monthIndex + 1, 0, 23, 59, 59, 999)) : new Date(year, monthIndex + 1, 0, 23, 59, 59, 999);
+
+                        // 該使用者該月的打卡紀錄
+                        const q = query(
+                            collection(db, 'clockInRecords'),
+                            where('userId', '==', userId),
+                            where('timestamp', '>=', startTS),
+                            where('timestamp', '<=', endTS)
+                        );
+                        const snap = await getDocs(q);
+                        const allRecords = [];
+                        snap.forEach(d => allRecords.push({ id: d.id, ...d.data() }));
+
+                        // 請假資料（覆蓋該月任何一天）
+                        let leaves = [];
+                        try {
+                            const lq = query(collection(db, 'leaves'), where('userId','==', userId));
+                            const ls = await getDocs(lq);
+                            ls.forEach(docu => leaves.push({ id: docu.id, ...docu.data() }));
+                        } catch(e) { console.warn('讀取請假失敗', e); }
+
+                        // 特殊勤務（值班）資料
+                        let duties = [];
+                        try {
+                            const dq = query(collection(db, 'specialDuties'), where('userId','==', userId));
+                            const ds = await getDocs(dq);
+                            ds.forEach(docu => duties.push({ id: docu.id, ...docu.data() }));
+                        } catch(e) { console.warn('讀取特殊勤務失敗', e); }
+
+                        // 週五值班名單
+                        let fridayDutyRoster = {};
+                        try {
+                            if (doc && getDoc && db) {
+                                const settingsRef = doc(db, 'settings', 'general');
+                                const settingsSnap = await getDoc(settingsRef);
+                                fridayDutyRoster = settingsSnap.exists() ? (settingsSnap.data().fridayDutyRoster || {}) : {};
+                            }
+                        } catch (e) { console.warn('讀取值班名單失敗', e); }
+
+                        // 準備覆蓋視窗
+                        const old = document.getElementById('monthly-report-container');
+                        if (old) old.remove();
+                        const container = document.createElement('div');
+                        container.id = 'monthly-report-container';
+                        container.className = 'fixed inset-0 z-50 bg-white';
+                        const ymTag = `${year}-${String(monthIndex+1).padStart(2,'0')}`;
+                        const titleText = `${ymTag}出勤紀錄-${userName || ''}`;
+                        container.innerHTML = `
+                            <div class="bg-white w-full h-full flex flex-col">
+                                <div class="px-4 py-3 bg-indigo-600 text-white flex items中心 justify-between shrink-0">
+                                    <h3 class="font-semibold">${titleText}</h3>
+                                    <div class="space-x-2">
+                                        <button id="print-month-report" class="px-3 py-1.5 bg-white text-indigo-700 rounded hover:bg-gray-100">列印</button>
+                                        <button id="close-month-report" class="px-3 py-1.5 bg-white text-indigo-700 rounded hover:bg-gray-100">關閉</button>
+                                    </div>
+                                </div>
+                                <div class="p-4 flex-1 overflow-auto">
+                                    <div id="month-report-content" class="mx-auto" style="width:190mm">
+                                        <div id="month-report-inner" style="transform-origin: top left;">
+                                            <h2 class="text-xl font-bold mb-2 text-center">${titleText}</h2>
+                                            <table class="w-full border border-gray-300 text-sm">
+                                                <thead>
+                                                    <tr class="bg-gray-100">
+                                                        <th class="border px-2 py-1">日期</th>
+                                                        <th class="border px-2 py-1">星期幾</th>
+                                                        <th class="border px-2 py-1">當日上班狀態+打卡時間</th>
+                                                        <th class="border px-2 py-1">當日下班狀態+打卡時間</th>
+                                                        <th class="border px-2 py-1">總時數</th>
+                                                        <th class="border px-2 py-1">外出次數</th>
+                                                        <th class="border px-2 py-1">假日/請假日/值班</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody id="month-report-body"></tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>`;
+                        document.body.appendChild(container);
+
+                        // 填充表格
+                        const weekdayZh = ['日','一','二','三','四','五','六'];
+                        const bodyEl = container.querySelector('#month-report-body');
+                        const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+                        for (let d = 1; d <= daysInMonth; d++) {
+                            const dayStart = new Date(year, monthIndex, d, 0, 0, 0, 0);
+                            const dayEnd = new Date(year, monthIndex, d, 23, 59, 59, 999);
+                            const w = dayStart.getDay();
+                            const dateLabel = `${year}-${String(monthIndex+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+
+                            const records = allRecords.filter(r => {
+                                const ts = r.timestamp?.toDate?.() || (r.timestamp ? new Date(r.timestamp) : null);
+                                if (!ts) return false;
+                                return ts >= dayStart && ts <= dayEnd;
+                            }).sort((a,b) => {
+                                const ta = a.timestamp?.toDate?.() || (a.timestamp ? new Date(a.timestamp) : new Date(0));
+                                const tb = b.timestamp?.toDate?.() || (b.timestamp ? new Date(b.timestamp) : new Date(0));
+                                return ta - tb;
+                            });
+
+                            let startRecord = records.find(r => (r.type === '上班')) || records.find(r => (r.type === '外出')) || null;
+                            let endRecord = records.slice().reverse().find(r => (r.type === '下班')) || null;
+                            const fmt = (dt) => dt ? `${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}` : '';
+                            const startTime = startRecord ? (startRecord.timestamp?.toDate?.() || new Date(startRecord.timestamp)) : null;
+                            const endTime = endRecord ? (endRecord.timestamp?.toDate?.() || new Date(endRecord.timestamp)) : null;
+                            const startText = startRecord ? `${startRecord.type}${startTime ? ' '+fmt(startTime) : ''}` : '';
+                            const endText = endRecord ? `${endRecord.type}${endTime ? ' '+fmt(endTime) : ''}` : '';
+
+                            let totalHours = '';
+                            if (startTime && endTime && endTime > startTime) {
+                                const diffMs = endTime - startTime;
+                                totalHours = (diffMs / 3600000).toFixed(2);
+                            }
+
+                            const outboundCount = records.filter(r => r.type === '外出').length;
+
+                            let indicators = [];
+                            try {
+                                const ymId = `${year}-${String(monthIndex+1).padStart(2,'0')}`;
+                                if (doc && getDoc && db) {
+                                    const ref = doc(db, 'users', userId, 'workdays', ymId);
+                                    const snap2 = await getDoc(ref);
+                                    const days = snap2.exists() ? (snap2.data().days || []) : [];
+                                    const set = new Set(days.map(n => Number(n)));
+                                    const hasWorkdayConfig = Array.isArray(days) && days.length > 0;
+                                    const nextDay = new Date(dayStart); nextDay.setDate(nextDay.getDate()+1);
+                                    const isDutyBySpecial = duties.some(di => {
+                                        const s = di.startTime?.toDate?.() || (di.startTime ? new Date(di.startTime) : null);
+                                        const e = di.endTime?.toDate?.() || (di.endTime ? new Date(di.endTime) : null);
+                                        if (!s || !e) return false;
+                                        return s < nextDay && e > dayStart;
+                                    });
+                                    const arr = fridayDutyRoster[dateLabel] || [];
+                                    const normalize = (s) => (s || '').trim();
+                                    const isRosterDuty = Array.isArray(arr) && (arr.includes(userId) || arr.some(n => normalize(n) === normalize(userName || '')));
+                                    const isDuty = isDutyBySpecial || isRosterDuty;
+                                    if (!isDuty && records.length === 0) {
+                                        if (hasWorkdayConfig) {
+                                            if (!set.has(d)) indicators.push('假日');
+                                        } else {
+                                            if (w === 6 || w === 0) indicators.push('假日');
+                                        }
+                                    }
+                                } else {
+                                    const nextDay = new Date(dayStart); nextDay.setDate(nextDay.getDate()+1);
+                                    const isDutyBySpecial = duties.some(di => {
+                                        const s = di.startTime?.toDate?.() || (di.startTime ? new Date(di.startTime) : null);
+                                        const e = di.endTime?.toDate?.() || (di.endTime ? new Date(di.endTime) : null);
+                                        if (!s || !e) return false;
+                                        return s < nextDay && e > dayStart;
+                                    });
+                                    const arr = fridayDutyRoster[dateLabel] || [];
+                                    const normalize = (s) => (s || '').trim();
+                                    const isRosterDuty = Array.isArray(arr) && (arr.includes(userId) || arr.some(n => normalize(n) === normalize(userName || '')));
+                                    const isDuty = isDutyBySpecial || isRosterDuty;
+                                    if (!isDuty && (w === 6 || w === 0) && records.length === 0) indicators.push('假日');
+                                }
+                            } catch(e) {
+                                const nextDay = new Date(dayStart); nextDay.setDate(nextDay.getDate()+1);
+                                const isDutyBySpecial = duties.some(di => {
+                                    const s = di.startTime?.toDate?.() || (di.startTime ? new Date(di.startTime) : null);
+                                    const e = di.endTime?.toDate?.() || (di.endTime ? new Date(di.endTime) : null);
+                                    if (!s || !e) return false;
+                                    return s < nextDay && e > dayStart;
+                                });
+                                const arr = fridayDutyRoster[dateLabel] || [];
+                                const normalize = (s) => (s || '').trim();
+                                const isRosterDuty = Array.isArray(arr) && (arr.includes(userId) || arr.some(n => normalize(n) === normalize(userName || '')));
+                                const isDuty = isDutyBySpecial || isRosterDuty;
+                                if (!isDuty && (w === 6 || w === 0) && records.length === 0) indicators.push('假日');
+                            }
+                            const nextDay2 = new Date(dayStart); nextDay2.setDate(nextDay2.getDate()+1);
+                            const isLeave = leaves.some(l => {
+                                const s = l.startTime?.toDate?.() || (l.startTime ? new Date(l.startTime) : null);
+                                const e = l.endTime?.toDate?.() || (l.endTime ? new Date(l.endTime) : null);
+                                if (!s || !e) return false;
+                                return s < nextDay2 && e > dayStart;
+                            });
+                            if (isLeave) indicators.push('請假日');
+                            const isDutyBySpecial2 = duties.some(di => {
+                                const s = di.startTime?.toDate?.() || (di.startTime ? new Date(di.startTime) : null);
+                                const e = di.endTime?.toDate?.() || (di.endTime ? new Date(di.endTime) : null);
+                                if (!s || !e) return false;
+                                return s < nextDay2 && e > dayStart;
+                            });
+                            const arr2 = fridayDutyRoster[dateLabel] || [];
+                            const normalize2 = (s) => (s || '').trim();
+                            const isRosterDuty2 = Array.isArray(arr2) && (arr2.includes(userId) || arr2.some(n => normalize2(n) === normalize2(userName || '')));
+                            const isDuty2 = isDutyBySpecial2 || isRosterDuty2;
+                            if (isDuty2) indicators.push('值班');
+
+                            const tr = document.createElement('tr');
+                            tr.innerHTML = `
+                                <td class="border px-2 py-1">${dateLabel}</td>
+                                <td class="border px-2 py-1">${weekdayZh[w]}</td>
+                                <td class="border px-2 py-1">${startText}</td>
+                                <td class="border px-2 py-1">${endText}</td>
+                                <td class="border px-2 py-1">${totalHours}</td>
+                                <td class="border px-2 py-1 text-center">${outboundCount}</td>
+                                <td class="border px-2 py-1">${indicators.join('、')}</td>`;
+                            bodyEl.appendChild(tr);
+                        }
+
+                        // 列印樣式
+                        if (!document.getElementById('monthly-report-print-style')) {
+                            const style = document.createElement('style');
+                            style.id = 'monthly-report-print-style';
+                            style.textContent = `
+                            @page { size: A4; margin: 10mm; }
+                            @media print {
+                                body { -webkit-print-color-adjust: exact; }
+                                body > * { display: none !important; }
+                                #monthly-report-container { display: block !important; position: static !important; }
+                                #monthly-report-container > div { display: block !important; height: auto !important; }
+                                #monthly-report-container .px-4.py-3.bg-indigo-600 { display: none !important; }
+                                #monthly-report-container .p-4.flex-1 { padding: 0 !important; }
+                                #month-report-content { width: 190mm !important; margin: 0 auto 0 auto !important; }
+                                #month-report-inner { margin-top: 0 !important; }
+                                table { border-collapse: collapse; }
+                                th, td { font-size: 11px; line-height: 1.2; padding: 2px 4px; }
+                            }
+                            `;
+                            document.head.appendChild(style);
+                        }
+
+                        container.querySelector('#close-month-report').addEventListener('click', () => container.remove());
+                        container.querySelector('#print-month-report').addEventListener('click', () => { window.print(); });
+                    } catch (err) {
+                        console.error('renderPersonalMonthlyReport 失敗', err);
+                        showToast && showToast('生成個人月報表失敗', true);
+                    }
+                }
+            }
+
+            // 共享：以指定月份生成「全員月報表」的覆蓋視窗（與個人打卡紀錄月報表相同表格，逐人顯示）
+            window.renderAllMonthlyReports = async function(ymStr) {
+                try {
+                    const { collection, where, query, getDocs, Timestamp, doc, getDoc } = window.__fs || {};
+                    const db = window.__db;
+                    if (!db || !collection || !query || !getDocs) {
+                        console.error('Firestore 未初始化');
+                        showToast && showToast('系統未初始化，請稍後重試', true);
+                        return;
+                    }
+                    const [yearStr, monthStr] = ymStr.split('-');
+                    const year = parseInt(yearStr, 10);
+                    const monthIndex = parseInt(monthStr, 10) - 1;
+                    const ymTag = `${year}-${String(monthIndex+1).padStart(2,'0')}`;
+
+                    // 載入所有使用者（優先 Firestore，回退快取）
+                    let users = [];
+                    try {
+                        const us = await getDocs(collection(db, 'users'));
+                        us.forEach(d => users.push({ id: d.id, ...d.data() }));
+                    } catch (e) {
+                        console.warn('讀取 users 失敗，改用快取', e);
+                        try {
+                            if (typeof window.fetchUsersOnce === 'function') {
+                                const cached = await window.fetchUsersOnce();
+                                users = Array.isArray(cached) ? cached : [];
+                            }
+                        } catch (e2) { console.warn('快取 users 失敗', e2); }
+                    }
+                    // 去重與排序
+                    const map = new Map();
+                    users.forEach(u => { if (!map.has(u.id)) map.set(u.id, u); });
+                    users = Array.from(map.values()).sort((a,b) => (a.name || '').localeCompare(b.name || '', 'zh-Hant'));
+                    if (!users.length) {
+                        showToast && showToast('沒有使用者可生成月報表', true);
+                        return;
+                    }
+
+                    // 準備覆蓋視窗
+                    const old = document.getElementById('monthly-all-report-container');
+                    if (old) old.remove();
+                    const container = document.createElement('div');
+                    container.id = 'monthly-all-report-container';
+                    container.className = 'fixed inset-0 z-50 bg-white';
+                    const titleText = `${ymTag}出勤紀錄-全部帳號`;
+                    container.innerHTML = `
+                        <div class="bg-white w-full h-full flex flex-col">
+                            <div class="px-4 py-3 bg-indigo-600 text-white flex items-center justify-between shrink-0">
+                                <h3 class="font-semibold">${titleText}</h3>
+                                <div class="space-x-2">
+                                    <button id="print-all-month-report" class="px-3 py-1.5 bg-white text-indigo-700 rounded hover:bg-gray-100">列印</button>
+                                    <button id="close-all-month-report" class="px-3 py-1.5 bg-white text-indigo-700 rounded hover:bg-gray-100">關閉</button>
+                                </div>
+                            </div>
+                            <div class="p-4 flex-1 overflow-auto">
+                                <div id="month-all-report-content" class="mx-auto space-y-6" style="max-width: 200mm">
+                                </div>
+                            </div>
+                        </div>`;
+                    document.body.appendChild(container);
+
+                    const contentEl = container.querySelector('#month-all-report-content');
+                    const exportRows = [];
+                    const exportSheets = [];
+
+                    // 週五值班名單（一次讀取）
+                    let fridayDutyRoster = {};
+                    try {
+                        if (doc && getDoc && db) {
+                            const settingsRef = doc(db, 'settings', 'general');
+                            const settingsSnap = await getDoc(settingsRef);
+                            fridayDutyRoster = settingsSnap.exists() ? (settingsSnap.data().fridayDutyRoster || {}) : {};
+                        }
+                    } catch (e) { console.warn('讀取值班名單失敗', e); }
+
+                    const startTS = Timestamp?.fromDate ? Timestamp.fromDate(new Date(year, monthIndex, 1)) : new Date(year, monthIndex, 1);
+                    const endTS = Timestamp?.fromDate ? Timestamp.fromDate(new Date(year, monthIndex + 1, 0, 23, 59, 59, 999)) : new Date(year, monthIndex + 1, 0, 23, 59, 59, 999);
+
+                    const weekdayZh = ['日','一','二','三','四','五','六'];
+
+                    // 逐人生成表格
+                    for (const user of users) {
+                        const userId = user.id;
+                        const userName = user.name || userId;
+
+                        // 該使用者該月的打卡紀錄
+                        let allRecords = [];
+                        try {
+                            const q = query(
+                                collection(db, 'clockInRecords'),
+                                where('userId', '==', userId),
+                                where('timestamp', '>=', startTS),
+                                where('timestamp', '<=', endTS)
+                            );
+                            const snap = await getDocs(q);
+                            snap.forEach(d => allRecords.push({ id: d.id, ...d.data() }));
+                        } catch (e) { console.warn('讀取打卡失敗', e); }
+
+                        // 該使用者請假
+                        let leaves = [];
+                        try {
+                            const lq = query(collection(db, 'leaves'), where('userId','==', userId));
+                            const ls = await getDocs(lq);
+                            ls.forEach(docu => leaves.push({ id: docu.id, ...docu.data() }));
+                        } catch(e) { /* ignore */ }
+
+                        // 該使用者特殊勤務
+                        let duties = [];
+                        try {
+                            const dq = query(collection(db, 'specialDuties'), where('userId','==', userId));
+                            const ds = await getDocs(dq);
+                            ds.forEach(docu => duties.push({ id: docu.id, ...docu.data() }));
+                        } catch(e) { /* ignore */ }
+
+                        const section = document.createElement('div');
+                        section.className = 'all-month-person mb-6';
+                        section.innerHTML = `
+                            <div>
+                                <h2 class="text-lg font-bold mb-2 text-center">${ymTag}出勤紀錄-${userName}</h2>
+                                <table class="w-full border border-gray-300 text-sm">
+                                    <thead>
+                                        <tr class="bg-gray-100">
+                                            <th class="border px-2 py-1">日期</th>
+                                            <th class="border px-2 py-1">星期幾</th>
+                                            <th class="border px-2 py-1">當日上班狀態+打卡時間</th>
+                                            <th class="border px-2 py-1">當日下班狀態+打卡時間</th>
+                                            <th class="border px-2 py-1">總時數</th>
+                                            <th class="border px-2 py-1">外出次數</th>
+                                            <th class="border px-2 py-1">假日/請假日/值班</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>`;
+                        const tbody = section.querySelector('tbody');
+                        const personRows = [];
+
+                        const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+                        for (let d = 1; d <= daysInMonth; d++) {
+                            const dayStart = new Date(year, monthIndex, d, 0, 0, 0, 0);
+                            const dayEnd = new Date(year, monthIndex, d, 23, 59, 59, 999);
+                            const w = dayStart.getDay();
+                            const dateLabel = `${year}-${String(monthIndex+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+
+                            const records = allRecords.filter(r => {
+                                const ts = r.timestamp?.toDate?.() || (r.timestamp ? new Date(r.timestamp) : null);
+                                if (!ts) return false;
+                                return ts >= dayStart && ts <= dayEnd;
+                            }).sort((a,b) => {
+                                const ta = a.timestamp?.toDate?.() || (a.timestamp ? new Date(a.timestamp) : new Date(0));
+                                const tb = b.timestamp?.toDate?.() || (b.timestamp ? new Date(b.timestamp) : new Date(0));
+                                return ta - tb;
+                            });
+
+                            let startRecord = records.find(r => (r.type === '上班')) || records.find(r => (r.type === '外出')) || null;
+                            let endRecord = records.slice().reverse().find(r => (r.type === '下班')) || null;
+                            const fmt = (dt) => dt ? `${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}` : '';
+                            const startTime = startRecord ? (startRecord.timestamp?.toDate?.() || new Date(startRecord.timestamp)) : null;
+                            const endTime = endRecord ? (endRecord.timestamp?.toDate?.() || new Date(endRecord.timestamp)) : null;
+                            const startText = startRecord ? `${startRecord.type}${startTime ? ' '+fmt(startTime) : ''}` : '';
+                            const endText = endRecord ? `${endRecord.type}${endTime ? ' '+fmt(endTime) : ''}` : '';
+
+                            let totalHours = '';
+                            if (startTime && endTime && endTime > startTime) {
+                                const diffMs = endTime - startTime;
+                                totalHours = (diffMs / 3600000).toFixed(2);
+                            }
+
+                            const outboundCount = records.filter(r => r.type === '外出').length;
+
+                            let indicators = [];
+                            try {
+                                const ymId = `${year}-${String(monthIndex+1).padStart(2,'0')}`;
+                                if (doc && getDoc && db) {
+                                    const ref = doc(db, 'users', userId, 'workdays', ymId);
+                                    const snap2 = await getDoc(ref);
+                                    const days = snap2.exists() ? (snap2.data().days || []) : [];
+                                    const set = new Set(days.map(n => Number(n)));
+                                    const nextDay = new Date(dayStart); nextDay.setDate(nextDay.getDate()+1);
+                                    const isDutyBySpecial = duties.some(di => {
+                                        const s = di.startTime?.toDate?.() || (di.startTime ? new Date(di.startTime) : null);
+                                        const e = di.endTime?.toDate?.() || (di.endTime ? new Date(di.endTime) : null);
+                                        if (!s || !e) return false;
+                                        return s < nextDay && e > dayStart;
+                                    });
+                                    const arr = fridayDutyRoster[dateLabel] || [];
+                                    const normalize = (s) => (s || '').trim();
+                                    const isRosterDuty = Array.isArray(arr) && (arr.includes(userId) || arr.some(n => normalize(n) === normalize(userName || '')));
+                                    const isDuty = isDutyBySpecial || isRosterDuty;
+                                    if (!isDuty && records.length === 0) {
+                                        if (hasWorkdayConfig) {
+                                            if (!set.has(d)) indicators.push('假日');
+                                        } else {
+                                            if (w === 6 || w === 0) indicators.push('假日');
+                                        }
+                                    }
+                                } else {
+                                    const nextDay = new Date(dayStart); nextDay.setDate(nextDay.getDate()+1);
+                                    const isDutyBySpecial = duties.some(di => {
+                                        const s = di.startTime?.toDate?.() || (di.startTime ? new Date(di.startTime) : null);
+                                        const e = di.endTime?.toDate?.() || (di.endTime ? new Date(di.endTime) : null);
+                                        if (!s || !e) return false;
+                                        return s < nextDay && e > dayStart;
+                                    });
+                                    const arr = fridayDutyRoster[dateLabel] || [];
+                                    const normalize = (s) => (s || '').trim();
+                                    const isRosterDuty = Array.isArray(arr) && (arr.includes(userId) || arr.some(n => normalize(n) === normalize(userName || '')));
+                                    const isDuty = isDutyBySpecial || isRosterDuty;
+                                    if (!isDuty && (w === 6 || w === 0)) indicators.push('假日');
+                                }
+                            } catch(e) {
+                                const nextDay = new Date(dayStart); nextDay.setDate(nextDay.getDate()+1);
+                                const isDutyBySpecial = duties.some(di => {
+                                    const s = di.startTime?.toDate?.() || (di.startTime ? new Date(di.startTime) : null);
+                                    const e = di.endTime?.toDate?.() || (di.endTime ? new Date(di.endTime) : null);
+                                    if (!s || !e) return false;
+                                    return s < nextDay && e > dayStart;
+                                });
+                                const arr = fridayDutyRoster[dateLabel] || [];
+                                const normalize = (s) => (s || '').trim();
+                                const isRosterDuty = Array.isArray(arr) && (arr.includes(userId) || arr.some(n => normalize(n) === normalize(userName || '')));
+                                const isDuty = isDutyBySpecial || isRosterDuty;
+                                if (!isDuty && (w === 6 || w === 0)) indicators.push('假日');
+                            }
+                            const nextDay2 = new Date(dayStart); nextDay2.setDate(nextDay2.getDate()+1);
+                            const isLeave = leaves.some(l => {
+                                const s = l.startTime?.toDate?.() || (l.startTime ? new Date(l.startTime) : null);
+                                const e = l.endTime?.toDate?.() || (l.endTime ? new Date(l.endTime) : null);
+                                if (!s || !e) return false;
+                                return s < nextDay2 && e > dayStart;
+                            });
+                            if (isLeave) indicators.push('請假日');
+                            const isDutyBySpecial2 = duties.some(di => {
+                                const s = di.startTime?.toDate?.() || (di.startTime ? new Date(di.startTime) : null);
+                                const e = di.endTime?.toDate?.() || (di.endTime ? new Date(di.endTime) : null);
+                                if (!s || !e) return false;
+                                return s < nextDay2 && e > dayStart;
+                            });
+                            const arr2 = fridayDutyRoster[dateLabel] || [];
+                            const normalize2 = (s) => (s || '').trim();
+                            const isRosterDuty2 = Array.isArray(arr2) && (arr2.includes(userId) || arr2.some(n => normalize2(n) === normalize2(userName || '')));
+                            const isDuty2 = isDutyBySpecial2 || isRosterDuty2;
+                            if (isDuty2) indicators.push('值班');
+
+                            const tr = document.createElement('tr');
+                            tr.innerHTML = `
+                                <td class="border px-2 py-1">${dateLabel}</td>
+                                <td class="border px-2 py-1">${weekdayZh[w]}</td>
+                                <td class="border px-2 py-1">${startText}</td>
+                                <td class="border px-2 py-1">${endText}</td>
+                                <td class="border px-2 py-1">${totalHours}</td>
+                                <td class="border px-2 py-1 text-center">${outboundCount}</td>
+                                <td class="border px-2 py-1">${indicators.join('、')}</td>`;
+                            tbody.appendChild(tr);
+
+                            // 匯出資料列（彙總 CSV 用）
+                            exportRows.push([
+                                userName,
+                                dateLabel,
+                                weekdayZh[w],
+                                startText,
+                                endText,
+                                totalHours,
+                                outboundCount,
+                                indicators.join('、')
+                            ]);
+
+                            // 匯出資料列（每人工作表用）
+                            personRows.push([
+                                dateLabel,
+                                weekdayZh[w],
+                                startText,
+                                endText,
+                                totalHours,
+                                outboundCount,
+                                indicators.join('、')
+                            ]);
+                        }
+
+                        // 生成每人一個工作表的 AOA
+                        const rawName = String(userName || userId);
+                        const safeName = rawName.replace(/[\\\/?*\[\]:]/g, ' ').slice(0, 31) || '工作表';
+                        exportSheets.push({
+                            name: safeName,
+                            aoa: [
+                                ['使用者', userName],
+                                ['月份', ymTag],
+                                ['日期','星期','上班','下班','總時數','外出次數','指標'],
+                                ...personRows
+                            ]
+                        });
+
+                        contentEl.appendChild(section);
+                    }
+
+                    // 列印樣式（覆蓋全員容器）
+                    if (!document.getElementById('monthly-all-report-print-style')) {
+                        const style = document.createElement('style');
+                        style.id = 'monthly-all-report-print-style';
+                        style.textContent = `
+                        @page { size: A4 portrait; margin: 10mm; }
+                        @media print {
+                            body { -webkit-print-color-adjust: exact; }
+                            body > * { display: none !important; }
+                            #monthly-all-report-container { display: block !important; position: static !important; }
+                            #monthly-all-report-container > div { display: block !important; height: auto !important; }
+                            #monthly-all-report-container .px-4.py-3.bg-indigo-600 { display: none !important; }
+                            #monthly-all-report-container .p-4.flex-1 { padding: 0 !important; }
+                            #month-all-report-content { width: 190mm !important; margin: 0 auto 0 auto !important; }
+                            #month-all-report-content > .all-month-person { break-after: page; page-break-after: always; }
+                            #month-all-report-content > .all-month-person:last-child { break-after: auto; page-break-after: auto; }
+                            table { border-collapse: collapse; }
+                            th, td { font-size: 11px; line-height: 1.2; padding: 2px 4px; }
+                        }
+                        `;
+                        document.head.appendChild(style);
+                    }
+
+                    container.querySelector('#close-all-month-report').addEventListener('click', () => container.remove());
+                    container.querySelector('#print-all-month-report').addEventListener('click', () => { window.print(); });
+
+                    // 匯出 Excel/CSV 功能
+                    const exportBtn = container.querySelector('#export-all-month-report');
+                    if (!exportBtn) {
+                        const headerActions = container.querySelector('.px-4.py-3.bg-indigo-600 .space-x-2');
+                        if (headerActions) {
+                            const btn = document.createElement('button');
+                            btn.id = 'export-all-month-report';
+                            btn.className = 'px-3 py-1.5 bg-white text-indigo-700 rounded hover:bg-gray-100';
+                            btn.textContent = '匯出Excel';
+                            headerActions.insertBefore(btn, headerActions.querySelector('#close-all-month-report'));
+                        }
+                    }
+                    container.querySelector('#export-all-month-report')?.addEventListener('click', () => {
+                        try {
+                            const XLSX = window.XLSX;
+                            if (XLSX && XLSX.utils && XLSX.writeFile) {
+                                // 以每人一個工作表輸出 .xlsx
+                                const wb = XLSX.utils.book_new();
+                                for (const sheet of exportSheets) {
+                                    const ws = XLSX.utils.aoa_to_sheet(sheet.aoa);
+                                    XLSX.utils.book_append_sheet(wb, ws, sheet.name);
+                                }
+                                XLSX.writeFile(wb, `全員月報表_${ymTag}.xlsx`);
+                            } else {
+                                const header = '使用者,日期,星期,上班,下班,總時數,外出次數,指標';
+                                const csv = [header, ...exportRows.map(r => r.map(v => {
+                                    const s = String(v ?? '');
+                                    const escaped = s.replace(/"/g, '""');
+                                    return `"${escaped}"`;
+                                }).join(','))].join('\r\n');
+                                const blob = new Blob(['\uFEFF'+csv], { type: 'text/csv;charset=utf-8;' });
+                                const a = document.createElement('a');
+                                a.href = URL.createObjectURL(blob);
+                                a.download = `全員月報表_${ymTag}.csv`;
+                                a.click();
+                                setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+                            }
+                        } catch (e) {
+                            console.error('匯出全員月報表失敗', e);
+                            showToast && showToast('匯出全員月報表失敗', true);
+                        }
+                    });
+                } catch (err) {
+                    console.error('renderAllMonthlyReports 失敗', err);
+                    showToast && showToast('生成全員月報表失敗', true);
                 }
             }
 
@@ -3627,25 +4182,722 @@
                 await renderList();
             }
 
-            // 人事分頁：出勤列表、請假列表
+            // 人事分頁：僅列印報表
             function renderHR(subPage) {
                 mainContent.innerHTML = `
                     <div class="h-[50px] flex items-center justify-around border-b border-gray-200 bg-white">
-                        <button data-subtab="attendance" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'attendance' ? 'active' : ''}">出勤列表</button>
-                        <button data-subtab="leave" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'leave' ? 'active' : ''}">請假列表</button>
+                        <button data-subtab="print" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'print' || !subPage ? 'active' : ''}">列印報表</button>
                     </div>
                     <div id="sub-page-content" class="overflow-y-auto" style="height: calc(100% - 50px);"></div>`;
 
                 const subPageContent = document.getElementById('sub-page-content');
-                if (subPage === 'leave') {
-                    renderTrackingLeave(subPageContent);
-                } else {
-                    renderTrackingAttendance(subPageContent);
+                renderHRPrintReport(subPageContent);
+
+                mainContent.querySelectorAll('.sub-tab-btn').forEach(btn => btn.addEventListener('click', () => showPage('hr', btn.dataset.subtab)));
+            }
+
+            // 人事 > 列印報表：月報表（支援全部人員或單一人員、列印與匯出）
+            function renderHRPrintReport(container) {
+                const db = window.__db;
+                const { collection, getDocs, query, where, Timestamp } = window.__fs || {};
+                if (!db || !collection || !getDocs) {
+                    container.innerHTML = '<div class="p-4 text-red-600">系統未初始化，請稍後再試。</div>';
+                    return;
                 }
 
-                // 初次渲染修改紀錄
-                try { renderModList(); } catch(e) {}
-                mainContent.querySelectorAll('.sub-tab-btn').forEach(btn => btn.addEventListener('click', () => showPage('hr', btn.dataset.subtab)));
+                const today = new Date();
+                const defaultMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+                container.innerHTML = `
+                    <div class="p-4 space-y-4">
+                        <div class="flex flex-wrap items-center gap-4 mb-4">
+                            <div class="flex items-center space-x-2">
+                                <label for="monthly-user-select" class="text-sm font-medium">選擇人員:</label>
+                                <select id="monthly-user-select" class="border border-gray-300 rounded-md px-2 py-1">
+                                    <option value="all">全部人員</option>
+                                </select>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <label for="monthly-month" class="text-sm font-medium">選擇月份:</label>
+                                <input type="month" id="monthly-month" value="${defaultMonth}" class="border border-gray-300 rounded-md px-2 py-1">
+                            </div>
+                            <div class="flex items-center space-x-2 ml-auto">
+                                <button id="btn-print-monthly" class="bg-gray-700 text-white px-3 py-1 rounded flex items-center">
+                                    <i data-lucide="printer" class="w-4 h-4 mr-1"></i> 列印
+                                </button>
+                                <button id="btn-export-excel" class="bg-blue-600 text-white px-3 py-1 rounded flex items-center">
+                                    <i data-lucide="download" class="w-4 h-4 mr-1"></i> 匯出Excel
+                                </button>
+                            </div>
+                        </div>
+                        <div class="bg-white rounded-lg shadow overflow-x-auto">
+                            <table id="attendance-monthly-table" class="min-w-full divide-y divide-gray-200 text-sm">
+                                <thead class="bg-gray-50" id="attendance-monthly-thead"></thead>
+                                <tbody id="attendance-monthly-tbody" class="bg-white divide-y divide-gray-200">
+                                    <tr><td colspan="32" class="px-6 py-4 text-center text-gray-500">
+                                        <div class="flex items-center justify-center">
+                                            <i data-lucide="loader" class="w-5 h-5 mr-2 animate-spin"></i>
+                                            載入中...
+                                        </div>
+                                    </td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+                try { lucide.createIcons(); } catch(e) {}
+
+                const usersRef = collection(db, 'users');
+                const userSelect = document.getElementById('monthly-user-select');
+                const monthInput = document.getElementById('monthly-month');
+                const theadEl = document.getElementById('attendance-monthly-thead');
+                const tbodyEl = document.getElementById('attendance-monthly-tbody');
+
+                let usersArr = [];
+                let usersMap = {};
+
+                const fmtHM = (d) => `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+
+                const renderHeader = (daysInMonth) => {
+                    const cols = ['<tr><th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">人員</th>'];
+                    for (let i = 1; i <= daysInMonth; i++) {
+                        cols.push(`<th class="px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">${String(i).padStart(2,'0')}</th>`);
+                    }
+                    cols.push('<th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">出勤日數</th>');
+                    cols.push('<th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">總工時(小時)</th>');
+                    cols.push('<th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">請假日數</th>');
+                    cols.push('<th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">特殊勤務日數</th>');
+                    cols.push('</tr>');
+                    theadEl.innerHTML = cols.join('');
+                };
+
+                const loadMonthlyReport = async () => {
+                    const ymStr = monthInput.value || defaultMonth;
+                    const [yStr, mStr] = ymStr.split('-');
+                    const year = Number(yStr);
+                    const month = Number(mStr) - 1; // 0-based
+                    const startOfMonth = new Date(year, month, 1, 0, 0, 0, 0);
+                    const endOfMonth = new Date(year, month + 1, 0, 23, 59, 59, 999);
+                    const daysInMonth = new Date(year, month + 1, 0).getDate();
+                    renderHeader(daysInMonth);
+
+                    const selectedUserId = userSelect.value;
+                    const recordsRef = collection(db, 'clockInRecords');
+                    const startTS = Timestamp?.fromDate ? Timestamp.fromDate(startOfMonth) : startOfMonth;
+                    const endTS = Timestamp?.fromDate ? Timestamp.fromDate(endOfMonth) : endOfMonth;
+                    let q;
+                    if (selectedUserId === 'all') {
+                        q = query(recordsRef, where('timestamp', '>=', startTS), where('timestamp', '<=', endTS));
+                    } else {
+                        q = query(recordsRef, where('userId', '==', selectedUserId), where('timestamp', '>=', startTS), where('timestamp', '<=', endTS));
+                    }
+
+                    tbodyEl.innerHTML = `<tr><td colspan="32" class="px-6 py-4 text-center text-gray-500"><div class="flex items-center justify-center"><i data-lucide="loader" class="w-5 h-5 mr-2 animate-spin"></i>載入中...</div></td></tr>`;
+
+                    try {
+                        const snap = await getDocs(q);
+                        const byUser = new Map();
+                        snap.forEach(d => {
+                            const r = d.data();
+                            const uid = r.userId;
+                            const dt = r.timestamp?.toDate?.() || (r.timestamp ? new Date(r.timestamp) : null);
+                            if (!uid || !dt) return;
+                            const day = dt.getDate();
+                            const entry = byUser.get(uid) || { days: new Map() };
+                            const dayObj = entry.days.get(day) || { start: null, end: null };
+                            if (r.type === '上班') { if (!dayObj.start || dt < dayObj.start) dayObj.start = dt; }
+                            if (r.type === '下班' || r.type === '自動下班') { if (!dayObj.end || dt > dayObj.end) dayObj.end = dt; }
+                            entry.days.set(day, dayObj);
+                            byUser.set(uid, entry);
+                        });
+
+                        const dayNumbersInRange = (start, end) => {
+                            if (!start || !end) return [];
+                            const cs = new Date(Math.max(start.getTime(), startOfMonth.getTime()));
+                            const ce = new Date(Math.min(end.getTime(), endOfMonth.getTime()));
+                            cs.setHours(12,0,0,0); ce.setHours(12,0,0,0);
+                            const out = [];
+                            for (let d = new Date(cs); d <= ce; d.setDate(d.getDate() + 1)) { out.push(d.getDate()); }
+                            return out;
+                        };
+
+                        const leaveDaySetMap = new Map();
+                        try {
+                            const leavesRef = collection(db, 'leaves');
+                            let qLeaves;
+                            if (selectedUserId === 'all') { qLeaves = query(leavesRef, where('status','==','approved')); }
+                            else { qLeaves = query(leavesRef, where('status','==','approved'), where('userId','==', selectedUserId)); }
+                            const leavesSnap = await getDocs(qLeaves);
+                            leavesSnap.forEach(doc => {
+                                const lv = doc.data();
+                                const uid = lv.userId || lv.uid || (lv.user && lv.user.id);
+                                if (!uid) return;
+                                const s = (lv.startTime && lv.startTime.toDate?.()) || (lv.startTime ? new Date(lv.startTime) : (lv.leaveStartTime && lv.leaveStartTime.toDate?.()) || (lv.leaveStartTime ? new Date(lv.leaveStartTime) : null));
+                                const e = (lv.endTime && lv.endTime.toDate?.()) || (lv.endTime ? new Date(lv.endTime) : (lv.leaveEndTime && lv.leaveEndTime.toDate?.()) || (lv.leaveEndTime ? new Date(lv.leaveEndTime) : null));
+                                if (!s || !e) return;
+                                const days = dayNumbersInRange(s, e);
+                                if (!days.length) return;
+                                const set = leaveDaySetMap.get(uid) || new Set();
+                                days.forEach(n => set.add(n));
+                                leaveDaySetMap.set(uid, set);
+                            });
+                        } catch (e) {}
+
+                        const specialDutyDaySetMap = new Map();
+                        try {
+                            const sdRef = collection(db, 'specialDuties');
+                            const startTS2 = Timestamp?.fromDate ? Timestamp.fromDate(startOfMonth) : startOfMonth;
+                            const endTS2 = Timestamp?.fromDate ? Timestamp.fromDate(endOfMonth) : endOfMonth;
+                            let q1, q2;
+                            if (selectedUserId === 'all') {
+                                q1 = query(sdRef, where('startTime','>=', startTS2), where('startTime','<=', endTS2));
+                                q2 = query(sdRef, where('endTime','>=', startTS2), where('endTime','<=', endTS2));
+                            } else {
+                                q1 = query(sdRef, where('userId','==', selectedUserId), where('startTime','>=', startTS2), where('startTime','<=', endTS2));
+                                q2 = query(sdRef, where('userId','==', selectedUserId), where('endTime','>=', startTS2), where('endTime','<=', endTS2));
+                            }
+                            const sdDocs = new Map();
+                            for (const qq of [q1, q2]) { const sSnap = await getDocs(qq); sSnap.forEach(doc => { sdDocs.set(doc.id, doc.data()); }); }
+                            sdDocs.forEach(sd => {
+                                const uid = sd.userId;
+                                const s = sd.startTime?.toDate?.() || (sd.startTime ? new Date(sd.startTime) : null);
+                                const e = sd.endTime?.toDate?.() || (sd.endTime ? new Date(sd.endTime) : null);
+                                if (!uid || !s || !e) return;
+                                const days = dayNumbersInRange(s, e);
+                                if (!days.length) return;
+                                const set = specialDutyDaySetMap.get(uid) || new Set();
+                                days.forEach(n => set.add(n));
+                                specialDutyDaySetMap.set(uid, set);
+                            });
+                        } catch (e) {}
+
+                        const buildRow = (user) => {
+                            const uid = user.id;
+                            const entry = byUser.get(uid) || { days: new Map() };
+                            let attendDays = 0; let totalMinutes = 0;
+                            const tds = [`<td class="px-3 py-2 whitespace-nowrap text-sm text-gray-800">${user.name || usersMap[uid] || '未知用戶'}</td>`];
+                            for (let i = 1; i <= daysInMonth; i++) {
+                                const dObj = entry.days.get(i) || { start: null, end: null };
+                                const hasStart = !!dObj.start; const hasEnd = !!dObj.end;
+                                const cls = hasStart && hasEnd ? 'bg-green-50' : (hasStart || hasEnd ? 'bg-yellow-50' : '');
+                                let text = '--';
+                                if (hasStart && hasEnd) text = `${fmtHM(dObj.start)}~${fmtHM(dObj.end)}`;
+                                else if (hasStart) text = `${fmtHM(dObj.start)}`;
+                                else if (hasEnd) text = `${fmtHM(dObj.end)}`;
+                                if (hasStart || hasEnd) attendDays++;
+                                if (hasStart && hasEnd) totalMinutes += Math.max(0, (dObj.end - dObj.start) / 60000);
+                                tds.push(`<td class="px-2 py-1 text-center text-xs ${cls}">${text}</td>`);
+                            }
+                            const totalHours = (totalMinutes / 60).toFixed(2);
+                            const leaveDays = (leaveDaySetMap.get(uid)?.size) || 0;
+                            const dutyDays = (specialDutyDaySetMap.get(uid)?.size) || 0;
+                            tds.push(`<td class="px-3 py-2 text-center text-sm">${attendDays}</td>`);
+                            tds.push(`<td class="px-3 py-2 text-center text-sm">${totalHours}</td>`);
+                            tds.push(`<td class="px-3 py-2 text-center text-sm">${leaveDays}</td>`);
+                            tds.push(`<td class="px-3 py-2 text-center text-sm">${dutyDays}</td>`);
+                            return `<tr>${tds.join('')}</tr>`;
+                        };
+
+                        const rows = [];
+                        if (selectedUserId === 'all') {
+                            const sorted = [...usersArr].sort((a,b) => a.name.localeCompare(b.name, 'zh-Hant'));
+                            sorted.forEach(u => rows.push(buildRow(u)));
+                        } else {
+                            const user = usersArr.find(u => u.id === selectedUserId);
+                            if (user) rows.push(buildRow(user));
+                        }
+                        tbodyEl.innerHTML = rows.length ? rows.join('') : `<tr><td colspan="${daysInMonth + 5}" class="px-6 py-4 text-center text-gray-500">無資料</td></tr>`;
+                        try { lucide.createIcons(); } catch(e) {}
+                    } catch (err) {
+                        console.error('讀取月報表失敗', err);
+                        tbodyEl.innerHTML = `<tr><td colspan="32" class="px-6 py-4 text-center text-red-500">讀取紀錄失敗。</td></tr>`;
+                    }
+                };
+
+                getDocs(usersRef).then((qs) => {
+                    const users = [];
+                    qs.forEach(doc => { const data = doc.data() || {}; users.push({ id: doc.id, name: data.name || data.displayName || data.account || data.email || doc.id }); });
+                    usersArr = users;
+                    usersMap = users.reduce((acc, u) => { acc[u.id] = u.name; return acc; }, {});
+                    users.sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant')).forEach(user => {
+                        const option = document.createElement('option'); option.value = user.id; option.textContent = user.name; userSelect.appendChild(option);
+                    });
+                    loadMonthlyReport();
+                });
+
+                userSelect.addEventListener('change', loadMonthlyReport);
+                monthInput.addEventListener('change', loadMonthlyReport);
+
+                const btnPrint = document.getElementById('btn-print-monthly');
+                const btnExport = document.getElementById('btn-export-excel');
+                btnPrint.addEventListener('click', printMonthlyReport);
+                btnExport.addEventListener('click', exportMonthlyToExcel);
+
+                function getSelectedUserLabel() {
+                    const sel = document.getElementById('monthly-user-select');
+                    const opt = sel.options[sel.selectedIndex];
+                    return opt ? opt.textContent : '全部人員';
+                }
+
+                async function ensureXLSX() {
+                    if (window.XLSX) return true;
+                    return new Promise((resolve) => {
+                        const s = document.createElement('script');
+                        s.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+                        s.onload = () => resolve(true);
+                        s.onerror = () => resolve(false);
+                        document.head.appendChild(s);
+                    });
+                }
+
+                function tableToCSV(table) {
+                    let csv = '';
+                    const rows = table.querySelectorAll('tr');
+                    rows.forEach(row => {
+                        const cells = row.querySelectorAll('th,td');
+                        const values = Array.from(cells).map(cell => '"' + (cell.innerText || '').replace(/"/g, '""') + '"');
+                        csv += values.join(',') + '\r\n';
+                    });
+                    return csv;
+                }
+
+                async function exportMonthlyToExcel() {
+                    try {
+                        const ok = await ensureXLSX();
+                        const ymStr = monthInput.value || defaultMonth;
+                        const userLabel = getSelectedUserLabel();
+                        const filename = `出勤月報表_${ymStr}_${userLabel}.xlsx`;
+                        const table = document.getElementById('attendance-monthly-table');
+                        if (ok && window.XLSX && window.XLSX.utils && window.XLSX.writeFile) {
+                            const wb = XLSX.utils.table_to_book(table, { sheet: '月報表' });
+                            XLSX.writeFile(wb, filename);
+                        } else {
+                            const csv = tableToCSV(table);
+                            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                            const a = document.createElement('a');
+                            a.href = URL.createObjectURL(blob);
+                            a.download = `出勤月報表_${ymStr}_${userLabel}.csv`;
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                        }
+                    } catch (err) {
+                        console.error('exportMonthlyToExcel error', err);
+                        showToast && showToast('匯出失敗', true);
+                    }
+                }
+
+                function printMonthlyReport() {
+                    try {
+                        const ymStr = monthInput.value || defaultMonth;
+                        const userLabel = getSelectedUserLabel();
+                        const table = document.getElementById('attendance-monthly-table');
+                        const [yStr, mStr] = (ymStr || '').split('-');
+                        const year = Number(yStr);
+                        const monthNum = Number(mStr);
+                        const daysInMonth = new Date(year, monthNum, 0).getDate();
+                        const extraCols = 5;
+                        const targetBase = 31;
+                        let scale = targetBase / (daysInMonth + extraCols);
+                        scale = Math.max(0.55, Math.min(0.95, scale));
+                        const html = `<!doctype html><html><head><meta charset="utf-8"><title>出勤月報表</title>
+                        <style>
+                            @page { size: A4 landscape; margin: 10mm; }
+                            * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                            body { font-family: system-ui,-apple-system,Segoe UI,Roboto,\"Helvetica Neue\",Arial,\"Noto Sans\",sans-serif; color: #111; }
+                            h1 { font-size: 14px; margin-bottom: 6px; }
+                            table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+                            thead th { background: #f9fafb; }
+                            th, td { border: 1px solid #d1d5db; padding: 2px 3px; font-size: 10px; }
+                            th:first-child, td:first-child { text-align: left; }
+                            th:not(:first-child), td:not(:first-child) { text-align: center; white-space: nowrap; }
+                            tr { page-break-inside: avoid; }
+                            #print-wrap { transform: scale(${scale}); transform-origin: top left; width: calc(100% / ${scale}); }
+                        </style>
+                        </head><body>
+                        <h1>出勤月報表：${ymStr}（${userLabel}）</h1>
+                        <div id="print-wrap">${table.outerHTML}</div>
+                        </body></html>`;
+                        const w = window.open('', '_blank');
+                        w.document.open();
+                        w.document.write(html);
+                        w.document.close();
+                        w.focus();
+                        w.print();
+                    } catch (err) {
+                        console.error('printMonthlyReport error', err);
+                        showToast && showToast('列印失敗', true);
+                    }
+                }
+            }
+
+            // 人事 > 打卡列表：複製「打卡紀錄」並提供帳號篩選（含「所有帳號」）
+            function renderHRClockList(container) {
+                const today = new Date().toISOString().split('T')[0];
+                container.innerHTML = `
+                    <div class="p-4 space-y-4">
+                        <div class="flex items-center flex-wrap gap-2">
+                            <label for="hr-record-user" class="text-sm font-medium">帳號:</label>
+                            <select id="hr-record-user" class="border border-gray-300 rounded-md px-2 py-1">
+                                <option value="__ALL__">所有帳號</option>
+                            </select>
+                            <label for="hr-record-date" class="text-sm font-medium">篩選日期:</label>
+                            <input type="date" id="hr-record-date" value="${today}" class="border border-gray-300 rounded-md px-2 py-1">
+                            <button id="hr-open-month-report" class="ml-2 px-3 py-1.5 bg-indigo-600 text-white rounded hover:bg-indigo-700 text-sm">月報表</button>
+                        </div>
+                        <div id="hr-records-list" class="space-y-3">
+                            <div class="text-center p-4 text-gray-500">系統初始化中，請稍候...</div>
+                        </div>
+                    </div>
+                `;
+
+                try { lucide.createIcons(); } catch(e) {}
+
+                const listElInit = document.getElementById('hr-records-list');
+                let tries = 0; const maxTries = 120; // ~12s（GitHub Pages 初始化可能較慢）
+                const waitReady = () => {
+                    const dbReady = !!window.__db;
+                    const fsReady = !!window.__fs && !!window.__fs.collection && !!window.__fs.query && !!window.__fs.onSnapshot;
+                    if (dbReady && fsReady) {
+                        start();
+                    } else if (tries < maxTries) {
+                        tries++; setTimeout(waitReady, 100);
+                    } else {
+                        if (listElInit) listElInit.innerHTML = '<div class="text-center text-red-500 p-4">系統未初始化，請稍後再試。</div>';
+                    }
+                };
+                // 若其他腳本在稍後才完成初始化，透過事件通知重新開始
+                try { window.addEventListener('firebase-ready', () => { try { start(); } catch (e) {} }); } catch (e) {}
+                waitReady();
+
+                function start() {
+                    const db = window.__db; const fs = window.__fs || {};
+                    const { collection, query, where, onSnapshot, getDocs, Timestamp } = fs;
+
+                    const userSelect = document.getElementById('hr-record-user');
+                    const dateInput = document.getElementById('hr-record-date');
+                    const monthBtn = document.getElementById('hr-open-month-report');
+
+                    // 載入使用者清單供下拉選擇（優先 Firestore，失敗時使用快取 fallback）
+                    const usersRef = collection(db, 'users');
+                    const userMap = {};
+                    (async () => {
+                        let loaded = false;
+                        try {
+                            const qs = await (getDocs ? getDocs(usersRef) : Promise.resolve(null));
+                            if (qs) {
+                                const users = [];
+                                qs.forEach(doc => {
+                                    const data = doc.data() || {};
+                                    const name = data.name || data.displayName || data.account || data.email || doc.id;
+                                    users.push({ id: doc.id, name });
+                                    userMap[doc.id] = name;
+                                });
+                                users.sort((a,b) => String(a.name).localeCompare(String(b.name), 'zh-TW'));
+                                users.forEach(u => {
+                                    // 避免重複加入
+                                    if (![...userSelect.options].some(o => o.value === u.id)) {
+                                        const opt = document.createElement('option');
+                                        opt.value = u.id; opt.textContent = `${u.name}`;
+                                        userSelect.appendChild(opt);
+                                    }
+                                });
+                                loaded = true;
+                            }
+                        } catch(e) { console.warn('載入使用者清單失敗（Firestore）', e); }
+
+                        // 若 Firestore 讀取失敗或尚未載入，嘗試使用快取函式（js/calendar.js）
+                        if (!loaded) {
+                            try {
+                                if (typeof window.fetchUsersOnce === 'function') {
+                                    const cached = await window.fetchUsersOnce();
+                                    const users = Object.keys(cached).map(id => ({ id, name: cached[id] }));
+                                    users.sort((a,b) => String(a.name).localeCompare(String(b.name), 'zh-TW'));
+                                    users.forEach(u => {
+                                        if (![...userSelect.options].some(o => o.value === u.id)) {
+                                            const opt = document.createElement('option');
+                                            opt.value = u.id; opt.textContent = `${u.name}`;
+                                            userSelect.appendChild(opt);
+                                        }
+                                        userMap[u.id] = u.name;
+                                    });
+                                    loaded = true;
+                                }
+                            } catch(e) { console.warn('載入使用者清單失敗（快取 fallback）', e); }
+                        }
+                    })();
+
+                    let unsubscribe = null;
+                    const loadRecords = () => {
+                        if (typeof unsubscribe === 'function') { try { unsubscribe(); } catch(e) {} }
+                        const selectedDate = new Date(dateInput.value);
+                        const startOfDay = new Date(selectedDate); startOfDay.setHours(0,0,0,0);
+                        const endOfDay = new Date(selectedDate); endOfDay.setHours(23,59,59,999);
+                        const recordsRef = collection(db, 'clockInRecords');
+                        const startTS = Timestamp?.fromDate ? Timestamp.fromDate(startOfDay) : startOfDay;
+                        const endTS = Timestamp?.fromDate ? Timestamp.fromDate(endOfDay) : endOfDay;
+                        const sel = userSelect.value || '__ALL__';
+                        const constraints = [where('timestamp', '>=', startTS), where('timestamp', '<=', endTS)];
+                        if (sel !== '__ALL__') constraints.unshift(where('userId', '==', sel));
+                        const q = query(recordsRef, ...constraints);
+
+                        unsubscribe = onSnapshot(q, (querySnapshot) => {
+                            const listEl = document.getElementById('hr-records-list'); if (!listEl) return;
+                            if (querySnapshot.empty) { listEl.innerHTML = `<p class="text-center text-gray-500 p-4">本日無打卡紀錄</p>`; return; }
+                            const records = []; querySnapshot.forEach(doc => records.push({ id: doc.id, ...doc.data() }));
+                            const filtered = records.filter(r => {
+                                const ts = r.timestamp?.toDate?.() || (r.timestamp ? new Date(r.timestamp) : null);
+                                if (!ts) return false; return ts >= startOfDay && ts <= endOfDay;
+                            }).sort((a,b) => {
+                                const ta = a.timestamp?.toDate?.() || (a.timestamp ? new Date(a.timestamp) : new Date(0));
+                                const tb = b.timestamp?.toDate?.() || (b.timestamp ? new Date(b.timestamp) : new Date(0));
+                                return tb - ta;
+                            });
+
+                            // 當載入 users 集合失敗或尚未載入時，動態以今日紀錄補齊帳號選項
+                            try {
+                                if (userSelect && userSelect.options.length <= 1) {
+                                    const ids = new Set(filtered.map(r => r.userId).filter(Boolean));
+                                    ids.forEach(uid => {
+                                        const name = userMap[uid] || (filtered.find(r => r.userId === uid)?.userName) || uid;
+                                        const opt = document.createElement('option');
+                                        opt.value = uid; opt.textContent = name;
+                                        userSelect.appendChild(opt);
+                                        userMap[uid] = name;
+                                    });
+                                }
+                            } catch (e) { /* ignore */ }
+
+                            listEl.innerHTML = '';
+                            filtered.forEach(record => {
+                                const card = document.createElement('div');
+                                card.className = 'bg-white p-3 rounded-lg shadow-sm border mb-3';
+                                const statusText = getStatusDisplayText(record.type || '未知', record.locationName || null, record.dutyType || null);
+                                const statusColor = getStatusColor(statusText);
+                                const tsText = formatDate(record.timestamp);
+                                const displayName = userMap[record.userId] || record.userName || '未知使用者';
+                                card.innerHTML = `
+                                    <div class="flex justify-between items-start">
+                                        <div>
+                                            <p class="font-bold text-lg ${statusColor}">${statusText}</p>
+                                            <p class="text-sm text-gray-600">${tsText}</p>
+                                            <p class="text-xs text-gray-500">使用者：${displayName}</p>
+                                        </div>
+                                    </div>
+                                    <div class="mt-2 flex space-x-2 overflow-x-auto">
+                                        <button class="photo-btn bg-green-500 text-white px-2 py-1 rounded text-sm" 
+                                            data-photos='${encodeURIComponent(JSON.stringify(record.photoUrls || []))}' 
+                                            data-descriptions='${encodeURIComponent(JSON.stringify(record.descriptions || []))}'>
+                                            <i data-lucide="image"></i> 照片 (${(record.photoUrls?.length || 0)})
+                                        </button>
+                                        <button class="map-btn bg-blue-500 text-white px-2 py-1 rounded text-sm" data-lat="${record.location?.latitude || 0}" data-lng="${record.location?.longitude || 0}">
+                                            <i data-lucide="map-pin"></i> 地圖
+                                        </button>
+                                    </div>
+                                `;
+                                listEl.appendChild(card);
+                            });
+
+                            try { lucide.createIcons(); } catch(e) {}
+
+                            document.querySelectorAll('.map-btn').forEach(btn => {
+                                btn.addEventListener('click', (e) => {
+                                    const lat = parseFloat(e.currentTarget.dataset.lat);
+                                    const lng = parseFloat(e.currentTarget.dataset.lng);
+                                    if (lat && lng) openMapModal(lat, lng); else showToast('無位置資訊可顯示', true);
+                                });
+                            });
+
+                            document.querySelectorAll('.photo-btn').forEach(btn => {
+                                btn.addEventListener('click', (e) => {
+                                    const photos = JSON.parse(decodeURIComponent(e.currentTarget.dataset.photos || '%5B%5D'));
+                                    const descriptions = JSON.parse(decodeURIComponent(e.currentTarget.dataset.descriptions || '%5B%5D'));
+                                    openPhotoModal(photos, descriptions);
+                                });
+                            });
+                        }, (error) => {
+                            console.error('HR 讀取打卡紀錄失敗', error);
+                            const listEl = document.getElementById('hr-records-list');
+                            if (listEl) {
+                                const hint = (error?.code === 'failed-precondition') ? '可能需要建立複合索引（userId + timestamp）。' : '請確認 Firestore 規則與網路狀況。';
+                                listEl.innerHTML = `<div class="text-center text-red-500 p-4">讀取紀錄失敗。${hint}</div>`;
+                            }
+                        });
+                    };
+
+                    dateInput.addEventListener('change', loadRecords);
+                    userSelect.addEventListener('change', loadRecords);
+                    loadRecords();
+
+                    // 防護：若本地函式存在但未綁到 window，補綁一次
+                    try {
+                        if (typeof window.renderPersonalMonthlyReport !== 'function' && typeof renderPersonalMonthlyReport === 'function') {
+                            window.renderPersonalMonthlyReport = renderPersonalMonthlyReport;
+                        }
+                    } catch (_) {}
+
+                    // HR 月報表：需選擇特定使用者後開啟月份選擇
+                    monthBtn?.addEventListener('click', () => {
+                        const sel = userSelect.value || '__ALL__';
+                        if (sel === '__ALL__') { showToast('請先選擇特定帳號', true); return; }
+                        const userName = userMap[sel] || sel;
+                        const now = new Date();
+                        const ym = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+                        const modal = document.createElement('div');
+                        modal.className = 'fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50';
+                        modal.innerHTML = `
+                            <div class="bg-white rounded-lg shadow-xl w-11/12 max-w-md overflow-hidden">
+                                <div class="px-4 py-3 bg-indigo-600 text-white flex items-center justify-between">
+                                    <h3 class="font-semibold">選擇月份（${userName}）</h3>
+                                    <button class="close-month-modal"><i data-lucide="x" class="w-5 h-5"></i></button>
+                                </div>
+                                <div class="p-4 space-y-4">
+                                    <div>
+                                        <label class="block text-sm font-medium mb-1">月份</label>
+                                        <input type="month" id="hr-month-input" value="${ym}" class="w-full border border-gray-300 rounded-md px-3 py-2">
+                                    </div>
+                                    <div class="flex justify-end space-x-2">
+                                        <button class="close-month-modal px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300">取消</button>
+                                        <button id="hr-gen-month-report" class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">生成月報表</button>
+                                    </div>
+                                </div>
+                            </div>`;
+                        document.body.appendChild(modal);
+                        try { lucide.createIcons(); } catch(e) {}
+                        modal.querySelectorAll('.close-month-modal').forEach(btn => btn.addEventListener('click', () => document.body.removeChild(modal)));
+                        modal.querySelector('#hr-gen-month-report').addEventListener('click', async () => {
+                            const mi = document.getElementById('hr-month-input').value || ym;
+                            if (!mi) { showToast && showToast('請選擇月份', true); return; }
+                            document.body.removeChild(modal);
+                            try {
+                                if (typeof window.renderPersonalMonthlyReport === 'function') {
+                                    await window.renderPersonalMonthlyReport(sel, userName, mi);
+                                } else {
+                                    showToast && showToast('無法找到個人月報表功能', true);
+                                }
+                            } catch (e) {
+                                console.error('生成個人月報表失敗', e);
+                                showToast && showToast('生成個人月報表失敗', true);
+                            }
+                        });
+                    });
+                }
+            }
+
+            // 人事 > 月報表子分頁：改為列表顯示（姓名｜月報表生成）
+            function renderHRMonthly(container) {
+                // 已下線：保留函式簽名避免舊連結報錯
+                container.innerHTML = `<div class="p-4 text-gray-500">「人事/月報表」功能已移除。</div>`;
+                return;
+                const today = new Date();
+                const defaultMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+                container.innerHTML = `
+                    <div class="p-4 space-y-2">
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full table-auto border border-gray-200 rounded-md">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="text-left px-3 py-2 border-b">姓名</th>
+                                        <th class="text-left px-3 py-2 border-b">月報表</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="hr-monthly-list"></tbody>
+                            </table>
+                        </div>
+                        <div class="text-xs text-gray-500">提示：點擊「生成」選擇月份後，會產出該人員該月份可列印的個人月報表。</div>
+                    </div>`;
+                try { lucide.createIcons(); } catch(e) {}
+
+                const db = window.__db;
+                const { collection, getDocs } = window.__fs || {};
+                if (!db || !collection || !getDocs) {
+                    container.innerHTML = '<div class="p-4 text-red-600">系統未初始化，請稍後再試。</div>';
+                    return;
+                }
+
+                const usersRef = collection(db, 'users');
+                const tbody = container.querySelector('#hr-monthly-list');
+                const users = [];
+
+                getDocs(usersRef).then((qs) => {
+                    qs.forEach(doc => {
+                        const data = doc.data() || {};
+                        const name = data.name || data.displayName || data.account || data.email || doc.id;
+                        users.push({ id: doc.id, name });
+                    });
+                    users.sort((a,b) => String(a.name).localeCompare(String(b.name), 'zh-Hant'));
+                    users.forEach(u => {
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `
+                            <td class="px-3 py-2 border-b">${u.name}</td>
+                            <td class="px-3 py-2 border-b">
+                                <button class="gen-month-btn px-3 py-1 bg-indigo-600 text-white rounded hover:bg-indigo-700" data-userid="${u.id}" data-username="${u.name}">生成</button>
+                            </td>`;
+                        tbody.appendChild(tr);
+                    });
+                    bindGenButtons();
+                }).catch(e => {
+                    console.warn('載入人員失敗', e);
+                    tbody.innerHTML = '<tr><td class="px-3 py-2 text-red-600" colspan="2">載入人員失敗</td></tr>';
+                });
+
+                // 防護：若本地函式存在但未綁到 window，補綁一次
+                try {
+                    if (typeof window.renderPersonalMonthlyReport !== 'function' && typeof renderPersonalMonthlyReport === 'function') {
+                        window.renderPersonalMonthlyReport = renderPersonalMonthlyReport;
+                    }
+                } catch (_) {}
+
+                function openUserMonthModal(userId, userName) {
+                    const now = new Date();
+                    const ym = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+                    const modal = document.createElement('div');
+                    modal.className = 'fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50';
+                    modal.innerHTML = `
+                        <div class="bg-white rounded-lg shadow-xl w-11/12 max-w-md overflow-hidden">
+                            <div class="px-4 py-3 bg-indigo-600 text-white flex items-center justify-between">
+                                <h3 class="font-semibold">選擇月份</h3>
+                                <button class="close-month-modal"><i data-lucide="x" class="w-5 h-5"></i></button>
+                            </div>
+                            <div class="p-4 space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">月份</label>
+                                    <input type="month" id="month-input" value="${ym}" class="w-full border border-gray-300 rounded-md px-3 py-2">
+                                </div>
+                                <div class="flex justify-end space-x-2">
+                                    <button class="close-month-modal px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300">取消</button>
+                                    <button id="gen-user-month-report" class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">生成月報表</button>
+                                </div>
+                            </div>
+                        </div>`;
+                    document.body.appendChild(modal);
+                    try { lucide.createIcons(); } catch(e) {}
+                    modal.querySelectorAll('.close-month-modal').forEach(btn => btn.addEventListener('click', () => document.body.removeChild(modal)));
+                    modal.querySelector('#gen-user-month-report').addEventListener('click', async () => {
+                        const mi = document.getElementById('month-input').value || defaultMonth;
+                        if (!mi) { showToast && showToast('請選擇月份', true); return; }
+                        document.body.removeChild(modal);
+                        try {
+                            if (typeof window.renderPersonalMonthlyReport === 'function') {
+                                await window.renderPersonalMonthlyReport(userId, userName, mi);
+                            } else {
+                                showToast && showToast('無法找到個人月報表功能', true);
+                            }
+                        } catch (e) {
+                            console.error('生成個人月報表失敗', e);
+                            showToast && showToast('生成個人月報表失敗', true);
+                        }
+                    });
+                }
+
+                function bindGenButtons() {
+                    container.querySelectorAll('.gen-month-btn').forEach(btn => {
+                        btn.addEventListener('click', () => {
+                            const uid = btn.dataset.userid;
+                            const uname = btn.dataset.username;
+                            openUserMonthModal(uid, uname);
+                        });
+                    });
+                }
             }
 
             // 群組分頁：人員地圖、出勤紀錄（僅顯示指定成員）
@@ -3861,6 +5113,9 @@
 
             // 我的班表子分頁：顯示本月上班日期與排定時間與狀態，含月份切換與快捷連結
             function renderClockInSchedule(container) {
+                // 已下線：此功能不再提供
+                container.innerHTML = `<div class="p-8 text-center text-gray-500">「我的班表」已移除，請改用其他功能。</div>`;
+                return;
                 const now = new Date();
                 let viewYear = now.getFullYear();
                 let viewMonth = now.getMonth(); // 0-based
@@ -4094,6 +5349,7 @@
             // 共用：出勤紀錄列表渲染（支援指定用戶白名單）
             async function renderAttendanceRecordsList(containerId, selectedUserId, selectedDateStr, allowedUserIds = null) {
                 const container = document.getElementById(containerId);
+                if (!container) { console.warn('renderAttendanceRecordsList: 找不到容器', containerId); return; }
                 const selectedDate = new Date(selectedDateStr);
                 const startOfDay = new Date(selectedDate);
                 startOfDay.setHours(0, 0, 0, 0);
@@ -4198,7 +5454,7 @@
                     btn.addEventListener('click', (e) => {
                         const photos = JSON.parse(decodeURIComponent(e.currentTarget.dataset.photos || '%5B%5D'));
                         const descriptions = JSON.parse(decodeURIComponent(e.currentTarget.dataset.descriptions || '%5B%5D'));
-                        openPhotoGalleryModal(photos, descriptions);
+                        openPhotoModal(photos, descriptions);
                     });
                 });
 
@@ -4241,6 +5497,17 @@
                         });
                     });
                 });
+            }
+
+            // 狀態文字對應底色（每日卡片列表用）
+            function getStatusBgColor(typeOrText) {
+                const s = String(typeOrText || '').toLowerCase();
+                if (s.includes('上班') || s.includes('返回') || s.includes('在辦')) return 'bg-green-100 text-green-800';
+                if (s.includes('下班')) return 'bg-red-100 text-red-800';
+                if (s.includes('外出') || s.includes('抵達') || s.includes('離開')) return 'bg-blue-100 text-blue-800';
+                if (s.includes('請假')) return 'bg-orange-100 text-orange-800';
+                if (s.includes('特殊勤務')) return 'bg-indigo-100 text-indigo-800';
+                return 'bg-gray-100 text-gray-800';
             }
 
             // 讀取初階主管可見用戶設定
@@ -4325,6 +5592,99 @@
             }
             
             function renderTrackingAttendance(container) {
+                // 使用「每日卡片列表」視圖（移除「月報表」按鈕）
+                    const defaultDateStr = (function(){
+                        try { return localStorage.getItem('__records_target_date') || new Date().toISOString().split('T')[0]; }
+                        catch(e) { return new Date().toISOString().split('T')[0]; }
+                    })();
+                    container.innerHTML = `
+                        <div class="p-4 space-y-4">
+                            <div class="flex flex-wrap items-center gap-4 mb-4">
+                                <div class="flex items-center space-x-2">
+                                    <label for="user-select" class="text-sm font-medium">選擇人員:</label>
+                                    <select id="user-select" class="border border-gray-300 rounded-md px-2 py-1">
+                                        <option value="all">全部人員</option>
+                                    </select>
+                                </div>
+                                <div class="flex items-center space-x-2">
+                                    <label for="record-date" class="text-sm font-medium">日期:</label>
+                                    <input type="date" id="record-date" value="${defaultDateStr}" class="border border-gray-300 rounded-md px-2 py-1">
+                                </div>
+                                <div class="flex items-center space-x-2 ml-auto">
+                                    <button id="btn-all-monthly" class="bg-indigo-600 text-white px-3 py-1 rounded flex items-center">
+                                        <i data-lucide="table" class="w-4 h-4 mr-1"></i> 全員月報表
+                                    </button>
+                                </div>
+                            </div>
+                            <div id="attendance-records-list" class="space-y-3"></div>
+                        </div>
+                    `;
+                    try { lucide.createIcons(); } catch(e) {}
+
+                    const userSelect = document.getElementById('user-select');
+                    const dateInput = document.getElementById('record-date');
+                    const usersRef = collection(db, 'users');
+                    let allowedUserIds = null;
+
+                    (async () => {
+                        try {
+                            const uid = state?.currentUser?.uid;
+                            const role = state?.currentUserData?.role;
+                            if (role === 'juniorManager' && uid) {
+                                allowedUserIds = await loadJuniorManagerAllowedUsers(uid);
+                            }
+                        } catch (err) { console.warn('讀取初階主管允許名單失敗', err); }
+
+                        const qs = await getDocs(usersRef);
+                        const arr = [];
+                        qs.forEach(doc => arr.push({ id: doc.id, ...doc.data() }));
+                        arr.sort((a,b) => (a.name || '').localeCompare(b.name || '', 'zh-Hant')).forEach(u => {
+                            const opt = document.createElement('option');
+                            opt.value = u.id;
+                            opt.textContent = u.name || u.id;
+                            userSelect.appendChild(opt);
+                        });
+
+                        // 預設選擇「全部人員」，不再沿用前次選擇
+                        userSelect.value = 'all';
+                        await renderAttendanceRecordsList('attendance-records-list', userSelect.value, dateInput.value, allowedUserIds);
+                    })().catch(err => { console.error('初始化每日列表失敗', err); });
+
+                    userSelect.addEventListener('change', () => {
+                        try { localStorage.setItem('__records_target_user', userSelect.value); } catch(e) {}
+                        renderAttendanceRecordsList('attendance-records-list', userSelect.value, dateInput.value, allowedUserIds);
+                    });
+                    dateInput.addEventListener('change', () => {
+                        try { localStorage.setItem('__records_target_date', dateInput.value); } catch(e) {}
+                        renderAttendanceRecordsList('attendance-records-list', userSelect.value, dateInput.value, allowedUserIds);
+                    });
+
+                    // 追蹤分頁：全員月報表（生成與個人打卡月報表相同格式，全部帳號）
+                    const btnAllMonthly = document.getElementById('btn-all-monthly');
+                    btnAllMonthly?.addEventListener('click', () => {
+                        try {
+                            const today = new Date();
+                            const defaultMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+                            const ymStr = window.prompt('請輸入月份 (YYYY-MM)', defaultMonth);
+                            if (!ymStr || !/^\d{4}-\d{2}$/.test(ymStr)) {
+                                showToast && showToast('月份格式錯誤，請使用 YYYY-MM', true);
+                                return;
+                            }
+                            if (typeof window.renderAllMonthlyReports === 'function') {
+                                window.renderAllMonthlyReports(ymStr);
+                            } else {
+                                showToast && showToast('系統未準備全員月報表功能', true);
+                            }
+                        } catch (e) {
+                            console.error('開啟全員月報表失敗', e);
+                            showToast && showToast('開啟全員月報表失敗', true);
+                        }
+                    });
+                    return; // 不進入月報表程式碼
+                }
+
+                // 以下保留原先「月報表」視圖程式碼（僅在 isMonthly 時執行）
+                if (false) { // 已停用月報表視圖，避免在函式外執行造成錯誤
                 const today = new Date();
                 const defaultMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
                 container.innerHTML = `
@@ -4673,6 +6033,7 @@
                         showToast && showToast('列印失敗', true);
                     }
                 }
+                } // 停用月報表視圖結束
             }
             
             function renderTrackingLeave(container) {
@@ -5040,11 +6401,35 @@
             }
 
             async function listenForUserLocations() {
+                // 等待地圖與 Google 物件準備完成，避免「google 未定義」錯誤
+                if (!window.google || !state.googleMapsLoaded || !state.trackingMap) {
+                    // 若地圖尚未載入，輪詢直到載入後再啟動監聽
+                    const pollId = setInterval(() => {
+                        if (window.google && state.googleMapsLoaded && state.trackingMap) {
+                            clearInterval(pollId);
+                            try { listenForUserLocations(); } catch(e) {}
+                        }
+                    }, 200);
+                    return;
+                }
                 const { AdvancedMarkerElement } = await google.maps.importLibrary("marker");
+                const fs = window.__fs; const db = window.__db;
+                if (!fs || !db || typeof fs.onSnapshot !== 'function') {
+                    console.warn('Firestore 未初始化，延後啟動人員位置監聽');
+                    document.addEventListener('firebase-ready', () => { try { listenForUserLocations(); } catch (e) {} }, { once: true });
+                    const waitId = setInterval(() => {
+                        if (window.__fs && typeof window.__fs.onSnapshot === 'function' && window.__db) {
+                            clearInterval(waitId);
+                            try { listenForUserLocations(); } catch (e) {}
+                        }
+                    }, 200);
+                    return;
+                }
+                const { collection, query, orderBy, onSnapshot, getDocs } = fs;
                 const usersRef = collection(db, "users");
                 const q = query(usersRef, orderBy("name"));
 
-                const unsubscribe = onSnapshot(q, (querySnapshot) => {
+                const handleSnapshot = (querySnapshot) => {
                     state.trackingMarkers.forEach(marker => marker.map = null);
                     state.trackingMarkers = [];
 
@@ -5216,12 +6601,31 @@
                             }
                         });
                     });
-                });
-                state.activeListeners.push(unsubscribe);
+                };
+
+                if (typeof onSnapshot === 'function') {
+                    const unsubscribe = onSnapshot(q, handleSnapshot);
+                    state.activeListeners.push(unsubscribe);
+                } else {
+                    console.warn('onSnapshot 不可用，改用輪詢更新人員列表');
+                    if (state.trackingPoller) clearInterval(state.trackingPoller);
+                    const poll = async () => {
+                        try {
+                            const snap = await getDocs(q);
+                            handleSnapshot(snap);
+                        } catch (e) {
+                            console.warn('輪詢人員列表失敗', e);
+                        }
+                    };
+                    // 立即載入一次，之後每 10 秒輪詢
+                    poll();
+                    state.trackingPoller = setInterval(poll, 10000);
+                }
             }
 
 
             function renderSettings(subPage) {
+                const mainContent = document.getElementById('main-content');
                 mainContent.innerHTML = `
                     <div class="h-[50px] flex items-center justify-around border-b border-gray-200 bg-white">
                         <button data-subtab="accounts" class="sub-tab-btn px-4 py-2 rounded-md text-sm font-medium text-gray-600 ${subPage === 'accounts' ? 'active' : ''}">帳號列表</button>
@@ -5234,6 +6638,14 @@
                     <div id="sub-page-content" class="overflow-y-auto" style="height: calc(100% - 50px);"></div>`;
                 
                 const subPageContent = document.getElementById('sub-page-content');
+                // 若 Firestore 尚未初始化，顯示提示並等待就緒事件後再渲染
+                const targetSub = subPage || 'accounts';
+                const needDb = ['accounts','rules','general','location','workdays','group'];
+                if (!window.__db && needDb.includes(targetSub)) {
+                    subPageContent.innerHTML = '<div class="p-4 text-gray-500">正在初始化資料庫…</div>';
+                    window.addEventListener('firebase-ready', () => renderSettings(targetSub), { once: true });
+                    return;
+                }
                 if (subPage === 'accounts') {
                     renderSettingsAccounts(subPageContent);
                 } else if (subPage === 'rules') {
@@ -5275,6 +6687,7 @@
             }
 
             async function initSettingsGroupUI() {
+                const db = window.__db;
                 const managerSelect = document.getElementById('manager-user-select');
                 const allowedList = document.getElementById('allowed-users-list');
                 const usersRef = collection(db, 'users');
@@ -5319,6 +6732,7 @@
             }
             
             function renderSettingsAccounts(container) {
+                const db = window.__db;
                 container.innerHTML = `
                     <div class="p-4">
                         <button id="add-user-btn" class="w-full bg-red-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-red-700 mb-4 flex items-center justify-center">
@@ -5411,6 +6825,7 @@
             }
 
             function renderSettingsGeneral(container) {
+                const db = window.__db;
                 container.innerHTML = `
                     <div class="p-4">
                         <div class="bg-white p-4 rounded-md shadow-sm border mb-4">
@@ -5710,6 +7125,7 @@
             }
             
             function renderSettingsLocation(container) {
+                const db = window.__db;
                 container.innerHTML = `
                     <div class="p-4">
                         <div class="bg-white p-4 rounded-md shadow-sm border mb-4">
@@ -6256,6 +7672,7 @@
             }
             
             function renderSettingsRules(container) {
+                const db = window.__db;
                 container.innerHTML = `
                     <div class="p-4">
                         <button id="add-rule-btn" class="w-full bg-red-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-red-700 mb-4 flex items-center justify-center">
@@ -6540,6 +7957,7 @@
             }
 
             function openUserModal(user = null) {
+                const modalContainer = document.getElementById('modal-container');
                 const modalId = `user-modal-${Date.now()}`;
                 const isEditing = user !== null;
                 const title = isEditing ? '編輯帳號' : '新增帳號';
@@ -7361,28 +8779,7 @@
                 }
             }
 
-            function renderLeaveInfo(userData) {
-                if (!userData) return '目前沒有請假記錄';
-                let isLeave = userData.clockInStatus === '臨時請假';
-                if (!isLeave && (userData.leaveStatus === 'approved' || userData.leaveStatus === 'pending')) {
-                    const toDate = v => v?.toDate ? v.toDate() : (v ? new Date(v) : null);
-                    const startTime = toDate(userData.leaveStartTime);
-                    const endTime = toDate(userData.leaveEndTime);
-                    const now = new Date();
-                    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-                    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-                    isLeave = !!(startTime && endTime && startTime <= todayEnd && endTime >= todayStart);
-                }
-                if (!isLeave) return '目前沒有請假記錄';
-                const statusText = userData.leaveStatus === 'approved' ? '已請假' : '請假申請';
-                const reasonText = userData.leaveReason ? `${userData.leaveReason}` : '';
-                const typeText = userData.reasonType ? `(${userData.reasonType})` : '';
-                const toDate = v => v?.toDate ? v.toDate() : (v ? new Date(v) : null);
-                const startTime = toDate(userData.leaveStartTime);
-                const endTime = toDate(userData.leaveEndTime);
-                const timeInfo = (startTime && endTime) ? `<div class="text-sm mt-1">從 ${formatDateTime(startTime)} 至 ${formatDateTime(endTime)}</div>` : '';
-                return `<div class="font-medium">${statusText}: ${reasonText} ${typeText}</div>${timeInfo}`;
-            }
+            // renderLeaveInfo 已於稍後區塊定義為完整版本，移除重複宣告以避免語法錯誤
 
             function openAvatarCameraModal(callback) {
                 const modalId = `avatar-camera-modal-${Date.now()}`;
@@ -7611,6 +9008,14 @@
                 });
 
                 const completeClockIn = async () => {
+                    // 確保 Firestore 已就緒並於本地作用域取用
+                    const fs = window.__fs || {};
+                    const db = window.__db;
+                    const { addDoc, collection, updateDoc, doc, getDoc, Timestamp, GeoPoint } = fs;
+                    if (!db || typeof addDoc !== 'function' || typeof collection !== 'function') {
+                        showToast('系統初始化中，請稍後再試', true);
+                        return;
+                    }
                     if (capturedPhotos.length === 0) {
                         showToast("請至少拍攝一張照片", true);
                         return;
@@ -7659,10 +9064,12 @@
                         });
 
                         const uploadedPhotos = await Promise.all(photoPromises);
-                        // Firestore 規則：最多 3 張照片，描述數量需一致
-                        const limitedPhotos = uploadedPhotos.slice(0, 3);
+                        const limitedPhotos = Array.isArray(uploadedPhotos) ? uploadedPhotos.slice(0, 3) : [];
+                        const hasInvalidPhoto = limitedPhotos.some(p => !p || typeof p.url !== 'string' || p.url.length === 0);
+                        if (hasInvalidPhoto) {
+                            throw new Error('照片上傳失敗或格式錯誤');
+                        }
                         const photoUrls = limitedPhotos.map(p => p.url);
-                        // Firestore 不允許 undefined：將非字串說明轉為空字串
                         const descriptions = limitedPhotos.map(p => (typeof p.description === 'string' ? p.description : ''));
 
                         // 安全座標處理：若缺少或為後備，使用 (0,0)
@@ -7673,6 +9080,17 @@
                         if (!uid) {
                             throw new Error('未登入或找不到使用者，無法寫入打卡記錄');
                         }
+                        // 使用既有 allowedTypes（若前面已宣告），否則宣告一次
+                        const __allowedTypes = (typeof allowedTypes !== 'undefined' && Array.isArray(allowedTypes))
+                            ? allowedTypes
+                            : ['上班','下班','外出','返回','抵達','離開','自動下班'];
+                        if (!__allowedTypes.includes(type)) {
+                            throw new Error('打卡類型不合法');
+                        }
+                        if (photoUrls.length !== descriptions.length || photoUrls.length > 3) {
+                            throw new Error('照片與描述數量不一致');
+                        }
+                        const deviceId = (typeof state.deviceId === 'string' && state.deviceId) ? state.deviceId.slice(0, 100) : 'unknown-device';
                         const recordData = {
                             userId: uid,
                             type: type,
@@ -7680,18 +9098,15 @@
                             location: new GeoPoint(safeLat, safeLng),
                             photoUrls,
                             descriptions,
-                            deviceId: state.deviceId || 'unknown-device'
+                            deviceId
                         };
-                        // 勤務項目與超時巡邏標記：避免 undefined 寫入
                         if (isOvertime) {
                             recordData.dutyType = '超時巡邏';
-                        } else if (type === '外出' && state.dutyType) {
-                            recordData.dutyType = state.dutyType;
+                        } else if (type === '外出' && typeof state.dutyType === 'string' && state.dutyType) {
+                            recordData.dutyType = state.dutyType.slice(0, 50);
                         }
-                        
-                        // 如果是外出打卡，添加地點名稱
                         if (type === '外出') {
-                            const locName = typeof location.name === 'string' ? location.name : '';
+                            const locName = typeof location?.name === 'string' ? location.name : '';
                             if (locName) {
                                 recordData.locationName = locName.slice(0, 100);
                             }
@@ -7741,8 +9156,8 @@
                             const uid2 = window.__auth?.currentUser?.uid || state.currentUser?.uid;
                             await updateDoc(doc(db, "users", uid2), userUpdateData);
                         } catch (e) {
-                            console.error('更新 users 狀態失敗：', e?.code, e?.message || e, { keys: Object.keys(userUpdateData) });
-                            throw e;
+                            // 軟失敗：若使用者文件不存在或無權限，仍視為打卡成功
+                            console.warn('更新 users 狀態失敗（將不阻斷打卡）：', e?.code, e?.message || e);
                         }
 
                         // 更新本地狀態
@@ -7770,7 +9185,16 @@
                         
                         showToast(`${type}打卡成功！`);
                         close();
-                        showPage('clock-in', 'location');  // 改為顯示定位打卡頁面
+                        // 安全導頁：若 showPage 不可用則直接重繪打卡頁
+                        try {
+                            if (typeof showPage === 'function') {
+                                showPage('clock-in', 'location');
+                            } else if (typeof renderClockIn === 'function') {
+                                renderClockIn('location');
+                            }
+                        } catch (_navErr) {
+                            console.warn('導頁失敗，但打卡已成功：', _navErr);
+                        }
 
                     } catch (error) {
                         console.error("Clock in error:", error);
@@ -8031,7 +9455,7 @@
                     return '';
                 }
             }
-        }
+
 
         // 用戶彈出視窗功能
         document.addEventListener('click', function(e) {
@@ -8122,6 +9546,14 @@
         });
 
         // --- Initial Load ---
+        // --- Global Compatibility Shim ---
+        // 確保在所有函式作用域中都能使用 mainContent / modalContainer
+        // 某些功能模組在不同作用域被定義並使用這兩個變數，這裡提供全域可用的引用
+        var mainContent = document.getElementById('main-content');
+        var modalContainer = document.getElementById('modal-container');
+        window.mainContent = mainContent;
+        window.modalContainer = modalContainer;
+
         document.addEventListener('DOMContentLoaded', () => {
              lucide.createIcons();
              showLoading(true);
