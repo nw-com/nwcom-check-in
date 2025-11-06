@@ -362,6 +362,10 @@
             users: [],
             trackingMap: null,
             trackingMarkers: [],
+            // 供「定位打卡」子頁面使用的地圖與標記引用，以及定位監聽ID
+            clockInMap: null,
+            clockInMarker: null,
+            geoWatchId: null,
         };
         
         // 初始化本機裝置ID（用於打卡紀錄與首次打卡裝置標記）
@@ -2766,6 +2770,7 @@
                                             locationName: locationName || '',
                                             requestedAt: Timestamp?.fromDate ? Timestamp.fromDate(new Date()) : new Date(),
                                             targetTime: Timestamp?.fromDate ? Timestamp.fromDate(dt) : dt,
+                                            originalRecordId: d.id || null,
                                             status: 'pending'
                                         };
                                         await addDoc(collection(db, 'retroClockRequests'), payload);
@@ -3745,6 +3750,12 @@
                 }
                 
                 try {
+                    // 若已有監聽，先清除避免重複
+                    if (state.geoWatchId) {
+                        try { navigator.geolocation.clearWatch(state.geoWatchId); } catch (e) { console.warn('清除舊的 geolocation 監聽失敗', e); }
+                        state.geoWatchId = null;
+                    }
+
                     const pos = await new Promise((resolve, reject) => {
                         navigator.geolocation.getCurrentPosition(resolve, reject, { 
                             enableHighAccuracy: true, 
@@ -3767,10 +3778,43 @@
                         disableDefaultUI: true 
                     });
                     
-                    new google.maps.Marker({ 
+                    const marker = new google.maps.Marker({ 
                         position: coords, 
                         map: map 
                     });
+
+                    // 儲存引用以便後續更新
+                    state.clockInMap = map;
+                    state.clockInMarker = marker;
+
+                    // 位置更新與地圖自動置中
+                    const updatePos = (p) => {
+                        const c = { lat: p.coords.latitude, lng: p.coords.longitude };
+                        state.currentLocation = c;
+                        if (state.clockInMarker) state.clockInMarker.setPosition(c);
+                        if (state.clockInMap) state.clockInMap.panTo(c);
+                    };
+
+                    // 啟動持續監聽位置
+                    state.geoWatchId = navigator.geolocation.watchPosition(updatePos, (err) => {
+                        console.warn('watchPosition 錯誤', err);
+                    }, { enableHighAccuracy: true, timeout: 20000, maximumAge: 10000 });
+
+                    // 畫面回到可見時，立即抓一次當前位置以防瀏覽器節流
+                    const visHandler = () => {
+                        if (!document.hidden) {
+                            navigator.geolocation.getCurrentPosition(updatePos, (err) => console.warn('visibility getCurrentPosition 錯誤', err), { enableHighAccuracy: true, timeout: 10000 });
+                        }
+                    };
+                    const focusHandler = () => {
+                        navigator.geolocation.getCurrentPosition(updatePos, (err) => console.warn('focus getCurrentPosition 錯誤', err), { enableHighAccuracy: true, timeout: 10000 });
+                    };
+                    document.addEventListener('visibilitychange', visHandler);
+                    window.addEventListener('focus', focusHandler);
+                    // 交由全域清理機制移除
+                    state.activeListeners.push(() => document.removeEventListener('visibilitychange', visHandler));
+                    state.activeListeners.push(() => window.removeEventListener('focus', focusHandler));
+                    state.activeListeners.push(() => { if (state.geoWatchId) { try { navigator.geolocation.clearWatch(state.geoWatchId); } catch{} state.geoWatchId = null; } });
                     
                     mapLoader.classList.add('hide');
                 } catch (error) {
@@ -4028,18 +4072,41 @@
                                 if (!reqDoc.exists()) { showToast('申請不存在', true); return; }
                                 const r = reqDoc.data();
                                 const ts = r.targetTime?.toDate?.() ? r.targetTime.toDate() : (r.targetTime ? new Date(r.targetTime) : new Date());
-                                await addDoc(collection(db, 'clockInRecords'), {
-                                    userId: r.userId,
-                                    type: r.type,
-                                    timestamp: Timestamp?.fromDate ? Timestamp.fromDate(ts) : ts,
-                                    location: GeoPoint ? new GeoPoint(0,0) : { latitude: 0, longitude: 0 },
-                                    photoUrls: [],
-                                    descriptions: [],
-                                    deviceId: 'retro',
-                                    locationName: r.locationName || null,
-                                    dutyType: null,
-                                    isAutomatic: false
-                                });
+                                let replaced = false;
+                                // 若申請包含原始紀錄 ID，優先覆寫原紀錄
+                                if (r.originalRecordId) {
+                                    try {
+                                        const origRef = doc(db, 'clockInRecords', r.originalRecordId);
+                                        const origSnap = await window.__fs.getDoc(origRef);
+                                        if (origSnap.exists()) {
+                                            const updatePayload = {
+                                                type: r.type,
+                                                timestamp: Timestamp?.fromDate ? Timestamp.fromDate(ts) : ts,
+                                                locationName: r.locationName || null,
+                                                isAutomatic: false
+                                            };
+                                            await updateDoc(origRef, updatePayload);
+                                            replaced = true;
+                                        }
+                                    } catch (err) {
+                                        console.warn('覆寫原紀錄失敗，改為新增', err);
+                                    }
+                                }
+                                // 若無法覆寫或沒有 originalRecordId，則保留舊行為新增一筆（相容舊申請）
+                                if (!replaced) {
+                                    await addDoc(collection(db, 'clockInRecords'), {
+                                        userId: r.userId,
+                                        type: r.type,
+                                        timestamp: Timestamp?.fromDate ? Timestamp.fromDate(ts) : ts,
+                                        location: GeoPoint ? new GeoPoint(0,0) : { latitude: 0, longitude: 0 },
+                                        photoUrls: [],
+                                        descriptions: [],
+                                        deviceId: 'retro',
+                                        locationName: r.locationName || null,
+                                        dutyType: null,
+                                        isAutomatic: false
+                                    });
+                                }
                                 // 同步更新 users 狀態，讓儀錶板與定位打卡按鈕正確顯示
                                 try {
                                     const newStatus = r.type; // 可能為：上班/下班/外出/抵達/離開/返回
@@ -4065,7 +4132,7 @@
                                     reviewerId: window.__auth?.currentUser?.uid || null,
                                     reviewedAt: Timestamp?.fromDate ? Timestamp.fromDate(new Date()) : new Date()
                                 });
-                                showToast('已核准並新增打卡紀錄');
+                                showToast(replaced ? '已核准並覆寫打卡紀錄' : '已核准並新增打卡紀錄');
                                 renderList();
                             } catch (e) {
                                 console.error('核准失敗', e);

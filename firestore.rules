@@ -90,7 +90,7 @@ service cloud.firestore {
 
       allow read: if request.auth != null;
       // 僅管理員可更新或刪除打卡紀錄，並限制可更新欄位與型別
-      allow update: if isAdmin() &&
+      allow update: if isReviewer() &&
         request.resource.data.keys().hasOnly([
           'userId','type','timestamp','location','photoUrls','descriptions','deviceId','locationName','dutyType','isAutomatic'
         ]) &&
@@ -154,11 +154,12 @@ service cloud.firestore {
       allow create: if request.auth != null &&
         request.auth.uid == request.resource.data.userId &&
         request.resource.data.keys().hasOnly([
-          'userId','type','reason','locationName','requestedAt','targetTime','status'
+          'userId','type','reason','locationName','requestedAt','targetTime','status','originalRecordId'
         ]) &&
         request.resource.data.type in ['上班','下班','外出','抵達','離開'] &&
         (request.resource.data.reason == null || request.resource.data.reason is string) &&
         (request.resource.data.locationName == null || request.resource.data.locationName is string) &&
+        (request.resource.data.originalRecordId == null || request.resource.data.originalRecordId is string) &&
         request.resource.data.requestedAt is timestamp &&
         request.resource.data.targetTime is timestamp &&
         request.resource.data.status == 'pending';
@@ -169,7 +170,7 @@ service cloud.firestore {
       // 管理員、人事、高階主管可審核並更新狀態；限制可更新欄位與型別
       allow update: if isReviewer() &&
         request.resource.data.keys().hasOnly([
-          'userId','type','reason','locationName','requestedAt','targetTime','status','reviewerId','reviewedAt'
+          'userId','type','reason','locationName','requestedAt','targetTime','status','reviewerId','reviewedAt','originalRecordId'
         ]) &&
         request.resource.data.type in ['上班','下班','外出','抵達','離開'] &&
         (request.resource.data.reason == null || request.resource.data.reason is string) &&
