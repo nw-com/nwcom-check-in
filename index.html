@@ -6427,6 +6427,15 @@
                 for (let i = 0; i < meetings.length; i++) {
                     const meet = meetings[i];
                     if (!meet) continue;
+
+                    // Filter Logic:
+                    // Only notify if user is admin/manager OR user is a participant
+                    const isAdminOrManager = dbUser && ['admin', 'manager'].includes(dbUser.role);
+                    const isParticipant = dbUser && Array.isArray(meet.participants) && meet.participants.includes(dbUser.id);
+                    
+                    if (!isAdminOrManager && !isParticipant) {
+                        continue;
+                    }
                     
                     const isToday = meet.date === todayKey;
                     const isFuture = meet.date > todayKey;
